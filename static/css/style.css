@@ -117,11 +117,11 @@ body {
 }
 
 .team-a::before {
-    background: #2563eb;
+    background: var(--team-color, #2563eb);
 }
 
 .team-b::before {
-    background: #dc2626;
+    background: var(--team-color, #dc2626);
 }
 
 /* Team Banner */

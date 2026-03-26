@@ -582,14 +582,195 @@
 
     document.getElementById("btn-load").addEventListener("click", openLoadModal);
 
+    // ── Team selection ────────────────────────────────────
+    const teamModal = document.getElementById("team-modal");
+    const teamModalTitle = document.getElementById("team-modal-title");
+    const teamGrid = document.getElementById("team-grid");
+    const teamModalClose = document.getElementById("team-modal-close");
+    const leagueTabs = document.querySelectorAll(".league-tab");
+
+    let pickingSide = "A";
+    let currentLeague = "K1";
+
+    function createLogoBadge(team, size) {
+        const el = document.createElement("div");
+        el.style.width = size + "px";
+        el.style.height = size + "px";
+        el.style.borderRadius = "50%";
+        el.style.background = `linear-gradient(135deg, ${team.primary} 60%, ${team.accent} 100%)`;
+        el.style.display = "flex";
+        el.style.alignItems = "center";
+        el.style.justifyContent = "center";
+        el.style.fontWeight = "800";
+        el.style.fontSize = (size * 0.28) + "px";
+        el.style.color = team.accent === "#000000" ? "#000" : "#fff";
+        el.style.border = `2px solid ${team.secondary}`;
+        el.style.textAlign = "center";
+        el.style.lineHeight = "1.1";
+        el.style.letterSpacing = "-0.5px";
+        el.style.flexShrink = "0";
+        el.textContent = team.short;
+        return el;
+    }
+
+    function renderTeamGrid() {
+        teamGrid.innerHTML = "";
+        const filtered = state.teams.filter((t) => t.league === currentLeague);
+        const currentTeam = pickingSide === "A" ? state.teamA : state.teamB;
+
+        for (const team of filtered) {
+            const card = document.createElement("div");
+            card.className = "team-card";
+            if (currentTeam && currentTeam.id === team.id) card.classList.add("selected");
+
+            const logo = createLogoBadge(team, 36);
+            logo.classList.add("team-card-logo");
+
+            const nameEl = document.createElement("span");
+            nameEl.className = "team-card-name";
+            nameEl.textContent = team.name;
+
+            card.appendChild(logo);
+            card.appendChild(nameEl);
+            card.addEventListener("click", () => selectTeam(team));
+            teamGrid.appendChild(card);
+        }
+    }
+
+    function selectTeam(team) {
+        if (pickingSide === "A") {
+            state.teamA = team;
+        } else {
+            state.teamB = team;
+        }
+        updateBanner();
+        updateLegend();
+        render();
+        closeTeamModal();
+        showToast(`${team.name} 선택 완료`);
+    }
+
+    function updateBanner() {
+        const badgeA = document.getElementById("badge-a");
+        const nameA = document.getElementById("name-a");
+        const badgeB = document.getElementById("badge-b");
+        const nameB = document.getElementById("name-b");
+
+        if (state.teamA) {
+            badgeA.innerHTML = "";
+            badgeA.style.background = `linear-gradient(135deg, ${state.teamA.primary} 60%, ${state.teamA.accent} 100%)`;
+            badgeA.style.borderColor = state.teamA.secondary;
+            const txt = document.createElement("span");
+            txt.className = "badge-letter";
+            txt.textContent = state.teamA.short;
+            txt.style.color = state.teamA.accent === "#000000" ? "#000" : "#fff";
+            txt.style.fontSize = "0.85rem";
+            badgeA.appendChild(txt);
+            nameA.textContent = state.teamA.name;
+        } else {
+            badgeA.innerHTML = '<span class="badge-letter">A</span>';
+            badgeA.style.background = DEFAULT_A_COLOR;
+            badgeA.style.borderColor = "rgba(255,255,255,0.2)";
+            nameA.textContent = "Team A";
+        }
+
+        if (state.teamB) {
+            badgeB.innerHTML = "";
+            badgeB.style.background = `linear-gradient(135deg, ${state.teamB.primary} 60%, ${state.teamB.accent} 100%)`;
+            badgeB.style.borderColor = state.teamB.secondary;
+            const txt = document.createElement("span");
+            txt.className = "badge-letter";
+            txt.textContent = state.teamB.short;
+            txt.style.color = state.teamB.accent === "#000000" ? "#000" : "#fff";
+            txt.style.fontSize = "0.85rem";
+            badgeB.appendChild(txt);
+            nameB.textContent = state.teamB.name;
+        } else {
+            badgeB.innerHTML = '<span class="badge-letter">B</span>';
+            badgeB.style.background = DEFAULT_B_COLOR;
+            badgeB.style.borderColor = "rgba(255,255,255,0.2)";
+            nameB.textContent = "Team B";
+        }
+    }
+
+    function updateLegend() {
+        const legendA = document.querySelector(".legend-item.team-a");
+        const legendB = document.querySelector(".legend-item.team-b");
+        legendA.textContent = state.teamA ? state.teamA.short : "Team A";
+        legendB.textContent = state.teamB ? state.teamB.short : "Team B";
+        legendA.style.setProperty("--team-color", getTeamColor("A"));
+        legendB.style.setProperty("--team-color", getTeamColor("B"));
+    }
+
+    function openTeamModal(side) {
+        pickingSide = side;
+        teamModalTitle.textContent = side === "A" ? "Team A 선택" : "Team B 선택";
+        teamModal.classList.remove("hidden");
+        renderTeamGrid();
+    }
+
+    function closeTeamModal() {
+        teamModal.classList.add("hidden");
+    }
+
+    teamModal.querySelector(".modal-backdrop").addEventListener("click", closeTeamModal);
+    teamModalClose.addEventListener("click", closeTeamModal);
+
+    leagueTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+            leagueTabs.forEach((t) => t.classList.remove("active"));
+            tab.classList.add("active");
+            currentLeague = tab.dataset.league;
+            renderTeamGrid();
+        });
+    });
+
+    document.querySelectorAll(".team-pick-btn").forEach((btn) => {
+        btn.addEventListener("click", () => openTeamModal(btn.dataset.side));
+    });
+
+    // Also allow clicking the badge/name area to pick
+    document.getElementById("slot-a").addEventListener("click", (e) => {
+        if (e.target.closest(".team-pick-btn")) return;
+        openTeamModal("A");
+    });
+    document.getElementById("slot-b").addEventListener("click", (e) => {
+        if (e.target.closest(".team-pick-btn")) return;
+        openTeamModal("B");
+    });
+
+    // ── Snapshot: include team info ──────────────────────
+    const _origSnapshot = getStateSnapshot;
+    getStateSnapshot = function () {
+        const snap = _origSnapshot();
+        snap.teamAId = state.teamA ? state.teamA.id : null;
+        snap.teamBId = state.teamB ? state.teamB.id : null;
+        return snap;
+    };
+
+    const _origApply = applySnapshot;
+    applySnapshot = function (data) {
+        if (data.teamAId && state.teams.length) {
+            state.teamA = state.teams.find((t) => t.id === data.teamAId) || null;
+        }
+        if (data.teamBId && state.teams.length) {
+            state.teamB = state.teams.find((t) => t.id === data.teamBId) || null;
+        }
+        updateBanner();
+        updateLegend();
+        _origApply(data);
+    };
+
     // ── Init ───────────────────────────────────────────────
     window.addEventListener("resize", resize);
 
-    fetch("/api/formations")
-        .then((r) => r.json())
-        .then((data) => {
-            state.formations = data;
-            resize();
-            loadFormation("4-4-2");
-        });
+    Promise.all([
+        fetch("/api/formations").then((r) => r.json()),
+        fetch("/api/teams").then((r) => r.json()),
+    ]).then(([formData, teamData]) => {
+        state.formations = formData;
+        state.teams = teamData;
+        resize();
+        loadFormation("4-4-2");
+    });
 })();
