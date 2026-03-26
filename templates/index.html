@@ -11,19 +11,6 @@
         <header id="toolbar">
             <h1>Today Tactics</h1>
             <div class="toolbar-group">
-                <label for="formation-select">포메이션:</label>
-                <select id="formation-select">
-                    <option value="4-4-2">4-4-2</option>
-                    <option value="4-3-3">4-3-3</option>
-                    <option value="3-5-2">3-5-2</option>
-                    <option value="4-2-3-1">4-2-3-1</option>
-                    <option value="4-1-4-1">4-1-4-1</option>
-                    <option value="3-4-3">3-4-3</option>
-                    <option value="5-3-2">5-3-2</option>
-                    <option value="5-4-1">5-4-1</option>
-                </select>
-            </div>
-            <div class="toolbar-group">
                 <button id="btn-select" class="mode-btn active" title="선수 이동 모드">이동</button>
                 <span class="toolbar-sep">|</span>
                 <button class="mode-btn draw-mode-btn" data-draw="arrow" title="실선 화살표">→ 실선</button>
@@ -49,8 +36,8 @@
                 <button id="btn-load" class="action-btn load-btn" title="저장된 전술 불러오기">불러오기</button>
             </div>
             <div class="toolbar-group legend">
-                <span class="legend-item team-a">Team A</span>
-                <span class="legend-item team-b">Team B</span>
+                <span class="legend-item team-a">HOME</span>
+                <span class="legend-item team-b">AWAY</span>
             </div>
         </header>
         <!-- 팀 선택 배너 -->
@@ -60,11 +47,29 @@
                     <span class="badge-letter">A</span>
                 </div>
                 <div class="team-slot-info">
-                    <span class="team-slot-name" id="name-a">Team A</span>
+                    <span class="team-slot-name" id="name-a">HOME</span>
                     <div class="team-slot-controls">
                         <button class="team-pick-btn" data-side="A">팀 선택</button>
                         <button class="kit-toggle-btn active" data-side="A" data-kit="home">HOME</button>
                         <button class="kit-toggle-btn" data-side="A" data-kit="away">AWAY</button>
+                        <select class="formation-select-team" data-side="A" title="HOME 포메이션">
+                            <option value="4-4-2">4-4-2</option>
+                            <option value="4-3-3">4-3-3</option>
+                            <option value="3-5-2">3-5-2</option>
+                            <option value="4-2-3-1">4-2-3-1</option>
+                            <option value="4-1-4-1">4-1-4-1</option>
+                            <option value="3-4-3">3-4-3</option>
+                            <option value="5-3-2">5-3-2</option>
+                            <option value="5-4-1">5-4-1</option>
+                        </select>
+                        <label class="icon-color-label" title="아이콘 채우기 색상">
+                            <span>●</span>
+                            <input type="color" class="icon-fill-color" data-side="A" value="#2563eb">
+                        </label>
+                        <label class="icon-color-label" title="아이콘 테두리 색상">
+                            <span>○</span>
+                            <input type="color" class="icon-border-color" data-side="A" value="#ffffff">
+                        </label>
                     </div>
                 </div>
             </div>
@@ -74,11 +79,29 @@
                     <span class="badge-letter">B</span>
                 </div>
                 <div class="team-slot-info">
-                    <span class="team-slot-name" id="name-b">Team B</span>
+                    <span class="team-slot-name" id="name-b">AWAY</span>
                     <div class="team-slot-controls">
                         <button class="team-pick-btn" data-side="B">팀 선택</button>
                         <button class="kit-toggle-btn active" data-side="B" data-kit="home">HOME</button>
                         <button class="kit-toggle-btn" data-side="B" data-kit="away">AWAY</button>
+                        <select class="formation-select-team" data-side="B" title="AWAY 포메이션">
+                            <option value="4-4-2">4-4-2</option>
+                            <option value="4-3-3">4-3-3</option>
+                            <option value="3-5-2">3-5-2</option>
+                            <option value="4-2-3-1">4-2-3-1</option>
+                            <option value="4-1-4-1">4-1-4-1</option>
+                            <option value="3-4-3">3-4-3</option>
+                            <option value="5-3-2">5-3-2</option>
+                            <option value="5-4-1">5-4-1</option>
+                        </select>
+                        <label class="icon-color-label" title="아이콘 채우기 색상">
+                            <span>●</span>
+                            <input type="color" class="icon-fill-color" data-side="B" value="#dc2626">
+                        </label>
+                        <label class="icon-color-label" title="아이콘 테두리 색상">
+                            <span>○</span>
+                            <input type="color" class="icon-border-color" data-side="B" value="#ffffff">
+                        </label>
                     </div>
                 </div>
             </div>
@@ -90,7 +113,7 @@
             <aside id="bench-panel">
                 <div class="bench-section" data-side="A">
                     <div class="bench-header">
-                        <span class="bench-team-name" id="bench-name-a">Team A</span>
+                        <span class="bench-team-name" id="bench-name-a">HOME</span>
                         <button class="bench-add-btn" data-side="A" title="선수 추가">+ 추가</button>
                     </div>
                     <div class="bench-players" id="bench-list-a"></div>
@@ -101,7 +124,7 @@
                 </div>
                 <div class="bench-section" data-side="B">
                     <div class="bench-header">
-                        <span class="bench-team-name" id="bench-name-b">Team B</span>
+                        <span class="bench-team-name" id="bench-name-b">AWAY</span>
                         <button class="bench-add-btn" data-side="B" title="선수 추가">+ 추가</button>
                     </div>
                     <div class="bench-players" id="bench-list-b"></div>

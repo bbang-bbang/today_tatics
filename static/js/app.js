@@ -19,12 +19,17 @@
         dragOffset: { dx: 0, dy: 0 },
         drawingLine: null,
         formations: {},
-        currentFormation: "4-4-2",
+        formationA: "4-4-2",
+        formationB: "4-4-2",
         teams: [],
         teamA: null,
         teamB: null,
         kitA: "home",           // "home" | "away"
         kitB: "home",
+        fillColorA: null,       // null = auto (team color)
+        fillColorB: null,
+        borderColorA: null,     // null = auto (team secondary)
+        borderColorB: null,
         nextId: 100,
     };
 
@@ -133,11 +138,15 @@
         return side === "A" ? state.kitA === "away" : state.kitB === "away";
     }
     function getTeamColor(side) {
+        const override = side === "A" ? state.fillColorA : state.fillColorB;
+        if (override) return override;
         const team = side === "A" ? state.teamA : state.teamB;
         if (!team) return side === "A" ? DEFAULT_A_COLOR : DEFAULT_B_COLOR;
         return isAway(side) ? "#ffffff" : team.primary;
     }
     function getTeamStroke(side) {
+        const override = side === "A" ? state.borderColorA : state.borderColorB;
+        if (override) return override;
         const team = side === "A" ? state.teamA : state.teamB;
         if (!team) return isAway(side) ? "#888888" : "#ffffff";
         return isAway(side) ? team.primary : team.secondary;
@@ -177,17 +186,34 @@
     }
 
     // ── Formation loading ──────────────────────────────────
-    function loadFormation(name) {
+    function loadFormationSide(side, name) {
         const f = state.formations[name];
         if (!f) return;
-        state.currentFormation = name;
+        if (side === "A") state.formationA = name;
+        else state.formationB = name;
+        state.players = state.players.filter((p) => p.team !== side);
+        const positions = side === "A" ? f.teamA : f.teamB;
+        const labels = side === "A" ? f.labelsA : f.labelsB;
+        for (let i = 0; i < positions.length; i++) {
+            state.players.push({ id: state.nextId++, team: side, x: positions[i].x, y: positions[i].y, name: labels[i] || "", number: i + 1 });
+        }
+        render();
+        renderBench();
+    }
+
+    function loadFormation(name) {
+        state.formationA = name;
+        state.formationB = name;
         state.players = [];
+        const f = state.formations[name];
+        if (!f) return;
         for (let i = 0; i < f.teamA.length; i++) {
             state.players.push({ id: state.nextId++, team: "A", x: f.teamA[i].x, y: f.teamA[i].y, name: f.labelsA[i] || "", number: i + 1 });
         }
         for (let i = 0; i < f.teamB.length; i++) {
             state.players.push({ id: state.nextId++, team: "B", x: f.teamB[i].x, y: f.teamB[i].y, name: f.labelsB[i] || "", number: i + 1 });
         }
+        document.querySelectorAll(".formation-select-team").forEach((sel) => { sel.value = name; });
         render();
         renderBench();
     }
@@ -264,7 +290,7 @@
         editNumber.value = player.number;
         editName.value = player.name;
         editTeamLabel.style.background = getTeamColor(player.team);
-        editTeamLabel.textContent = player.team === "A" ? (state.teamA ? state.teamA.short : "Team A") : (state.teamB ? state.teamB.short : "Team B");
+        editTeamLabel.textContent = player.team === "A" ? (state.teamA ? state.teamA.short : "HOME") : (state.teamB ? state.teamB.short : "AWAY");
         let left = screenX + 12, top = screenY - 20;
         if (left + 200 > window.innerWidth) left = screenX - 212;
         if (top + 160 > window.innerHeight) top = window.innerHeight - 168;
@@ -305,7 +331,6 @@
     // ── Mode & draw style ─────────────────────────────────
     const btnSelect = document.getElementById("btn-select");
     const drawModeBtns = document.querySelectorAll(".draw-mode-btn");
-    const formationSelect = document.getElementById("formation-select");
 
     function setMode(mode, drawStyle) {
         state.mode = mode;
@@ -329,8 +354,10 @@
     // ── Toolbar actions ───────────────────────────────────
     document.getElementById("btn-clear-lines").addEventListener("click", () => { state.lines = []; render(); });
     document.getElementById("btn-undo-line").addEventListener("click", () => { state.lines.pop(); render(); });
-    document.getElementById("btn-reset").addEventListener("click", () => { state.lines = []; loadFormation(state.currentFormation); });
-    formationSelect.addEventListener("change", (e) => { state.lines = []; loadFormation(e.target.value); });
+    document.getElementById("btn-reset").addEventListener("click", () => { state.lines = []; loadFormationSide("A", state.formationA); loadFormationSide("B", state.formationB); });
+    document.querySelectorAll(".formation-select-team").forEach((sel) => {
+        sel.addEventListener("change", (e) => { loadFormationSide(sel.dataset.side, e.target.value); });
+    });
 
     // ── Toast ─────────────────────────────────────────────
     let toastEl = document.createElement("div"); toastEl.className = "toast"; document.body.appendChild(toastEl);
@@ -344,8 +371,8 @@
     const benchNameB = document.getElementById("bench-name-b");
 
     function renderBench() {
-        benchNameA.textContent = state.teamA ? state.teamA.short : "Team A";
-        benchNameB.textContent = state.teamB ? state.teamB.short : "Team B";
+        benchNameA.textContent = state.teamA ? state.teamA.short : "HOME";
+        benchNameB.textContent = state.teamB ? state.teamB.short : "AWAY";
         renderBenchList("A", benchListA);
         renderBenchList("B", benchListB);
     }
@@ -411,7 +438,9 @@
     // ── Save / Load helpers ───────────────────────────────
     function getStateSnapshot() {
         return {
-            formation: state.currentFormation,
+            formation: state.formationA,
+            formationA: state.formationA,
+            formationB: state.formationB,
             players: state.players.map((p) => ({ id: p.id, team: p.team, x: p.x, y: p.y, name: p.name, number: p.number })),
             lines: state.lines.map((l) => ({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color })),
             teamAId: state.teamA ? state.teamA.id : null,
@@ -423,8 +452,10 @@
         if (data.teamAId && state.teams.length) state.teamA = state.teams.find((t) => t.id === data.teamAId) || null;
         if (data.teamBId && state.teams.length) state.teamB = state.teams.find((t) => t.id === data.teamBId) || null;
         updateBanner(); updateLegend();
-        state.currentFormation = data.formation || "4-4-2";
-        formationSelect.value = state.currentFormation;
+        state.formationA = data.formationA || data.formation || "4-4-2";
+        state.formationB = data.formationB || data.formation || "4-4-2";
+        document.querySelector('.formation-select-team[data-side="A"]').value = state.formationA;
+        document.querySelector('.formation-select-team[data-side="B"]').value = state.formationB;
         state.players = data.players || [];
         // backward compat: old saves use "arrows"
         state.lines = (data.lines || data.arrows || []).map((l) => ({
@@ -574,28 +605,28 @@
     }
 
     function updateBanner() {
-        setBannerBadge(document.getElementById("badge-a"), state.teamA, DEFAULT_A_COLOR, "A");
-        document.getElementById("name-a").textContent = state.teamA ? state.teamA.name : "Team A";
-        setBannerBadge(document.getElementById("badge-b"), state.teamB, DEFAULT_B_COLOR, "B");
-        document.getElementById("name-b").textContent = state.teamB ? state.teamB.name : "Team B";
+        setBannerBadge(document.getElementById("badge-a"), state.teamA, DEFAULT_A_COLOR, "H");
+        document.getElementById("name-a").textContent = state.teamA ? state.teamA.name : "HOME";
+        setBannerBadge(document.getElementById("badge-b"), state.teamB, DEFAULT_B_COLOR, "A");
+        document.getElementById("name-b").textContent = state.teamB ? state.teamB.name : "AWAY";
     }
 
     function updateLegend() {
         const la = document.querySelector(".legend-item.team-a"), lb = document.querySelector(".legend-item.team-b");
-        la.textContent = state.teamA ? state.teamA.short : "Team A";
-        lb.textContent = state.teamB ? state.teamB.short : "Team B";
+        la.textContent = state.teamA ? state.teamA.short : "HOME";
+        lb.textContent = state.teamB ? state.teamB.short : "AWAY";
         la.style.setProperty("--team-color", getTeamColor("A"));
         lb.style.setProperty("--team-color", getTeamColor("B"));
     }
 
-    function openTeamModal(side) { pickingSide = side; teamModalTitle.textContent = side === "A" ? "Team A 선택" : "Team B 선택"; teamModal.classList.remove("hidden"); renderTeamGrid(); }
+    function openTeamModal(side) { pickingSide = side; teamModalTitle.textContent = side === "A" ? "HOME 팀 선택" : "AWAY 팀 선택"; teamModal.classList.remove("hidden"); renderTeamGrid(); }
     function closeTeamModal() { teamModal.classList.add("hidden"); }
     teamModal.querySelector(".modal-backdrop").addEventListener("click", closeTeamModal);
     teamModalClose.addEventListener("click", closeTeamModal);
     leagueTabs.forEach((tab) => tab.addEventListener("click", () => { leagueTabs.forEach((t) => t.classList.remove("active")); tab.classList.add("active"); currentLeague = tab.dataset.league; renderTeamGrid(); }));
     document.querySelectorAll(".team-pick-btn").forEach((btn) => btn.addEventListener("click", () => openTeamModal(btn.dataset.side)));
-    document.getElementById("slot-a").addEventListener("click", (e) => { if (!e.target.closest(".team-pick-btn")) openTeamModal("A"); });
-    document.getElementById("slot-b").addEventListener("click", (e) => { if (!e.target.closest(".team-pick-btn")) openTeamModal("B"); });
+    document.getElementById("slot-a").addEventListener("click", (e) => { if (!e.target.closest(".team-pick-btn") && !e.target.closest(".formation-select-team") && !e.target.closest(".kit-toggle-btn")) openTeamModal("A"); });
+    document.getElementById("slot-b").addEventListener("click", (e) => { if (!e.target.closest(".team-pick-btn") && !e.target.closest(".formation-select-team") && !e.target.closest(".kit-toggle-btn")) openTeamModal("B"); });
 
     // ── HOME / AWAY kit toggle ──────────────────────────
     document.querySelectorAll(".kit-toggle-btn").forEach((btn) => {
@@ -609,6 +640,22 @@
                 b.classList.toggle("active", b.dataset.kit === kit);
             });
             render(); renderBench();
+        });
+    });
+
+    // ── Icon color pickers ────────────────────────────────
+    document.querySelectorAll(".icon-fill-color").forEach((input) => {
+        input.addEventListener("input", (e) => {
+            if (input.dataset.side === "A") state.fillColorA = e.target.value;
+            else state.fillColorB = e.target.value;
+            render(); renderBench();
+        });
+    });
+    document.querySelectorAll(".icon-border-color").forEach((input) => {
+        input.addEventListener("input", (e) => {
+            if (input.dataset.side === "A") state.borderColorA = e.target.value;
+            else state.borderColorB = e.target.value;
+            render();
         });
     });
 
@@ -630,7 +677,7 @@
             const teamPlayers = state.players.filter((p) => p.team === side);
             if (teamPlayers.length === 0) { showToast("저장할 선수가 없습니다."); return; }
 
-            const teamName = team ? team.short : (side === "A" ? "Team A" : "Team B");
+            const teamName = team ? team.short : (side === "A" ? "HOME" : "AWAY");
             const name = prompt(`스쿼드 이름을 입력하세요:`, teamName + " 스쿼드");
             if (!name) return;
 
@@ -651,7 +698,7 @@
         btn.addEventListener("click", async () => {
             squadLoadSide = btn.dataset.side;
             const team = squadLoadSide === "A" ? state.teamA : state.teamB;
-            squadModalTitle.textContent = (team ? team.short : "Team " + squadLoadSide) + " 스쿼드 불러오기";
+            squadModalTitle.textContent = (team ? team.short : (squadLoadSide === "A" ? "HOME" : "AWAY")) + " 스쿼드 불러오기";
             squadModal.classList.remove("hidden");
             squadList.innerHTML = '<p class="empty-msg">불러오는 중...</p>';
 
@@ -692,7 +739,7 @@
         // Remove existing players of this side
         state.players = state.players.filter((p) => p.team !== side);
         // Get formation positions for this side
-        const f = state.formations[state.currentFormation];
+        const f = state.formations[side === "A" ? state.formationA : state.formationB];
         const positions = side === "A" ? f.teamA : f.teamB;
         const squadPlayers = squadData.players || [];
         for (let i = 0; i < squadPlayers.length; i++) {
@@ -714,21 +761,32 @@
         render(); renderBench();
     }
 
-    // ── Snapshot: include kit state ──────────────────────
+    // ── Snapshot: include kit + icon color state ─────────
     const _origSnapshot = getStateSnapshot;
     getStateSnapshot = function () {
         const snap = _origSnapshot();
         snap.kitA = state.kitA;
         snap.kitB = state.kitB;
+        snap.fillColorA = state.fillColorA;
+        snap.fillColorB = state.fillColorB;
+        snap.borderColorA = state.borderColorA;
+        snap.borderColorB = state.borderColorB;
         return snap;
     };
     const _origApply = applySnapshot;
     applySnapshot = function (data) {
         state.kitA = data.kitA || "home";
         state.kitB = data.kitB || "home";
-        // update kit toggle buttons
         document.querySelectorAll('.kit-toggle-btn[data-side="A"]').forEach((b) => b.classList.toggle("active", b.dataset.kit === state.kitA));
         document.querySelectorAll('.kit-toggle-btn[data-side="B"]').forEach((b) => b.classList.toggle("active", b.dataset.kit === state.kitB));
+        state.fillColorA = data.fillColorA || null;
+        state.fillColorB = data.fillColorB || null;
+        state.borderColorA = data.borderColorA || null;
+        state.borderColorB = data.borderColorB || null;
+        if (state.fillColorA) document.querySelector('.icon-fill-color[data-side="A"]').value = state.fillColorA;
+        if (state.fillColorB) document.querySelector('.icon-fill-color[data-side="B"]').value = state.fillColorB;
+        if (state.borderColorA) document.querySelector('.icon-border-color[data-side="A"]').value = state.borderColorA;
+        if (state.borderColorB) document.querySelector('.icon-border-color[data-side="B"]').value = state.borderColorB;
         _origApply(data);
     };
 

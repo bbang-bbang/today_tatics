@@ -30,22 +30,22 @@ TEAMS = [
     {"id": "gimcheon", "name": "김천 상무 FC",       "short": "김천",   "league": "K1", "primary": "#c8102e", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K35.png"},
     # K2 리그 (17팀)
     {"id": "suwon",    "name": "수원 삼성 블루윙즈",  "short": "수원",   "league": "K2", "primary": "#003da5", "secondary": "#ffffff", "accent": "#c8102e", "emblem": "emblem_K02.png"},
-    {"id": "busan",    "name": "부산 아이파크",      "short": "부산",   "league": "K2", "primary": "#b4050f", "secondary": "#c2d0d4", "accent": "#ffffff", "emblem": "emblem_K06.png"},
-    {"id": "jeonnam",  "name": "전남 드래곤즈",      "short": "전남",   "league": "K2", "primary": "#ffe600", "secondary": "#006b3f", "accent": "#000000", "emblem": "emblem_K07.png"},
-    {"id": "seongnam", "name": "성남 FC",           "short": "성남",   "league": "K2", "primary": "#000000", "secondary": "#ffe600", "accent": "#ffffff", "emblem": "emblem_K08.png"},
-    {"id": "daegu",    "name": "대구 FC",           "short": "대구",   "league": "K2", "primary": "#1e3a8a", "secondary": "#dc2626", "accent": "#ffffff", "emblem": "emblem_K17.png"},
-    {"id": "gyeongnam","name": "경남 FC",           "short": "경남",   "league": "K2", "primary": "#c8102e", "secondary": "#000000", "accent": "#ffffff", "emblem": "emblem_K20.png"},
-    {"id": "suwon_fc", "name": "수원 FC",           "short": "수원FC", "league": "K2", "primary": "#e30613", "secondary": "#1d2c6b", "accent": "#ffffff", "emblem": "emblem_K29.png"},
+    {"id": "busan",    "name": "부산 아이파크",      "short": "부산",   "league": "K2", "primary": "#b4050f", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K06.png"},
+    {"id": "jeonnam",  "name": "전남 드래곤즈",      "short": "전남",   "league": "K2", "primary": "#ffe600", "secondary": "#ffffff", "accent": "#000000", "emblem": "emblem_K07.png"},
+    {"id": "seongnam", "name": "성남 FC",           "short": "성남",   "league": "K2", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K08.png"},
+    {"id": "daegu",    "name": "대구 FC",           "short": "대구",   "league": "K2", "primary": "#1e3a8a", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K17.png"},
+    {"id": "gyeongnam","name": "경남 FC",           "short": "경남",   "league": "K2", "primary": "#c8102e", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K20.png"},
+    {"id": "suwon_fc", "name": "수원 FC",           "short": "수원FC", "league": "K2", "primary": "#e30613", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K29.png"},
     {"id": "seouland", "name": "서울 이랜드 FC",     "short": "이랜드", "league": "K2", "primary": "#e30613", "secondary": "#ffffff", "accent": "#1e3a8a", "emblem": "emblem_K31.png"},
     {"id": "ansan",    "name": "안산 그리너스 FC",    "short": "안산",   "league": "K2", "primary": "#006b3f", "secondary": "#ffffff", "accent": "#ffd700", "emblem": "emblem_K32.png"},
     {"id": "asan",     "name": "충남 아산 FC",       "short": "아산",   "league": "K2", "primary": "#004b87", "secondary": "#ffffff", "accent": "#e30613", "emblem": "emblem_K34.png"},
-    {"id": "gimpo",    "name": "김포 FC",           "short": "김포",   "league": "K2", "primary": "#7bbe3a", "secondary": "#c9a84c", "accent": "#ffffff", "emblem": "emblem_K36.png"},
-    {"id": "cheongju", "name": "충북 청주 FC",       "short": "청주",   "league": "K2", "primary": "#1e3a8a", "secondary": "#c8102e", "accent": "#ffffff", "emblem": "emblem_K37.png"},
+    {"id": "gimpo",    "name": "김포 FC",           "short": "김포",   "league": "K2", "primary": "#7bbe3a", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K36.png"},
+    {"id": "cheongju", "name": "충북 청주 FC",       "short": "청주",   "league": "K2", "primary": "#161c4a", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K37.png"},
     {"id": "cheonan",  "name": "천안 시티 FC",       "short": "천안",   "league": "K2", "primary": "#58b4e5", "secondary": "#ffffff", "accent": "#e30613", "emblem": "emblem_K38.png"},
-    {"id": "hwaseong", "name": "화성 FC",           "short": "화성",   "league": "K2", "primary": "#003da5", "secondary": "#ffd700", "accent": "#ffffff", "emblem": "emblem_K39.png"},
-    {"id": "paju",     "name": "파주 시민축구단",     "short": "파주",   "league": "K2", "primary": "#1e3a8a", "secondary": "#ffffff", "accent": "#c8102e", "emblem": "emblem_K40.png"},
-    {"id": "gimhae",   "name": "김해 FC",           "short": "김해",   "league": "K2", "primary": "#004b87", "secondary": "#ffffff", "accent": "#ffd700", "emblem": "emblem_K41.png"},
-    {"id": "yongin",   "name": "용인 시민축구단",     "short": "용인",   "league": "K2", "primary": "#003da5", "secondary": "#ffffff", "accent": "#ffd700", "emblem": "emblem_K42.png"},
+    {"id": "hwaseong", "name": "화성 FC",           "short": "화성",   "league": "K2", "primary": "#d24e20", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K39.png"},
+    {"id": "paju",     "name": "파주 시민축구단",     "short": "파주",   "league": "K2", "primary": "#1b287a", "secondary": "#ffffff", "accent": "#c8102e", "emblem": "emblem_K40.png"},
+    {"id": "gimhae",   "name": "김해 FC",           "short": "김해",   "league": "K2", "primary": "#ad1416", "secondary": "#ffffff", "accent": "#ffd700", "emblem": "emblem_K41.png"},
+    {"id": "yongin",   "name": "용인 시민축구단",     "short": "용인",   "league": "K2", "primary": "#a61e34", "secondary": "#ffffff", "accent": "#ffd700", "emblem": "emblem_K42.png"},
 ]
 
 
@@ -53,6 +53,8 @@ TEAMS = [
 def teams():
     return jsonify(TEAMS)
 
+
+PLAYER_STEP = 0.20  # 선수 간 고정 세로 간격
 
 def compute_formation(formation_str):
     """포메이션 문자열을 파싱하여 선수 좌표(0~1 정규화)를 계산한다."""
@@ -69,8 +71,8 @@ def compute_formation(formation_str):
             if count == 1:
                 y = 0.5
             else:
-                margin = 0.1
-                y = margin + (player_idx / (count - 1)) * (1.0 - 2 * margin)
+                start = 0.5 - (count - 1) * PLAYER_STEP / 2
+                y = start + player_idx * PLAYER_STEP
             positions.append({"x": round(x, 3), "y": round(y, 3)})
 
     return positions
@@ -87,6 +89,18 @@ POSITION_LABELS = {
     "5-4-1": ["GK", "LWB", "CB", "CB", "CB", "RWB", "LM", "CM", "CM", "RM", "ST"],
 }
 
+def mirror_labels(labels):
+    result = []
+    for label in labels:
+        if label.startswith("L"):
+            result.append("R" + label[1:])
+        elif label.startswith("R"):
+            result.append("L" + label[1:])
+        else:
+            result.append(label)
+    return result
+
+
 FORMATIONS = {}
 for name in POSITION_LABELS:
     team_a = compute_formation(name)
@@ -95,7 +109,7 @@ for name in POSITION_LABELS:
         "teamA": team_a,
         "teamB": team_b,
         "labelsA": POSITION_LABELS[name],
-        "labelsB": POSITION_LABELS[name],
+        "labelsB": mirror_labels(POSITION_LABELS[name]),
     }
 
 
