@@ -10,6 +10,40 @@ app = Flask(__name__)
 SAVES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saves")
 os.makedirs(SAVES_DIR, exist_ok=True)
 
+# ── K리그 팀 데이터 ──────────────────────────────────────
+TEAMS = [
+    # K1
+    {"id": "ulsan",    "name": "울산 HD FC",       "short": "울산",  "league": "K1", "primary": "#004a9f", "secondary": "#ffffff", "accent": "#f2a900"},
+    {"id": "jeonbuk",  "name": "전북 현대 모터스",  "short": "전북",  "league": "K1", "primary": "#006b3f", "secondary": "#ffffff", "accent": "#ffd700"},
+    {"id": "pohang",   "name": "포항 스틸러스",     "short": "포항",  "league": "K1", "primary": "#c8102e", "secondary": "#000000", "accent": "#ffffff"},
+    {"id": "jeju",     "name": "제주 유나이티드",    "short": "제주",  "league": "K1", "primary": "#f47920", "secondary": "#000000", "accent": "#ffffff"},
+    {"id": "incheon",  "name": "인천 유나이티드",    "short": "인천",  "league": "K1", "primary": "#004b87", "secondary": "#d4a843", "accent": "#ffffff"},
+    {"id": "suwon_fc", "name": "수원 FC",          "short": "수원FC", "league": "K1", "primary": "#e30613", "secondary": "#1d2c6b", "accent": "#ffffff"},
+    {"id": "daegu",    "name": "대구 FC",          "short": "대구",  "league": "K1", "primary": "#1e3a8a", "secondary": "#dc2626", "accent": "#ffffff"},
+    {"id": "gangwon",  "name": "강원 FC",          "short": "강원",  "league": "K1", "primary": "#e30613", "secondary": "#ffffff", "accent": "#f47920"},
+    {"id": "gwangju",  "name": "광주 FC",          "short": "광주",  "league": "K1", "primary": "#ffe600", "secondary": "#006b3f", "accent": "#000000"},
+    {"id": "daejeon",  "name": "대전 하나 시티즌",   "short": "대전",  "league": "K1", "primary": "#6b2fa0", "secondary": "#e30613", "accent": "#ffffff"},
+    {"id": "fcseoul",  "name": "FC 서울",          "short": "서울",  "league": "K1", "primary": "#c8102e", "secondary": "#000000", "accent": "#ffd700"},
+    {"id": "gimcheon", "name": "김천 상무 FC",      "short": "김천",  "league": "K1", "primary": "#c8102e", "secondary": "#1e3a8a", "accent": "#ffffff"},
+    # K2
+    {"id": "busan",    "name": "부산 아이파크",     "short": "부산",  "league": "K2", "primary": "#f47920", "secondary": "#1e3a8a", "accent": "#ffffff"},
+    {"id": "asan",     "name": "충남 아산 FC",      "short": "아산",  "league": "K2", "primary": "#004b87", "secondary": "#ffffff", "accent": "#e30613"},
+    {"id": "anyang",   "name": "FC 안양",          "short": "안양",  "league": "K2", "primary": "#6b2fa0", "secondary": "#ffffff", "accent": "#ffd700"},
+    {"id": "jeonnam",  "name": "전남 드래곤즈",     "short": "전남",  "league": "K2", "primary": "#ffe600", "secondary": "#006b3f", "accent": "#000000"},
+    {"id": "bucheon",  "name": "부천 FC 1995",     "short": "부천",  "league": "K2", "primary": "#c8102e", "secondary": "#1e3a8a", "accent": "#ffffff"},
+    {"id": "seouland", "name": "서울 이랜드 FC",    "short": "이랜드", "league": "K2", "primary": "#e30613", "secondary": "#ffffff", "accent": "#1e3a8a"},
+    {"id": "ansan",    "name": "안산 그리너스",      "short": "안산",  "league": "K2", "primary": "#006b3f", "secondary": "#ffffff", "accent": "#ffd700"},
+    {"id": "cheongju", "name": "충북 청주 FC",      "short": "청주",  "league": "K2", "primary": "#1e3a8a", "secondary": "#c8102e", "accent": "#ffffff"},
+    {"id": "seongnam", "name": "성남 FC",          "short": "성남",  "league": "K2", "primary": "#000000", "secondary": "#ffe600", "accent": "#ffffff"},
+    {"id": "gimpo",    "name": "김포 FC",          "short": "김포",  "league": "K2", "primary": "#004b87", "secondary": "#c9a84c", "accent": "#ffffff"},
+    {"id": "cheonan",  "name": "천안 시티 FC",      "short": "천안",  "league": "K2", "primary": "#004b87", "secondary": "#ffffff", "accent": "#e30613"},
+]
+
+
+@app.route("/api/teams")
+def teams():
+    return jsonify(TEAMS)
+
 
 def compute_formation(formation_str):
     """포메이션 문자열을 파싱하여 선수 좌표(0~1 정규화)를 계산한다."""

@@ -50,6 +50,28 @@
                 <span class="legend-item team-b">Team B</span>
             </div>
         </header>
+        <!-- 팀 선택 배너 -->
+        <div id="team-banner">
+            <div class="team-slot" id="slot-a">
+                <div class="team-slot-badge" id="badge-a">
+                    <span class="badge-letter">A</span>
+                </div>
+                <div class="team-slot-info">
+                    <span class="team-slot-name" id="name-a">Team A</span>
+                    <button class="team-pick-btn" data-side="A">팀 선택</button>
+                </div>
+            </div>
+            <div class="team-banner-vs">VS</div>
+            <div class="team-slot" id="slot-b">
+                <div class="team-slot-badge" id="badge-b">
+                    <span class="badge-letter">B</span>
+                </div>
+                <div class="team-slot-info">
+                    <span class="team-slot-name" id="name-b">Team B</span>
+                    <button class="team-pick-btn" data-side="B">팀 선택</button>
+                </div>
+            </div>
+        </div>
         <main id="canvas-container">
             <canvas id="field"></canvas>
         </main>
@@ -79,6 +101,22 @@
             </div>
             <div class="modal-actions">
                 <button id="load-modal-close" class="modal-btn cancel">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 팀 선택 모달 -->
+    <div id="team-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content team-modal-content">
+            <h2 id="team-modal-title">팀 선택</h2>
+            <div class="league-tabs">
+                <button class="league-tab active" data-league="K1">K1 리그</button>
+                <button class="league-tab" data-league="K2">K2 리그</button>
+            </div>
+            <div id="team-grid" class="team-grid"></div>
+            <div class="modal-actions">
+                <button id="team-modal-close" class="modal-btn cancel">취소</button>
             </div>
         </div>
     </div>

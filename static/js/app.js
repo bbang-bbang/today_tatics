@@ -2,8 +2,8 @@
     "use strict";
 
     const PITCH_RATIO = 105 / 68;
-    const TEAM_A_COLOR = "#2563eb";
-    const TEAM_B_COLOR = "#dc2626";
+    const DEFAULT_A_COLOR = "#2563eb";
+    const DEFAULT_B_COLOR = "#dc2626";
     const PLAYER_RADIUS = 16;
     const FIELD_GREEN = "#2d8a4e";
     const LINE_COLOR = "#ffffffcc";
@@ -18,6 +18,9 @@
         drawingArrow: null,
         formations: {},
         currentFormation: "4-4-2",
+        teams: [],
+        teamA: null,          // selected team object or null
+        teamB: null,
     };
 
     const canvas = document.getElementById("field");
@@ -201,11 +204,24 @@
         }
     }
 
+    // ── Team color helpers ────────────────────────────────
+    function getTeamColor(side) {
+        if (side === "A" && state.teamA) return state.teamA.primary;
+        if (side === "B" && state.teamB) return state.teamB.primary;
+        return side === "A" ? DEFAULT_A_COLOR : DEFAULT_B_COLOR;
+    }
+
+    function getTeamStroke(side) {
+        if (side === "A" && state.teamA) return state.teamA.secondary;
+        if (side === "B" && state.teamB) return state.teamB.secondary;
+        return "#ffffff";
+    }
+
     // ── Draw players ───────────────────────────────────────
     function drawPlayers() {
         for (const p of state.players) {
             const { px, py } = fieldToCanvas(p.x, p.y);
-            const color = p.team === "A" ? TEAM_A_COLOR : TEAM_B_COLOR;
+            const color = getTeamColor(p.team);
             const isDragging = state.dragging === p;
             const r = isDragging ? PLAYER_RADIUS + 3 : PLAYER_RADIUS;
 
@@ -220,8 +236,8 @@
             ctx.arc(px, py, r, 0, Math.PI * 2);
             ctx.fillStyle = color;
             ctx.fill();
-            ctx.strokeStyle = "#fff";
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = getTeamStroke(p.team);
+            ctx.lineWidth = 2.5;
             ctx.stroke();
 
             ctx.shadowColor = "transparent";
