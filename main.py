@@ -136,7 +136,9 @@ def create_save():
         "name": body.get("name", "Untitled"),
         "formation": body.get("formation", ""),
         "players": body.get("players", []),
-        "arrows": body.get("arrows", []),
+        "lines": body.get("lines", body.get("arrows", [])),
+        "teamAId": body.get("teamAId"),
+        "teamBId": body.get("teamBId"),
         "createdAt": now,
         "updatedAt": now,
     }
@@ -167,7 +169,9 @@ def update_save(save_id):
     existing["name"] = body.get("name", existing["name"])
     existing["formation"] = body.get("formation", existing["formation"])
     existing["players"] = body.get("players", existing["players"])
-    existing["arrows"] = body.get("arrows", existing["arrows"])
+    existing["lines"] = body.get("lines", existing.get("lines", existing.get("arrows", [])))
+    existing["teamAId"] = body.get("teamAId", existing.get("teamAId"))
+    existing["teamBId"] = body.get("teamBId", existing.get("teamBId"))
     existing["updatedAt"] = datetime.now().isoformat()
     with open(fpath, "w", encoding="utf-8") as f:
         json.dump(existing, f, ensure_ascii=False, indent=2)

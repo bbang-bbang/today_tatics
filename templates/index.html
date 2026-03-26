@@ -24,21 +24,24 @@
                 </select>
             </div>
             <div class="toolbar-group">
-                <button id="btn-select" class="mode-btn active" title="선수 이동 모드">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M5 9l4-4 4 4"/><path d="M9 5v14"/><path d="M19 15l-4 4-4-4"/><path d="M15 19V5"/>
-                    </svg>
-                    이동
-                </button>
-                <button id="btn-draw" class="mode-btn" title="화살표 그리기 모드">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M5 19L19 5"/><path d="M13 5h6v6"/>
-                    </svg>
-                    화살표
-                </button>
+                <button id="btn-select" class="mode-btn active" title="선수 이동 모드">이동</button>
+                <span class="toolbar-sep">|</span>
+                <button class="mode-btn draw-mode-btn" data-draw="arrow" title="실선 화살표">→ 실선</button>
+                <button class="mode-btn draw-mode-btn" data-draw="dashedArrow" title="점선 화살표">⇢ 점선</button>
+                <button class="mode-btn draw-mode-btn" data-draw="line" title="실선">― 실선</button>
+                <button class="mode-btn draw-mode-btn" data-draw="dashedLine" title="점선">┄ 점선</button>
+            </div>
+            <div class="toolbar-group color-swatches" title="선 색상">
+                <span class="color-swatch active" data-color="rgba(255,255,255,0.85)"></span>
+                <span class="color-swatch" data-color="rgba(255,68,68,0.9)"></span>
+                <span class="color-swatch" data-color="rgba(68,170,255,0.9)"></span>
+                <span class="color-swatch" data-color="rgba(255,221,0,0.9)"></span>
+                <span class="color-swatch" data-color="rgba(68,255,100,0.9)"></span>
+                <span class="color-swatch" data-color="rgba(255,140,0,0.9)"></span>
             </div>
             <div class="toolbar-group">
-                <button id="btn-clear-arrows" class="action-btn" title="화살표 지우기">화살표 지우기</button>
+                <button id="btn-clear-lines" class="action-btn" title="그리기 지우기">그리기 지우기</button>
+                <button id="btn-undo-line" class="action-btn" title="마지막 선 취소">실행취소</button>
                 <button id="btn-reset" class="action-btn" title="전체 초기화">초기화</button>
             </div>
             <div class="toolbar-group">
@@ -72,9 +75,27 @@
                 </div>
             </div>
         </div>
-        <main id="canvas-container">
-            <canvas id="field"></canvas>
-        </main>
+        <div id="main-area">
+            <main id="canvas-container">
+                <canvas id="field"></canvas>
+            </main>
+            <aside id="bench-panel">
+                <div class="bench-section" data-side="A">
+                    <div class="bench-header">
+                        <span class="bench-team-name" id="bench-name-a">Team A</span>
+                        <button class="bench-add-btn" data-side="A" title="선수 추가">+ 추가</button>
+                    </div>
+                    <div class="bench-players" id="bench-list-a"></div>
+                </div>
+                <div class="bench-section" data-side="B">
+                    <div class="bench-header">
+                        <span class="bench-team-name" id="bench-name-b">Team B</span>
+                        <button class="bench-add-btn" data-side="B" title="선수 추가">+ 추가</button>
+                    </div>
+                    <div class="bench-players" id="bench-list-b"></div>
+                </div>
+            </aside>
+        </div>
     </div>
 
     <!-- 선수 편집 팝업 -->
