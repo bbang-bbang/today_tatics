@@ -2,8 +2,8 @@
     "use strict";
 
     const PITCH_RATIO = 105 / 68;
-    const DEFAULT_A_COLOR = "#2563eb";
-    const DEFAULT_B_COLOR = "#dc2626";
+    const DEFAULT_A_COLOR = "BLUE";
+    const DEFAULT_B_COLOR = "RED";
     const PLAYER_RADIUS = 16;
     const FIELD_GREEN = "#2d8a4e";
     const LINE_COLOR = "#ffffffcc";
