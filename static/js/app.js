@@ -320,6 +320,7 @@
     }
 
     canvas.addEventListener("pointerdown", (e) => {
+        if (editingPlayer) return; // don't start drag while editing
         const { px, py } = getPointerPos(e);
         const { fx, fy } = canvasToField(px, py);
 
@@ -370,6 +371,82 @@
             }
             state.drawingArrow = null;
             render();
+        }
+    });
+
+    // ── Player edit popup (double-click) ───────────────────
+    const editPopup = document.getElementById("player-edit-popup");
+    const editNumber = document.getElementById("player-edit-number");
+    const editName = document.getElementById("player-edit-name");
+    const editConfirm = document.getElementById("player-edit-confirm");
+    const editClose = document.getElementById("player-edit-close");
+    const editTeamLabel = document.getElementById("player-edit-team-label");
+
+    let editingPlayer = null;
+
+    function openEditPopup(player, screenX, screenY) {
+        editingPlayer = player;
+        editNumber.value = player.number;
+        editName.value = player.name;
+
+        const color = getTeamColor(player.team);
+        editTeamLabel.style.background = color;
+        editTeamLabel.textContent = player.team === "A"
+            ? (state.teamA ? state.teamA.short : "Team A")
+            : (state.teamB ? state.teamB.short : "Team B");
+
+        // Position popup near the player but keep it within viewport
+        let left = screenX + 12;
+        let top = screenY - 20;
+        const popupW = 200, popupH = 160;
+        if (left + popupW > window.innerWidth) left = screenX - popupW - 12;
+        if (top + popupH > window.innerHeight) top = window.innerHeight - popupH - 8;
+        if (top < 8) top = 8;
+
+        editPopup.style.left = left + "px";
+        editPopup.style.top = top + "px";
+        editPopup.classList.remove("hidden");
+        editName.focus();
+        editName.select();
+    }
+
+    function closeEditPopup() {
+        editPopup.classList.add("hidden");
+        editingPlayer = null;
+    }
+
+    function confirmEdit() {
+        if (!editingPlayer) return;
+        const num = parseInt(editNumber.value, 10);
+        if (!isNaN(num) && num >= 1 && num <= 99) {
+            editingPlayer.number = num;
+        }
+        editingPlayer.name = editName.value.trim() || editingPlayer.name;
+        closeEditPopup();
+        render();
+    }
+
+    editConfirm.addEventListener("click", confirmEdit);
+    editClose.addEventListener("click", closeEditPopup);
+
+    editPopup.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); confirmEdit(); }
+        if (e.key === "Escape") closeEditPopup();
+    });
+
+    // Close popup when clicking outside
+    document.addEventListener("pointerdown", (e) => {
+        if (editingPlayer && !editPopup.contains(e.target) && e.target !== canvas) {
+            closeEditPopup();
+        }
+    });
+
+    canvas.addEventListener("dblclick", (e) => {
+        if (state.mode !== "select") return;
+        const { px, py } = getPointerPos(e);
+        const player = hitTest(px, py);
+        if (player) {
+            openEditPopup(player, e.clientX, e.clientY);
         }
     });
 
@@ -597,19 +674,37 @@
         el.style.width = size + "px";
         el.style.height = size + "px";
         el.style.borderRadius = "50%";
-        el.style.background = `linear-gradient(135deg, ${team.primary} 60%, ${team.accent} 100%)`;
         el.style.display = "flex";
         el.style.alignItems = "center";
         el.style.justifyContent = "center";
-        el.style.fontWeight = "800";
-        el.style.fontSize = (size * 0.28) + "px";
-        el.style.color = team.accent === "#000000" ? "#000" : "#fff";
-        el.style.border = `2px solid ${team.secondary}`;
-        el.style.textAlign = "center";
-        el.style.lineHeight = "1.1";
-        el.style.letterSpacing = "-0.5px";
         el.style.flexShrink = "0";
-        el.textContent = team.short;
+        el.style.overflow = "hidden";
+        el.style.background = "#1a1a2e";
+        el.style.border = `2px solid ${team.secondary}`;
+
+        if (team.emblem) {
+            const img = document.createElement("img");
+            img.src = `/static/img/emblems/${team.emblem}`;
+            img.alt = team.short;
+            img.style.width = "90%";
+            img.style.height = "90%";
+            img.style.objectFit = "contain";
+            img.onerror = () => {
+                img.remove();
+                el.textContent = team.short;
+                el.style.fontWeight = "800";
+                el.style.fontSize = (size * 0.28) + "px";
+                el.style.color = team.accent === "#000000" ? "#000" : "#fff";
+                el.style.background = `linear-gradient(135deg, ${team.primary} 60%, ${team.accent} 100%)`;
+            };
+            el.appendChild(img);
+        } else {
+            el.textContent = team.short;
+            el.style.fontWeight = "800";
+            el.style.fontSize = (size * 0.28) + "px";
+            el.style.color = team.accent === "#000000" ? "#000" : "#fff";
+            el.style.background = `linear-gradient(135deg, ${team.primary} 60%, ${team.accent} 100%)`;
+        }
         return el;
     }
 
@@ -650,47 +745,45 @@
         showToast(`${team.name} 선택 완료`);
     }
 
+    function setBannerBadge(badgeEl, team, fallbackColor, fallbackLetter) {
+        badgeEl.innerHTML = "";
+        if (team) {
+            badgeEl.style.background = "#1a1a2e";
+            badgeEl.style.borderColor = team.secondary;
+            if (team.emblem) {
+                const img = document.createElement("img");
+                img.src = `/static/img/emblems/${team.emblem}`;
+                img.alt = team.short;
+                img.style.width = "85%";
+                img.style.height = "85%";
+                img.style.objectFit = "contain";
+                badgeEl.appendChild(img);
+            } else {
+                const txt = document.createElement("span");
+                txt.className = "badge-letter";
+                txt.textContent = team.short;
+                txt.style.fontSize = "0.85rem";
+                badgeEl.style.background = `linear-gradient(135deg, ${team.primary} 60%, ${team.accent} 100%)`;
+                badgeEl.appendChild(txt);
+            }
+        } else {
+            badgeEl.style.background = fallbackColor;
+            badgeEl.style.borderColor = "rgba(255,255,255,0.2)";
+            badgeEl.innerHTML = `<span class="badge-letter">${fallbackLetter}</span>`;
+        }
+    }
+
     function updateBanner() {
         const badgeA = document.getElementById("badge-a");
         const nameA = document.getElementById("name-a");
         const badgeB = document.getElementById("badge-b");
         const nameB = document.getElementById("name-b");
 
-        if (state.teamA) {
-            badgeA.innerHTML = "";
-            badgeA.style.background = `linear-gradient(135deg, ${state.teamA.primary} 60%, ${state.teamA.accent} 100%)`;
-            badgeA.style.borderColor = state.teamA.secondary;
-            const txt = document.createElement("span");
-            txt.className = "badge-letter";
-            txt.textContent = state.teamA.short;
-            txt.style.color = state.teamA.accent === "#000000" ? "#000" : "#fff";
-            txt.style.fontSize = "0.85rem";
-            badgeA.appendChild(txt);
-            nameA.textContent = state.teamA.name;
-        } else {
-            badgeA.innerHTML = '<span class="badge-letter">A</span>';
-            badgeA.style.background = DEFAULT_A_COLOR;
-            badgeA.style.borderColor = "rgba(255,255,255,0.2)";
-            nameA.textContent = "Team A";
-        }
+        setBannerBadge(badgeA, state.teamA, DEFAULT_A_COLOR, "A");
+        nameA.textContent = state.teamA ? state.teamA.name : "Team A";
 
-        if (state.teamB) {
-            badgeB.innerHTML = "";
-            badgeB.style.background = `linear-gradient(135deg, ${state.teamB.primary} 60%, ${state.teamB.accent} 100%)`;
-            badgeB.style.borderColor = state.teamB.secondary;
-            const txt = document.createElement("span");
-            txt.className = "badge-letter";
-            txt.textContent = state.teamB.short;
-            txt.style.color = state.teamB.accent === "#000000" ? "#000" : "#fff";
-            txt.style.fontSize = "0.85rem";
-            badgeB.appendChild(txt);
-            nameB.textContent = state.teamB.name;
-        } else {
-            badgeB.innerHTML = '<span class="badge-letter">B</span>';
-            badgeB.style.background = DEFAULT_B_COLOR;
-            badgeB.style.borderColor = "rgba(255,255,255,0.2)";
-            nameB.textContent = "Team B";
-        }
+        setBannerBadge(badgeB, state.teamB, DEFAULT_B_COLOR, "B");
+        nameB.textContent = state.teamB ? state.teamB.name : "Team B";
     }
 
     function updateLegend() {

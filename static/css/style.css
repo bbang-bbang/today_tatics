@@ -582,3 +582,100 @@ body {
 .toast.show {
     opacity: 1;
 }
+
+/* Player Edit Popup */
+.player-edit-popup {
+    position: fixed;
+    z-index: 1500;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 10px;
+    padding: 12px 14px;
+    width: 200px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    transition: opacity 0.15s;
+}
+
+.player-edit-popup.hidden {
+    display: none;
+}
+
+.player-edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.player-edit-team-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: #fff;
+}
+
+.player-edit-close-btn {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.player-edit-close-btn:hover {
+    color: #e94560;
+}
+
+.player-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.player-edit-row label {
+    font-size: 0.78rem;
+    color: #a0a0b0;
+    width: 42px;
+    flex-shrink: 0;
+}
+
+.player-edit-row input {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: 5px;
+    border: 1px solid #0f3460;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.player-edit-row input:focus {
+    border-color: #e94560;
+}
+
+.player-edit-row input[type="number"] {
+    width: 56px;
+    flex: none;
+}
+
+.player-edit-confirm-btn {
+    width: 100%;
+    padding: 6px;
+    border-radius: 5px;
+    border: 1px solid #15a050;
+    background: #0d7c3e;
+    color: #fff;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 2px;
+}
+
+.player-edit-confirm-btn:hover {
+    background: #15a050;
+}

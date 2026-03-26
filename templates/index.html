@@ -77,6 +77,23 @@
         </main>
     </div>
 
+    <!-- 선수 편집 팝업 -->
+    <div id="player-edit-popup" class="player-edit-popup hidden">
+        <div class="player-edit-header">
+            <span id="player-edit-team-label" class="player-edit-team-label">Team A</span>
+            <button id="player-edit-close" class="player-edit-close-btn">&times;</button>
+        </div>
+        <div class="player-edit-row">
+            <label for="player-edit-number">등번호</label>
+            <input type="number" id="player-edit-number" min="1" max="99">
+        </div>
+        <div class="player-edit-row">
+            <label for="player-edit-name">이름</label>
+            <input type="text" id="player-edit-name" maxlength="20" placeholder="선수 이름">
+        </div>
+        <button id="player-edit-confirm" class="player-edit-confirm-btn">확인</button>
+    </div>
+
     <!-- 저장 모달 -->
     <div id="save-modal" class="modal hidden">
         <div class="modal-backdrop"></div>
