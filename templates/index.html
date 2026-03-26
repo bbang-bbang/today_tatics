@@ -41,6 +41,10 @@
                 <button id="btn-clear-arrows" class="action-btn" title="화살표 지우기">화살표 지우기</button>
                 <button id="btn-reset" class="action-btn" title="전체 초기화">초기화</button>
             </div>
+            <div class="toolbar-group">
+                <button id="btn-save" class="action-btn save-btn" title="현재 전술 저장">저장</button>
+                <button id="btn-load" class="action-btn load-btn" title="저장된 전술 불러오기">불러오기</button>
+            </div>
             <div class="toolbar-group legend">
                 <span class="legend-item team-a">Team A</span>
                 <span class="legend-item team-b">Team B</span>
@@ -50,6 +54,35 @@
             <canvas id="field"></canvas>
         </main>
     </div>
+
+    <!-- 저장 모달 -->
+    <div id="save-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h2 id="save-modal-title">전술 저장</h2>
+            <label for="save-name-input">전술 이름</label>
+            <input type="text" id="save-name-input" placeholder="예: 공격 전술 A" maxlength="50">
+            <div class="modal-actions">
+                <button id="save-modal-cancel" class="modal-btn cancel">취소</button>
+                <button id="save-modal-confirm" class="modal-btn confirm">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 불러오기 모달 -->
+    <div id="load-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content load-modal-content">
+            <h2>저장된 전술</h2>
+            <div id="saves-list" class="saves-list">
+                <p class="empty-msg">저장된 전술이 없습니다.</p>
+            </div>
+            <div class="modal-actions">
+                <button id="load-modal-close" class="modal-btn cancel">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/app.js"></script>
 </body>
 </html>

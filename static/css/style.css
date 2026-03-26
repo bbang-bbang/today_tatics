@@ -139,3 +139,240 @@ body {
     border-radius: 4px;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
 }
+
+/* Save / Load buttons */
+.save-btn {
+    background: #0d7c3e !important;
+    border-color: #15a050 !important;
+}
+
+.save-btn:hover {
+    background: #15a050 !important;
+}
+
+.load-btn {
+    background: #7c3a0d !important;
+    border-color: #a0581b !important;
+}
+
+.load-btn:hover {
+    background: #a0581b !important;
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.modal-content {
+    position: relative;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 12px;
+    padding: 24px 28px;
+    width: 380px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h2 {
+    font-size: 1.1rem;
+    color: #e94560;
+    margin-bottom: 16px;
+}
+
+.modal-content label {
+    display: block;
+    font-size: 0.85rem;
+    color: #a0a0b0;
+    margin-bottom: 6px;
+}
+
+.modal-content input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #0f3460;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    outline: none;
+    margin-bottom: 20px;
+}
+
+.modal-content input[type="text"]:focus {
+    border-color: #e94560;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.modal-btn {
+    padding: 7px 18px;
+    border-radius: 6px;
+    border: 1px solid #0f3460;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.modal-btn.cancel {
+    background: #1a1a2e;
+    color: #c0c0d0;
+}
+
+.modal-btn.cancel:hover {
+    border-color: #e94560;
+    color: #fff;
+}
+
+.modal-btn.confirm {
+    background: #0d7c3e;
+    border-color: #15a050;
+    color: #fff;
+}
+
+.modal-btn.confirm:hover {
+    background: #15a050;
+}
+
+/* Load modal - saves list */
+.load-modal-content {
+    width: 460px;
+}
+
+.saves-list {
+    max-height: 350px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+.saves-list .empty-msg {
+    text-align: center;
+    color: #666;
+    padding: 24px;
+    font-size: 0.9rem;
+}
+
+.save-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border: 1px solid #0f3460;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    background: #1a1a2e;
+    transition: border-color 0.2s;
+}
+
+.save-item:hover {
+    border-color: #e94560;
+}
+
+.save-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.save-item-name {
+    font-size: 0.95rem;
+    color: #e0e0e0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.save-item-meta {
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 2px;
+}
+
+.save-item-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+.save-item-actions button {
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid #0f3460;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-item-actions .btn-load-item {
+    background: #0f3460;
+    color: #fff;
+}
+
+.save-item-actions .btn-load-item:hover {
+    background: #2563eb;
+}
+
+.save-item-actions .btn-overwrite-item {
+    background: #5a3d0d;
+    color: #e0c080;
+    border-color: #7c5a1a;
+}
+
+.save-item-actions .btn-overwrite-item:hover {
+    background: #7c5a1a;
+    color: #fff;
+}
+
+.save-item-actions .btn-delete-item {
+    background: #3d0d0d;
+    color: #e08080;
+    border-color: #7c1a1a;
+}
+
+.save-item-actions .btn-delete-item:hover {
+    background: #7c1a1a;
+    color: #fff;
+}
+
+/* Toast notification */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 24px;
+    border-radius: 8px;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.toast.show {
+    opacity: 1;
+}

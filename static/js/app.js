@@ -389,6 +389,183 @@
         loadFormation(e.target.value);
     });
 
+    // ── Toast notification ────────────────────────────────
+    let toastEl = document.createElement("div");
+    toastEl.className = "toast";
+    document.body.appendChild(toastEl);
+    let toastTimer = null;
+
+    function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2000);
+    }
+
+    // ── Save / Load helpers ───────────────────────────────
+    function getStateSnapshot() {
+        return {
+            formation: state.currentFormation,
+            players: state.players.map((p) => ({
+                id: p.id, team: p.team, x: p.x, y: p.y, name: p.name, number: p.number,
+            })),
+            arrows: state.arrows.map((a) => ({ sx: a.sx, sy: a.sy, ex: a.ex, ey: a.ey })),
+        };
+    }
+
+    function applySnapshot(data) {
+        state.currentFormation = data.formation || "4-4-2";
+        formationSelect.value = state.currentFormation;
+        state.players = data.players || [];
+        state.arrows = data.arrows || [];
+        render();
+    }
+
+    function formatDate(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    // ── Save modal ────────────────────────────────────────
+    const saveModal = document.getElementById("save-modal");
+    const saveModalTitle = document.getElementById("save-modal-title");
+    const saveNameInput = document.getElementById("save-name-input");
+    const saveModalCancel = document.getElementById("save-modal-cancel");
+    const saveModalConfirm = document.getElementById("save-modal-confirm");
+
+    let saveOverwriteId = null;
+
+    function openSaveModal(overwriteId, defaultName) {
+        saveOverwriteId = overwriteId || null;
+        saveModalTitle.textContent = overwriteId ? "전술 덮어쓰기" : "전술 저장";
+        saveModalConfirm.textContent = overwriteId ? "덮어쓰기" : "저장";
+        saveNameInput.value = defaultName || "";
+        saveModal.classList.remove("hidden");
+        saveNameInput.focus();
+    }
+
+    function closeSaveModal() {
+        saveModal.classList.add("hidden");
+        saveOverwriteId = null;
+    }
+
+    saveModal.querySelector(".modal-backdrop").addEventListener("click", closeSaveModal);
+    saveModalCancel.addEventListener("click", closeSaveModal);
+
+    saveNameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") saveModalConfirm.click();
+        if (e.key === "Escape") closeSaveModal();
+    });
+
+    saveModalConfirm.addEventListener("click", async () => {
+        const name = saveNameInput.value.trim();
+        if (!name) {
+            saveNameInput.focus();
+            return;
+        }
+        const snap = getStateSnapshot();
+        snap.name = name;
+
+        if (saveOverwriteId) {
+            await fetch(`/api/saves/${saveOverwriteId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(snap),
+            });
+            showToast("전술이 덮어쓰기 되었습니다.");
+        } else {
+            await fetch("/api/saves", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(snap),
+            });
+            showToast("전술이 저장되었습니다.");
+        }
+        closeSaveModal();
+    });
+
+    document.getElementById("btn-save").addEventListener("click", () => openSaveModal(null, ""));
+
+    // ── Load modal ────────────────────────────────────────
+    const loadModal = document.getElementById("load-modal");
+    const savesList = document.getElementById("saves-list");
+    const loadModalClose = document.getElementById("load-modal-close");
+
+    function closeLoadModal() {
+        loadModal.classList.add("hidden");
+    }
+
+    loadModal.querySelector(".modal-backdrop").addEventListener("click", closeLoadModal);
+    loadModalClose.addEventListener("click", closeLoadModal);
+
+    async function openLoadModal() {
+        loadModal.classList.remove("hidden");
+        savesList.innerHTML = '<p class="empty-msg">불러오는 중...</p>';
+
+        const res = await fetch("/api/saves");
+        const saves = await res.json();
+
+        if (saves.length === 0) {
+            savesList.innerHTML = '<p class="empty-msg">저장된 전술이 없습니다.</p>';
+            return;
+        }
+
+        savesList.innerHTML = "";
+        for (const s of saves) {
+            const item = document.createElement("div");
+            item.className = "save-item";
+            item.innerHTML = `
+                <div class="save-item-info">
+                    <div class="save-item-name">${escapeHtml(s.name)}</div>
+                    <div class="save-item-meta">${s.formation} &middot; ${formatDate(s.updatedAt)}</div>
+                </div>
+                <div class="save-item-actions">
+                    <button class="btn-load-item" data-id="${s.id}">불러오기</button>
+                    <button class="btn-overwrite-item" data-id="${s.id}" data-name="${escapeAttr(s.name)}">덮어쓰기</button>
+                    <button class="btn-delete-item" data-id="${s.id}">삭제</button>
+                </div>
+            `;
+            savesList.appendChild(item);
+        }
+
+        // event delegation
+        savesList.onclick = async (e) => {
+            const btn = e.target.closest("button");
+            if (!btn) return;
+            const id = btn.dataset.id;
+
+            if (btn.classList.contains("btn-load-item")) {
+                const res = await fetch(`/api/saves/${id}`);
+                const data = await res.json();
+                applySnapshot(data);
+                closeLoadModal();
+                showToast("전술을 불러왔습니다.");
+            } else if (btn.classList.contains("btn-overwrite-item")) {
+                closeLoadModal();
+                openSaveModal(id, btn.dataset.name);
+            } else if (btn.classList.contains("btn-delete-item")) {
+                if (!confirm("정말 삭제하시겠습니까?")) return;
+                await fetch(`/api/saves/${id}`, { method: "DELETE" });
+                showToast("삭제되었습니다.");
+                openLoadModal();
+            }
+        };
+    }
+
+    function escapeHtml(str) {
+        const d = document.createElement("div");
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function escapeAttr(str) {
+        return str.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    document.getElementById("btn-load").addEventListener("click", openLoadModal);
+
     // ── Init ───────────────────────────────────────────────
     window.addEventListener("resize", resize);
 
