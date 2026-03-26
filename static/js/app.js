@@ -26,10 +26,6 @@
         teamB: null,
         kitA: "home",           // "home" | "away"
         kitB: "home",
-        fillColorA: null,       // null = auto (team color)
-        fillColorB: null,
-        borderColorA: null,     // null = auto (team secondary)
-        borderColorB: null,
         nextId: 100,
     };
 
@@ -138,18 +134,16 @@
         return side === "A" ? state.kitA === "away" : state.kitB === "away";
     }
     function getTeamColor(side) {
-        const override = side === "A" ? state.fillColorA : state.fillColorB;
-        if (override) return override;
         const team = side === "A" ? state.teamA : state.teamB;
         if (!team) return side === "A" ? DEFAULT_A_COLOR : DEFAULT_B_COLOR;
         return isAway(side) ? "#ffffff" : team.primary;
     }
     function getTeamStroke(side) {
-        const override = side === "A" ? state.borderColorA : state.borderColorB;
-        if (override) return override;
         const team = side === "A" ? state.teamA : state.teamB;
         if (!team) return isAway(side) ? "#888888" : "#ffffff";
-        return isAway(side) ? team.primary : team.secondary;
+        return isAway(side)
+            ? (team.border_away || team.primary)
+            : (team.border_home || team.secondary);
     }
     function getTeamTextColor(side) {
         return isAway(side) ? "#222222" : "#ffffff";
@@ -643,22 +637,6 @@
         });
     });
 
-    // ── Icon color pickers ────────────────────────────────
-    document.querySelectorAll(".icon-fill-color").forEach((input) => {
-        input.addEventListener("input", (e) => {
-            if (input.dataset.side === "A") state.fillColorA = e.target.value;
-            else state.fillColorB = e.target.value;
-            render(); renderBench();
-        });
-    });
-    document.querySelectorAll(".icon-border-color").forEach((input) => {
-        input.addEventListener("input", (e) => {
-            if (input.dataset.side === "A") state.borderColorA = e.target.value;
-            else state.borderColorB = e.target.value;
-            render();
-        });
-    });
-
     // ── Squad save / load ─────────────────────────────────
     const squadModal = document.getElementById("squad-modal");
     const squadModalTitle = document.getElementById("squad-modal-title");
@@ -767,10 +745,6 @@
         const snap = _origSnapshot();
         snap.kitA = state.kitA;
         snap.kitB = state.kitB;
-        snap.fillColorA = state.fillColorA;
-        snap.fillColorB = state.fillColorB;
-        snap.borderColorA = state.borderColorA;
-        snap.borderColorB = state.borderColorB;
         return snap;
     };
     const _origApply = applySnapshot;
@@ -779,14 +753,6 @@
         state.kitB = data.kitB || "home";
         document.querySelectorAll('.kit-toggle-btn[data-side="A"]').forEach((b) => b.classList.toggle("active", b.dataset.kit === state.kitA));
         document.querySelectorAll('.kit-toggle-btn[data-side="B"]').forEach((b) => b.classList.toggle("active", b.dataset.kit === state.kitB));
-        state.fillColorA = data.fillColorA || null;
-        state.fillColorB = data.fillColorB || null;
-        state.borderColorA = data.borderColorA || null;
-        state.borderColorB = data.borderColorB || null;
-        if (state.fillColorA) document.querySelector('.icon-fill-color[data-side="A"]').value = state.fillColorA;
-        if (state.fillColorB) document.querySelector('.icon-fill-color[data-side="B"]').value = state.fillColorB;
-        if (state.borderColorA) document.querySelector('.icon-border-color[data-side="A"]').value = state.borderColorA;
-        if (state.borderColorB) document.querySelector('.icon-border-color[data-side="B"]').value = state.borderColorB;
         _origApply(data);
     };
 
