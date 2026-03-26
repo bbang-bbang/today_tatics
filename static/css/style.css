@@ -201,6 +201,12 @@ body {
     white-space: nowrap;
 }
 
+.team-slot-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
 .team-pick-btn {
     padding: 3px 10px;
     font-size: 0.72rem;
@@ -210,13 +216,42 @@ body {
     color: #a0a0b0;
     cursor: pointer;
     transition: all 0.2s;
-    width: fit-content;
 }
 
 .team-pick-btn:hover {
     background: #e94560;
     border-color: #e94560;
     color: #fff;
+}
+
+.kit-toggle-btn {
+    padding: 2px 7px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    border-radius: 3px;
+    border: 1px solid #0f3460;
+    background: #1a1a2e;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+}
+
+.kit-toggle-btn:hover {
+    border-color: #e94560;
+    color: #bbb;
+}
+
+.kit-toggle-btn.active {
+    background: #0f3460;
+    border-color: #4a90d9;
+    color: #fff;
+}
+
+.kit-toggle-btn[data-kit="away"].active {
+    background: #e8e8e8;
+    border-color: #ccc;
+    color: #222;
 }
 
 .team-banner-vs {
@@ -497,8 +532,64 @@ body {
     flex-shrink: 0;
 }
 
+.bench-player-edit {
+    background: none;
+    border: none;
+    color: #555;
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0 3px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.bench-player-edit:hover {
+    color: #4a90d9;
+}
+
 .bench-player-remove:hover {
     color: #e94560;
+}
+
+.bench-squad-bar {
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    border-top: 1px solid #0f3460;
+    flex-shrink: 0;
+}
+
+.squad-btn {
+    flex: 1;
+    padding: 4px;
+    font-size: 0.65rem;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.squad-save-btn {
+    background: #0d5c2e;
+    border-color: #15a050;
+    color: #afd8bf;
+}
+
+.squad-save-btn:hover {
+    background: #15a050;
+    color: #fff;
+}
+
+.squad-load-btn {
+    background: #5a3d0d;
+    border-color: #7c5a1a;
+    color: #e0c080;
+}
+
+.squad-load-btn:hover {
+    background: #7c5a1a;
+    color: #fff;
 }
 
 #field {

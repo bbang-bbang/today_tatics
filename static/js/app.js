@@ -23,6 +23,8 @@
         teams: [],
         teamA: null,
         teamB: null,
+        kitA: "home",           // "home" | "away"
+        kitB: "home",
         nextId: 100,
     };
 
@@ -127,15 +129,21 @@
     }
 
     // ── Team color helpers ────────────────────────────────
+    function isAway(side) {
+        return side === "A" ? state.kitA === "away" : state.kitB === "away";
+    }
     function getTeamColor(side) {
-        if (side === "A" && state.teamA) return state.teamA.primary;
-        if (side === "B" && state.teamB) return state.teamB.primary;
-        return side === "A" ? DEFAULT_A_COLOR : DEFAULT_B_COLOR;
+        const team = side === "A" ? state.teamA : state.teamB;
+        if (!team) return side === "A" ? DEFAULT_A_COLOR : DEFAULT_B_COLOR;
+        return isAway(side) ? "#ffffff" : team.primary;
     }
     function getTeamStroke(side) {
-        if (side === "A" && state.teamA) return state.teamA.secondary;
-        if (side === "B" && state.teamB) return state.teamB.secondary;
-        return "#ffffff";
+        const team = side === "A" ? state.teamA : state.teamB;
+        if (!team) return isAway(side) ? "#888888" : "#ffffff";
+        return isAway(side) ? team.primary : team.secondary;
+    }
+    function getTeamTextColor(side) {
+        return isAway(side) ? "#222222" : "#ffffff";
     }
 
     // ── Draw players ───────────────────────────────────────
@@ -150,10 +158,12 @@
             ctx.fillStyle = color; ctx.fill();
             ctx.strokeStyle = getTeamStroke(p.team); ctx.lineWidth = 2.5; ctx.stroke();
             ctx.shadowColor = "transparent"; ctx.shadowBlur = 0;
-            ctx.fillStyle = "#fff"; ctx.font = "bold 11px 'Segoe UI', sans-serif";
+            const txtCol = getTeamTextColor(p.team);
+            ctx.fillStyle = txtCol; ctx.font = "bold 11px 'Segoe UI', sans-serif";
             ctx.textAlign = "center"; ctx.textBaseline = "middle";
             ctx.fillText(p.number, px, py);
             ctx.font = "bold 10px 'Segoe UI', sans-serif";
+            ctx.fillStyle = "#fff";
             ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 3;
             ctx.fillText(p.name, px, py + r + 12);
             ctx.shadowColor = "transparent"; ctx.shadowBlur = 0;
@@ -360,6 +370,15 @@
             name.className = "bench-player-name";
             name.textContent = p.name;
 
+            const editBtn = document.createElement("button");
+            editBtn.className = "bench-player-edit";
+            editBtn.textContent = "✎";
+            editBtn.title = "이름/등번호 수정";
+            editBtn.addEventListener("click", (e) => {
+                const rect = editBtn.getBoundingClientRect();
+                openEditPopup(p, rect.left - 210, rect.top);
+            });
+
             const removeBtn = document.createElement("button");
             removeBtn.className = "bench-player-remove";
             removeBtn.innerHTML = "&times;";
@@ -369,7 +388,7 @@
                 render(); renderBench();
             });
 
-            item.appendChild(dot); item.appendChild(name); item.appendChild(removeBtn);
+            item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(removeBtn);
             container.appendChild(item);
         }
     }
@@ -576,6 +595,141 @@
     document.querySelectorAll(".team-pick-btn").forEach((btn) => btn.addEventListener("click", () => openTeamModal(btn.dataset.side)));
     document.getElementById("slot-a").addEventListener("click", (e) => { if (!e.target.closest(".team-pick-btn")) openTeamModal("A"); });
     document.getElementById("slot-b").addEventListener("click", (e) => { if (!e.target.closest(".team-pick-btn")) openTeamModal("B"); });
+
+    // ── HOME / AWAY kit toggle ──────────────────────────
+    document.querySelectorAll(".kit-toggle-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const side = btn.dataset.side;
+            const kit = btn.dataset.kit;
+            if (side === "A") state.kitA = kit; else state.kitB = kit;
+            // update button states
+            document.querySelectorAll(`.kit-toggle-btn[data-side="${side}"]`).forEach((b) => {
+                b.classList.toggle("active", b.dataset.kit === kit);
+            });
+            render(); renderBench();
+        });
+    });
+
+    // ── Squad save / load ─────────────────────────────────
+    const squadModal = document.getElementById("squad-modal");
+    const squadModalTitle = document.getElementById("squad-modal-title");
+    const squadList = document.getElementById("squad-list");
+    const squadModalClose = document.getElementById("squad-modal-close");
+    let squadLoadSide = "A";
+
+    function closeSquadModal() { squadModal.classList.add("hidden"); }
+    squadModal.querySelector(".modal-backdrop").addEventListener("click", closeSquadModal);
+    squadModalClose.addEventListener("click", closeSquadModal);
+
+    document.querySelectorAll(".squad-save-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const side = btn.dataset.side;
+            const team = side === "A" ? state.teamA : state.teamB;
+            const teamPlayers = state.players.filter((p) => p.team === side);
+            if (teamPlayers.length === 0) { showToast("저장할 선수가 없습니다."); return; }
+
+            const teamName = team ? team.short : (side === "A" ? "Team A" : "Team B");
+            const name = prompt(`스쿼드 이름을 입력하세요:`, teamName + " 스쿼드");
+            if (!name) return;
+
+            await fetch("/api/squads", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    teamId: team ? team.id : "",
+                    name: name,
+                    players: teamPlayers.map((p) => ({ number: p.number, name: p.name })),
+                }),
+            });
+            showToast("스쿼드가 저장되었습니다.");
+        });
+    });
+
+    document.querySelectorAll(".squad-load-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            squadLoadSide = btn.dataset.side;
+            const team = squadLoadSide === "A" ? state.teamA : state.teamB;
+            squadModalTitle.textContent = (team ? team.short : "Team " + squadLoadSide) + " 스쿼드 불러오기";
+            squadModal.classList.remove("hidden");
+            squadList.innerHTML = '<p class="empty-msg">불러오는 중...</p>';
+
+            const url = team ? `/api/squads?teamId=${team.id}` : "/api/squads";
+            const res = await fetch(url);
+            const squads = await res.json();
+            if (squads.length === 0) { squadList.innerHTML = '<p class="empty-msg">저장된 스쿼드가 없습니다.</p>'; return; }
+
+            squadList.innerHTML = "";
+            for (const s of squads) {
+                const item = document.createElement("div"); item.className = "save-item";
+                const teamObj = state.teams.find((t) => t.id === s.teamId);
+                const teamLabel = teamObj ? teamObj.short : "";
+                item.innerHTML = `<div class="save-item-info"><div class="save-item-name">${escapeHtml(s.name)}</div><div class="save-item-meta">${teamLabel} &middot; ${s.playerCount}명</div></div>
+                <div class="save-item-actions"><button class="btn-load-item" data-id="${s.id}">적용</button><button class="btn-delete-item" data-id="${s.id}">삭제</button></div>`;
+                squadList.appendChild(item);
+            }
+            squadList.onclick = async (e) => {
+                const btn2 = e.target.closest("button"); if (!btn2) return;
+                const id = btn2.dataset.id;
+                if (btn2.classList.contains("btn-load-item")) {
+                    const r = await fetch(`/api/squads/${id}`);
+                    const data = await r.json();
+                    applySquad(squadLoadSide, data);
+                    closeSquadModal();
+                    showToast("스쿼드를 적용했습니다.");
+                } else if (btn2.classList.contains("btn-delete-item")) {
+                    if (!confirm("정말 삭제하시겠습니까?")) return;
+                    await fetch(`/api/squads/${id}`, { method: "DELETE" });
+                    showToast("삭제되었습니다.");
+                    btn.click(); // re-open
+                }
+            };
+        });
+    });
+
+    function applySquad(side, squadData) {
+        // Remove existing players of this side
+        state.players = state.players.filter((p) => p.team !== side);
+        // Get formation positions for this side
+        const f = state.formations[state.currentFormation];
+        const positions = side === "A" ? f.teamA : f.teamB;
+        const squadPlayers = squadData.players || [];
+        for (let i = 0; i < squadPlayers.length; i++) {
+            const pos = positions[i] || { x: side === "A" ? 0.25 : 0.75, y: 0.3 + (i * 0.04) };
+            state.players.push({
+                id: state.nextId++, team: side,
+                x: pos.x, y: pos.y,
+                name: squadPlayers[i].name, number: squadPlayers[i].number,
+            });
+        }
+        // Also set the team from squad if not already set
+        if (squadData.teamId) {
+            const team = state.teams.find((t) => t.id === squadData.teamId);
+            if (team) {
+                if (side === "A") state.teamA = team; else state.teamB = team;
+                updateBanner(); updateLegend();
+            }
+        }
+        render(); renderBench();
+    }
+
+    // ── Snapshot: include kit state ──────────────────────
+    const _origSnapshot = getStateSnapshot;
+    getStateSnapshot = function () {
+        const snap = _origSnapshot();
+        snap.kitA = state.kitA;
+        snap.kitB = state.kitB;
+        return snap;
+    };
+    const _origApply = applySnapshot;
+    applySnapshot = function (data) {
+        state.kitA = data.kitA || "home";
+        state.kitB = data.kitB || "home";
+        // update kit toggle buttons
+        document.querySelectorAll('.kit-toggle-btn[data-side="A"]').forEach((b) => b.classList.toggle("active", b.dataset.kit === state.kitA));
+        document.querySelectorAll('.kit-toggle-btn[data-side="B"]').forEach((b) => b.classList.toggle("active", b.dataset.kit === state.kitB));
+        _origApply(data);
+    };
 
     // ── Init ───────────────────────────────────────────────
     window.addEventListener("resize", resize);

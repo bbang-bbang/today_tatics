@@ -8,7 +8,9 @@ from flask import Flask, render_template, jsonify, request
 app = Flask(__name__)
 
 SAVES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saves")
+SQUADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "squads")
 os.makedirs(SAVES_DIR, exist_ok=True)
+os.makedirs(SQUADS_DIR, exist_ok=True)
 
 # ── K리그 2026 팀 데이터 (K리그 데이터 포털 기준) ─────────
 TEAMS = [
@@ -181,6 +183,68 @@ def update_save(save_id):
 @app.route("/api/saves/<save_id>", methods=["DELETE"])
 def delete_save(save_id):
     fpath = os.path.join(SAVES_DIR, f"{save_id}.json")
+    if not os.path.exists(fpath):
+        return jsonify({"error": "Not found"}), 404
+    os.remove(fpath)
+    return jsonify({"ok": True})
+
+
+# ── 스쿼드(선수 명단) API ──────────────────────────────────
+@app.route("/api/squads", methods=["GET"])
+def list_squads():
+    team_id = request.args.get("teamId")
+    squads = []
+    for fname in os.listdir(SQUADS_DIR):
+        if not fname.endswith(".json"):
+            continue
+        fpath = os.path.join(SQUADS_DIR, fname)
+        with open(fpath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if team_id and data.get("teamId") != team_id:
+            continue
+        squads.append({
+            "id": data["id"],
+            "teamId": data["teamId"],
+            "name": data["name"],
+            "playerCount": len(data.get("players", [])),
+            "updatedAt": data.get("updatedAt", ""),
+        })
+    squads.sort(key=lambda s: s["updatedAt"], reverse=True)
+    return jsonify(squads)
+
+
+@app.route("/api/squads", methods=["POST"])
+def create_squad():
+    body = request.get_json()
+    squad_id = str(uuid.uuid4())[:8]
+    now = datetime.now().isoformat()
+    data = {
+        "id": squad_id,
+        "teamId": body.get("teamId", ""),
+        "name": body.get("name", "Untitled"),
+        "players": body.get("players", []),
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    fpath = os.path.join(SQUADS_DIR, f"{squad_id}.json")
+    with open(fpath, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return jsonify(data), 201
+
+
+@app.route("/api/squads/<squad_id>", methods=["GET"])
+def get_squad(squad_id):
+    fpath = os.path.join(SQUADS_DIR, f"{squad_id}.json")
+    if not os.path.exists(fpath):
+        return jsonify({"error": "Not found"}), 404
+    with open(fpath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return jsonify(data)
+
+
+@app.route("/api/squads/<squad_id>", methods=["DELETE"])
+def delete_squad(squad_id):
+    fpath = os.path.join(SQUADS_DIR, f"{squad_id}.json")
     if not os.path.exists(fpath):
         return jsonify({"error": "Not found"}), 404
     os.remove(fpath)

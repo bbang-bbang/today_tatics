@@ -61,7 +61,11 @@
                 </div>
                 <div class="team-slot-info">
                     <span class="team-slot-name" id="name-a">Team A</span>
-                    <button class="team-pick-btn" data-side="A">팀 선택</button>
+                    <div class="team-slot-controls">
+                        <button class="team-pick-btn" data-side="A">팀 선택</button>
+                        <button class="kit-toggle-btn active" data-side="A" data-kit="home">HOME</button>
+                        <button class="kit-toggle-btn" data-side="A" data-kit="away">AWAY</button>
+                    </div>
                 </div>
             </div>
             <div class="team-banner-vs">VS</div>
@@ -71,7 +75,11 @@
                 </div>
                 <div class="team-slot-info">
                     <span class="team-slot-name" id="name-b">Team B</span>
-                    <button class="team-pick-btn" data-side="B">팀 선택</button>
+                    <div class="team-slot-controls">
+                        <button class="team-pick-btn" data-side="B">팀 선택</button>
+                        <button class="kit-toggle-btn active" data-side="B" data-kit="home">HOME</button>
+                        <button class="kit-toggle-btn" data-side="B" data-kit="away">AWAY</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -86,6 +94,10 @@
                         <button class="bench-add-btn" data-side="A" title="선수 추가">+ 추가</button>
                     </div>
                     <div class="bench-players" id="bench-list-a"></div>
+                    <div class="bench-squad-bar">
+                        <button class="squad-btn squad-save-btn" data-side="A" title="현재 선수 명단 저장">스쿼드 저장</button>
+                        <button class="squad-btn squad-load-btn" data-side="A" title="저장된 스쿼드 불러오기">스쿼드 불러오기</button>
+                    </div>
                 </div>
                 <div class="bench-section" data-side="B">
                     <div class="bench-header">
@@ -93,6 +105,10 @@
                         <button class="bench-add-btn" data-side="B" title="선수 추가">+ 추가</button>
                     </div>
                     <div class="bench-players" id="bench-list-b"></div>
+                    <div class="bench-squad-bar">
+                        <button class="squad-btn squad-save-btn" data-side="B" title="현재 선수 명단 저장">스쿼드 저장</button>
+                        <button class="squad-btn squad-load-btn" data-side="B" title="저장된 스쿼드 불러오기">스쿼드 불러오기</button>
+                    </div>
                 </div>
             </aside>
         </div>
@@ -155,6 +171,20 @@
             <div id="team-grid" class="team-grid"></div>
             <div class="modal-actions">
                 <button id="team-modal-close" class="modal-btn cancel">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스쿼드 불러오기 모달 -->
+    <div id="squad-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content load-modal-content">
+            <h2 id="squad-modal-title">스쿼드 불러오기</h2>
+            <div id="squad-list" class="saves-list">
+                <p class="empty-msg">저장된 스쿼드가 없습니다.</p>
+            </div>
+            <div class="modal-actions">
+                <button id="squad-modal-close" class="modal-btn cancel">닫기</button>
             </div>
         </div>
     </div>
