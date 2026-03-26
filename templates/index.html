@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Today Tactics - 축구 전술판</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div id="app">
+        <header id="toolbar">
+            <h1>Today Tactics</h1>
+            <div class="toolbar-group">
+                <label for="formation-select">포메이션:</label>
+                <select id="formation-select">
+                    <option value="4-4-2">4-4-2</option>
+                    <option value="4-3-3">4-3-3</option>
+                    <option value="3-5-2">3-5-2</option>
+                    <option value="4-2-3-1">4-2-3-1</option>
+                    <option value="4-1-4-1">4-1-4-1</option>
+                    <option value="3-4-3">3-4-3</option>
+                    <option value="5-3-2">5-3-2</option>
+                    <option value="5-4-1">5-4-1</option>
+                </select>
+            </div>
+            <div class="toolbar-group">
+                <button id="btn-select" class="mode-btn active" title="선수 이동 모드">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 9l4-4 4 4"/><path d="M9 5v14"/><path d="M19 15l-4 4-4-4"/><path d="M15 19V5"/>
+                    </svg>
+                    이동
+                </button>
+                <button id="btn-draw" class="mode-btn" title="화살표 그리기 모드">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 19L19 5"/><path d="M13 5h6v6"/>
+                    </svg>
+                    화살표
+                </button>
+            </div>
+            <div class="toolbar-group">
+                <button id="btn-clear-arrows" class="action-btn" title="화살표 지우기">화살표 지우기</button>
+                <button id="btn-reset" class="action-btn" title="전체 초기화">초기화</button>
+            </div>
+            <div class="toolbar-group legend">
+                <span class="legend-item team-a">Team A</span>
+                <span class="legend-item team-b">Team B</span>
+            </div>
+        </header>
+        <main id="canvas-container">
+            <canvas id="field"></canvas>
+        </main>
+    </div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
