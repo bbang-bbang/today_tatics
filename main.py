@@ -6,6 +6,7 @@ from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 
 app = Flask(__name__)
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 SAVES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saves")
 SQUADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "squads")

@@ -548,6 +548,7 @@
     }
 
     function selectTeam(team) {
+        console.log("selectTeam:", team.id, team.name, "league:", team.league, "primary:", team.primary, "side:", pickingSide);
         if (pickingSide === "A") state.teamA = team; else state.teamB = team;
         updateBanner(); updateLegend(); render(); renderBench();
         closeTeamModal(); showToast(`${team.name} 선택 완료`);
