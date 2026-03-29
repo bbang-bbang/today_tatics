@@ -21,7 +21,7 @@
         dragging: null,
         dragOffset: { dx: 0, dy: 0 },
         drawingLine: null,
-        draggingHandle: null,   // {line} when dragging curve control point
+        draggingCurve: null,    // {line, t, px, py, moved}
         formations: {},
         formationA: "4-4-2",
         formationB: "4-4-2",
@@ -31,6 +31,7 @@
         kitA: "home",           // "home" | "away"
         kitB: "home",
         nextId: 100,
+        animSpeed: 1.0,
     };
 
     const canvas = document.getElementById("field");
@@ -147,23 +148,7 @@
         const tx = to.px - ctrl.px, ty = to.py - ctrl.py;
         const tlen = Math.sqrt(tx * tx + ty * ty);
         if (tlen > 0) drawArrowHead(to.px - tx / tlen * 20, to.py - ty / tlen * 20, to.px, to.py, color);
-        // 곡선 제어점 핸들 표시
-        if (!isPreview) {
-            ctx.beginPath(); ctx.arc(ctrl.px, ctrl.py, 5, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fill();
-            ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
-        }
         ctx.globalAlpha = 1;
-    }
-
-    function hitTestCurveHandle(px, py) {
-        for (let i = state.lines.length - 1; i >= 0; i--) {
-            const l = state.lines[i];
-            if (l.style !== 'curvedArrow') continue;
-            const { px: hx, py: hy } = fieldToCanvas(l.cx, l.cy);
-            if (Math.sqrt((px - hx) ** 2 + (py - hy) ** 2) <= 8) return l;
-        }
-        return null;
     }
 
     function drawMultiLine(points, color, isPreview, previewEnd) {
@@ -185,10 +170,32 @@
         ctx.globalAlpha = 1;
     }
 
+    function closestTOnBezier(line, px, py) {
+        let bestT = 0.5, bestDist = Infinity;
+        for (let i = 0; i <= 20; i++) {
+            const t = i / 20;
+            const pt = getBezierPoint(line, t);
+            const c = fieldToCanvas(pt.x, pt.y);
+            const d = Math.sqrt((px - c.px) ** 2 + (py - c.py) ** 2);
+            if (d < bestDist) { bestDist = d; bestT = t; }
+        }
+        return bestT;
+    }
+
+    function controlPointFromDrag(line, t, fx, fy) {
+        const denom = 2 * t * (1 - t);
+        if (denom < 0.01) return { cx: line.cx, cy: line.cy };
+        return {
+            cx: (fx - (1 - t) ** 2 * line.sx - t ** 2 * line.ex) / denom,
+            cy: (fy - (1 - t) ** 2 * line.sy - t ** 2 * line.ey) / denom,
+        };
+    }
+
     function drawLines() {
         for (const l of state.lines) {
-            if (l.style === 'curvedArrow') drawCurvedLine(l.sx, l.sy, l.cx, l.cy, l.ex, l.ey, l.color, false);
-            else if (l.style === 'multiArrow') drawMultiLine(l.points, l.color, false, null);
+            if (l.style === 'curvedArrow') {
+                drawCurvedLine(l.sx, l.sy, l.cx, l.cy, l.ex, l.ey, l.color, false);
+            } else if (l.style === 'multiArrow') drawMultiLine(l.points, l.color, false, null);
             else drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, false);
         }
         if (state.drawingLine) {
@@ -228,6 +235,7 @@
     // ── Draw players ───────────────────────────────────────
     function drawPlayers() {
         for (const p of state.players) {
+            if (p.onField === false) continue;
             const { px, py } = fieldToCanvas(p.x, p.y);
             const color = getTeamColor(p.team);
             const isDragging = state.dragging === p;
@@ -292,6 +300,7 @@
     function hitTest(px, py) {
         for (let i = state.players.length - 1; i >= 0; i--) {
             const p = state.players[i];
+            if (p.onField === false) continue;
             const { px: cx, py: cy } = fieldToCanvas(p.x, p.y);
             if (Math.sqrt((px - cx) ** 2 + (py - cy) ** 2) <= PLAYER_RADIUS + 4) return p;
         }
@@ -374,7 +383,7 @@
         } else {
             dist = Math.sqrt((line.ex - line.sx)**2 + (line.ey - line.sy)**2);
         }
-        return Math.max(400, Math.min(2000, dist * 4000));
+        return Math.max(200, Math.min(4000, dist * 4000)) / state.animSpeed;
     }
 
     function nearestPlayerToPoint(fx, fy) {
@@ -440,15 +449,20 @@
                 state.dragOffset = { dx: cx - px, dy: cy - py };
                 canvas.setPointerCapture(e.pointerId);
             } else {
-                const handle = hitTestCurveHandle(px, py);
-                if (handle) {
-                    state.draggingHandle = handle;
-                    canvas.setPointerCapture(e.pointerId);
-                } else {
-                    const line = hitTestLine(px, py);
-                    if (line) startLineAnimation(line);
+                const line = hitTestLine(px, py);
+                if (line) {
+                    if (line.style === 'curvedArrow') {
+                        const t = closestTOnBezier(line, px, py);
+                        state.draggingCurve = { line, t, px, py, moved: false };
+                        canvas.setPointerCapture(e.pointerId);
+                    } else {
+                        startLineAnimation(line);
+                    }
                 }
             }
+        } else if (state.mode === "erase") {
+            const line = hitTestLine(px, py);
+            if (line) { state.lines = state.lines.filter(l => l !== line); render(); }
         } else if (state.mode === "draw") {
             // 시작점 근처 선수에 귀속
             const nearPlayer = hitTest(px, py) || nearestPlayerToPoint(fx, fy);
@@ -496,8 +510,13 @@
         if (state.mode === "select" && state.dragging) {
             const { fx: dfx, fy: dfy } = canvasToField(px + state.dragOffset.dx, py + state.dragOffset.dy);
             state.dragging.x = dfx; state.dragging.y = dfy; render();
-        } else if (state.mode === "select" && state.draggingHandle) {
-            state.draggingHandle.cx = fx; state.draggingHandle.cy = fy; render();
+        } else if (state.mode === "select" && state.draggingCurve) {
+            const dc = state.draggingCurve;
+            if (!dc.moved && Math.sqrt((px - dc.px) ** 2 + (py - dc.py) ** 2) > 5) dc.moved = true;
+            if (dc.moved) {
+                const { cx, cy } = controlPointFromDrag(dc.line, dc.t, fx, fy);
+                dc.line.cx = cx; dc.line.cy = cy; render();
+            }
         } else if (state.mode === "draw" && state.drawingLine) {
             if (state.drawingLine.style === 'curvedArrow') {
                 if (state.drawingLine.phase === 'end') {
@@ -514,17 +533,25 @@
             render();
         } else if (state.mode === "select") {
             if (hitTest(px, py)) canvas.style.cursor = "grab";
-            else if (hitTestCurveHandle(px, py)) canvas.style.cursor = "move";
             else if (hitTestLine(px, py)) canvas.style.cursor = "pointer";
             else canvas.style.cursor = "default";
+        } else if (state.mode === "erase") {
+            canvas.style.cursor = hitTestLine(px, py) ? "not-allowed" : "cell";
         }
     });
 
     canvas.addEventListener("pointerup", () => {
-        if (state.mode === "select") { state.dragging = null; state.draggingHandle = null; }
+        if (state.mode === "select") {
+            state.dragging = null;
+            if (state.draggingCurve) {
+                if (!state.draggingCurve.moved) startLineAnimation(state.draggingCurve.line);
+                state.draggingCurve = null;
+            }
+            render();
+        }
         else if (state.mode === "draw" && state.drawingLine && state.drawingLine.style !== 'curvedArrow') {
             const l = state.drawingLine;
-            if (Math.sqrt((l.ex - l.sx) ** 2 + (l.ey - l.sy) ** 2) > 0.01) {
+            if (Math.sqrt((l.ex - l.sx) ** 2 + (l.ey - l.sy) ** 2) > 0.04) {
                 state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId });
             }
             state.drawingLine = null; render();
@@ -592,14 +619,16 @@
 
     // ── Mode & draw style ─────────────────────────────────
     const btnSelect = document.getElementById("btn-select");
+    const btnErase = document.getElementById("btn-erase");
     const drawModeBtns = document.querySelectorAll(".draw-mode-btn");
 
     function setMode(mode, drawStyle) {
         state.mode = mode;
         if (drawStyle) state.drawStyle = drawStyle;
         if (state.multiPoints) { state.multiPoints = null; state.multiPreviewEnd = null; state.multiAttachedPlayerId = null; render(); }
-        if (state.drawingLine && state.drawingLine.style === 'curvedArrow') { state.drawingLine = null; render(); }
+        if (state.drawingLine) { state.drawingLine = null; render(); }
         btnSelect.classList.toggle("active", mode === "select");
+        btnErase.classList.toggle("active", mode === "erase");
         drawModeBtns.forEach((b) => b.classList.toggle("active", mode === "draw" && b.dataset.draw === state.drawStyle));
         canvas.style.cursor = mode === "draw" ? "crosshair" : "default";
     }
@@ -609,6 +638,7 @@
     });
 
     btnSelect.addEventListener("click", () => setMode("select"));
+    btnErase.addEventListener("click", () => setMode("erase"));
     drawModeBtns.forEach((btn) => btn.addEventListener("click", () => setMode("draw", btn.dataset.draw)));
 
     // ── Color swatches ────────────────────────────────────
@@ -618,6 +648,14 @@
         sw.classList.add("active");
         state.drawColor = sw.dataset.color;
     }));
+
+    // ── Speed slider ──────────────────────────────────────
+    const speedSlider = document.getElementById("anim-speed");
+    const speedLabel = document.getElementById("anim-speed-label");
+    speedSlider.addEventListener("input", () => {
+        state.animSpeed = parseFloat(speedSlider.value);
+        speedLabel.textContent = state.animSpeed.toFixed(1) + "x";
+    });
 
     // ── Toolbar actions ───────────────────────────────────
     document.getElementById("btn-clear-lines").addEventListener("click", () => { state.lines = []; render(); });
@@ -669,39 +707,82 @@
             editBtn.className = "bench-player-edit";
             editBtn.textContent = "✎";
             editBtn.title = "이름/등번호 수정";
-            editBtn.addEventListener("click", (e) => {
+            editBtn.addEventListener("click", () => {
                 const rect = editBtn.getBoundingClientRect();
                 openEditPopup(p, rect.left - 210, rect.top);
             });
 
-            const removeBtn = document.createElement("button");
-            removeBtn.className = "bench-player-remove";
-            removeBtn.innerHTML = "&times;";
-            removeBtn.title = "필드에서 제거";
-            removeBtn.addEventListener("click", () => {
-                state.players = state.players.filter((pl) => pl !== p);
-                render(); renderBench();
-            });
-
-            item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(removeBtn);
+            if (p.onField === false) {
+                // 미배치 선수: 배치 버튼
+                const placeBtn = document.createElement("button");
+                placeBtn.className = "bench-player-edit";
+                placeBtn.textContent = "⊕";
+                placeBtn.title = "필드에 배치";
+                placeBtn.addEventListener("click", () => {
+                    const defaultX = p.team === "A" ? 0.25 : 0.75;
+                    p.x = defaultX + (Math.random() - 0.5) * 0.15;
+                    p.y = 0.3 + Math.random() * 0.4;
+                    p.onField = true;
+                    render(); renderBench();
+                });
+                item.style.opacity = "0.6";
+                const removeBtn2 = document.createElement("button");
+                removeBtn2.className = "bench-player-remove";
+                removeBtn2.innerHTML = "&times;";
+                removeBtn2.title = "삭제";
+                removeBtn2.addEventListener("click", () => { state.players = state.players.filter(pl => pl !== p); renderBench(); });
+                item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(placeBtn); item.appendChild(removeBtn2);
+            } else {
+                const removeBtn = document.createElement("button");
+                removeBtn.className = "bench-player-remove";
+                removeBtn.innerHTML = "&times;";
+                removeBtn.title = "필드에서 제거";
+                removeBtn.addEventListener("click", () => {
+                    state.players = state.players.filter((pl) => pl !== p);
+                    render(); renderBench();
+                });
+                item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(removeBtn);
+            }
             container.appendChild(item);
         }
     }
 
-    function addPlayer(side) {
-        const teamPlayers = state.players.filter((p) => p.team === side);
-        const num = teamPlayers.length + 1;
-        const defaultX = side === "A" ? 0.25 : 0.75;
-        state.players.push({
-            id: state.nextId++, team: side,
-            x: defaultX + (Math.random() - 0.5) * 0.1,
-            y: 0.3 + Math.random() * 0.4,
-            name: "선수" + num, number: num,
-        });
-        render(); renderBench();
+    // ── Add player popup ──────────────────────────────────
+    const addPopup = document.getElementById("add-player-popup");
+    const addNumberInput = document.getElementById("add-player-number");
+    const addNameInput = document.getElementById("add-player-name");
+    const addTeamLabel = document.getElementById("add-player-team-label");
+    let addingSide = null;
+
+    function openAddPopup(side, anchorEl) {
+        addingSide = side;
+        const teamPlayers = state.players.filter(p => p.team === side);
+        addNumberInput.value = teamPlayers.length + 1;
+        addNameInput.value = "";
+        addTeamLabel.style.background = getTeamColor(side);
+        addTeamLabel.textContent = side === "A" ? (state.teamA ? state.teamA.short : "HOME") : (state.teamB ? state.teamB.short : "AWAY");
+        const rect = anchorEl.getBoundingClientRect();
+        addPopup.style.left = Math.min(rect.right + 8, window.innerWidth - 220) + "px";
+        addPopup.style.top = Math.max(rect.top - 20, 8) + "px";
+        addPopup.classList.remove("hidden");
+        addNameInput.focus();
     }
 
-    document.querySelectorAll(".bench-add-btn").forEach((btn) => btn.addEventListener("click", () => addPlayer(btn.dataset.side)));
+    function confirmAddPlayer() {
+        if (!addingSide) return;
+        const num = parseInt(addNumberInput.value, 10);
+        const name = addNameInput.value.trim() || "선수" + num;
+        state.players.push({ id: state.nextId++, team: addingSide, onField: false, x: 0.5, y: 0.5, name, number: isNaN(num) ? state.nextId : num });
+        addPopup.classList.add("hidden"); addingSide = null;
+        renderBench();
+    }
+
+    document.getElementById("add-player-confirm").addEventListener("click", confirmAddPlayer);
+    document.getElementById("add-player-close").addEventListener("click", () => { addPopup.classList.add("hidden"); addingSide = null; });
+    addPopup.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); confirmAddPlayer(); } if (e.key === "Escape") { addPopup.classList.add("hidden"); addingSide = null; } });
+    document.addEventListener("pointerdown", (e) => { if (addingSide && !addPopup.contains(e.target)) { addPopup.classList.add("hidden"); addingSide = null; } });
+
+    document.querySelectorAll(".bench-add-btn").forEach((btn) => btn.addEventListener("click", () => openAddPopup(btn.dataset.side, btn)));
 
     // ── Save / Load helpers ───────────────────────────────
     function getStateSnapshot() {

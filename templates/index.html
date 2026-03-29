@@ -12,6 +12,7 @@
             <h1>Today Tactics</h1>
             <div class="toolbar-group">
                 <button id="btn-select" class="mode-btn active" title="선수 이동 모드">이동</button>
+                <button id="btn-erase" class="mode-btn" title="선 하나씩 지우기">✕ 지우기</button>
                 <span class="toolbar-sep">|</span>
                 <button class="mode-btn draw-mode-btn" data-draw="arrow" title="실선 화살표">→ 실선</button>
                 <button class="mode-btn draw-mode-btn" data-draw="dashedArrow" title="점선 화살표">⇢ 점선</button>
@@ -27,6 +28,11 @@
                 <span class="color-swatch" data-color="rgba(255,221,0,0.9)"></span>
                 <span class="color-swatch" data-color="rgba(68,255,100,0.9)"></span>
                 <span class="color-swatch" data-color="rgba(255,140,0,0.9)"></span>
+            </div>
+            <div class="toolbar-group" style="align-items:center;gap:6px;">
+                <span style="font-size:12px;color:#ccc;">속도</span>
+                <input id="anim-speed" type="range" min="0.5" max="4" step="0.5" value="1" style="width:80px;cursor:pointer;">
+                <span id="anim-speed-label" style="font-size:12px;color:#fff;min-width:28px;">1.0x</span>
             </div>
             <div class="toolbar-group">
                 <button id="btn-clear-lines" class="action-btn" title="그리기 지우기">그리기 지우기</button>
@@ -121,6 +127,23 @@
                 </div>
             </aside>
         </div>
+    </div>
+
+    <!-- 선수 추가 팝업 -->
+    <div id="add-player-popup" class="player-edit-popup hidden">
+        <div class="player-edit-header">
+            <span id="add-player-team-label" class="player-edit-team-label">Team</span>
+            <button id="add-player-close" class="player-edit-close-btn">&times;</button>
+        </div>
+        <div class="player-edit-row">
+            <label for="add-player-number">등번호</label>
+            <input type="number" id="add-player-number" min="1" max="99">
+        </div>
+        <div class="player-edit-row">
+            <label for="add-player-name">이름/포지션</label>
+            <input type="text" id="add-player-name" maxlength="20" placeholder="예: 홍길동 (ST)">
+        </div>
+        <button id="add-player-confirm" class="player-edit-confirm-btn">추가</button>
     </div>
 
     <!-- 선수 편집 팝업 -->
