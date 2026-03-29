@@ -21,6 +21,7 @@
         dragging: null,
         dragOffset: { dx: 0, dy: 0 },
         drawingLine: null,
+        draggingHandle: null,   // {line} when dragging curve control point
         formations: {},
         formationA: "4-4-2",
         formationB: "4-4-2",
@@ -146,7 +147,23 @@
         const tx = to.px - ctrl.px, ty = to.py - ctrl.py;
         const tlen = Math.sqrt(tx * tx + ty * ty);
         if (tlen > 0) drawArrowHead(to.px - tx / tlen * 20, to.py - ty / tlen * 20, to.px, to.py, color);
+        // 곡선 제어점 핸들 표시
+        if (!isPreview) {
+            ctx.beginPath(); ctx.arc(ctrl.px, ctrl.py, 5, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fill();
+            ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+        }
         ctx.globalAlpha = 1;
+    }
+
+    function hitTestCurveHandle(px, py) {
+        for (let i = state.lines.length - 1; i >= 0; i--) {
+            const l = state.lines[i];
+            if (l.style !== 'curvedArrow') continue;
+            const { px: hx, py: hy } = fieldToCanvas(l.cx, l.cy);
+            if (Math.sqrt((px - hx) ** 2 + (py - hy) ** 2) <= 8) return l;
+        }
+        return null;
     }
 
     function drawMultiLine(points, color, isPreview, previewEnd) {
@@ -176,8 +193,12 @@
         }
         if (state.drawingLine) {
             const l = state.drawingLine;
-            if (l.style === 'curvedArrow') drawCurvedLine(l.sx, l.sy, l.cx, l.cy, l.ex, l.ey, l.color, true);
-            else drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, true);
+            if (l.style === 'curvedArrow') {
+                if (l.phase === 'curve') drawCurvedLine(l.sx, l.sy, l.cx, l.cy, l.ex, l.ey, l.color, true);
+                else drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, true); // phase 'end': 직선 프리뷰
+            } else {
+                drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, true);
+            }
         }
         if (state.multiPoints && state.multiPoints.length > 0) {
             drawMultiLine(state.multiPoints, state.drawColor, true, state.multiPreviewEnd);
@@ -390,10 +411,12 @@
     function startLineAnimation(line) {
         const startFx = line.style === 'multiArrow' ? line.points[0].fx : line.sx;
         const startFy = line.style === 'multiArrow' ? line.points[0].fy : line.sy;
-        const player = nearestPlayerToPoint(startFx, startFy);
+        // 귀속된 선수 우선, 없으면 가장 가까운 선수
+        const player = line.attachedPlayerId
+            ? (state.players.find(p => p.id === line.attachedPlayerId) || nearestPlayerToPoint(startFx, startFy))
+            : nearestPlayerToPoint(startFx, startFy);
         if (!player) return;
         state.animations = state.animations.filter(a => a.player !== player);
-        // 시작점으로 선수를 순간이동 후 path 따라 이동
         player.x = startFx; player.y = startFy;
         state.animations.push({ player, line, progress: 0, duration: calcPathDuration(line) });
         if (!animFrameId) { lastAnimTime = null; animFrameId = requestAnimationFrame(animTick); }
@@ -417,17 +440,50 @@
                 state.dragOffset = { dx: cx - px, dy: cy - py };
                 canvas.setPointerCapture(e.pointerId);
             } else {
-                const line = hitTestLine(px, py);
-                if (line) startLineAnimation(line);
+                const handle = hitTestCurveHandle(px, py);
+                if (handle) {
+                    state.draggingHandle = handle;
+                    canvas.setPointerCapture(e.pointerId);
+                } else {
+                    const line = hitTestLine(px, py);
+                    if (line) startLineAnimation(line);
+                }
             }
         } else if (state.mode === "draw") {
+            // 시작점 근처 선수에 귀속
+            const nearPlayer = hitTest(px, py) || nearestPlayerToPoint(fx, fy);
+            const attachedPlayerId = nearPlayer && Math.sqrt((nearPlayer.x - fx) ** 2 + (nearPlayer.y - fy) ** 2) < 0.07
+                ? nearPlayer.id : null;
+
             if (state.drawStyle === 'multiArrow') {
-                if (!state.multiPoints) state.multiPoints = [{ fx, fy }];
-                else state.multiPoints.push({ fx, fy });
+                if (!state.multiPoints) {
+                    state.multiPoints = [{ fx, fy }];
+                    state.multiAttachedPlayerId = attachedPlayerId;
+                } else {
+                    state.multiPoints.push({ fx, fy });
+                }
+                render();
+            } else if (state.drawStyle === 'curvedArrow') {
+                if (!state.drawingLine) {
+                    // 1번 클릭: 시작점 설정
+                    state.drawingLine = { sx: fx, sy: fy, ex: fx, ey: fy, cx: fx, cy: fy, phase: 'end', style: 'curvedArrow', color: state.drawColor, attachedPlayerId };
+                } else if (state.drawingLine.phase === 'end') {
+                    // 2번 클릭: 끝점 확정, 곡선 방향 설정 phase로
+                    const cp = calcCurveControlPoint(state.drawingLine.sx, state.drawingLine.sy, fx, fy);
+                    state.drawingLine.ex = fx; state.drawingLine.ey = fy;
+                    state.drawingLine.cx = cp.cx; state.drawingLine.cy = cp.cy;
+                    state.drawingLine.phase = 'curve';
+                } else if (state.drawingLine.phase === 'curve') {
+                    // 3번 클릭: 곡선 방향 확정 → 저장
+                    const l = state.drawingLine;
+                    if (Math.sqrt((l.ex - l.sx) ** 2 + (l.ey - l.sy) ** 2) > 0.01) {
+                        state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: 'curvedArrow', color: l.color, attachedPlayerId: l.attachedPlayerId });
+                    }
+                    state.drawingLine = null;
+                }
                 render();
             } else {
-                const dl = { sx: fx, sy: fy, ex: fx, ey: fy, style: state.drawStyle, color: state.drawColor };
-                if (state.drawStyle === 'curvedArrow') { dl.cx = fx; dl.cy = fy; }
+                const dl = { sx: fx, sy: fy, ex: fx, ey: fy, style: state.drawStyle, color: state.drawColor, attachedPlayerId };
                 state.drawingLine = dl;
                 canvas.setPointerCapture(e.pointerId);
             }
@@ -436,15 +492,21 @@
 
     canvas.addEventListener("pointermove", (e) => {
         const { px, py } = getPointerPos(e);
+        const { fx, fy } = canvasToField(px, py);
         if (state.mode === "select" && state.dragging) {
-            const { fx, fy } = canvasToField(px + state.dragOffset.dx, py + state.dragOffset.dy);
-            state.dragging.x = fx; state.dragging.y = fy; render();
+            const { fx: dfx, fy: dfy } = canvasToField(px + state.dragOffset.dx, py + state.dragOffset.dy);
+            state.dragging.x = dfx; state.dragging.y = dfy; render();
+        } else if (state.mode === "select" && state.draggingHandle) {
+            state.draggingHandle.cx = fx; state.draggingHandle.cy = fy; render();
         } else if (state.mode === "draw" && state.drawingLine) {
-            const { fx, fy } = canvasToField(px, py);
-            state.drawingLine.ex = fx; state.drawingLine.ey = fy;
             if (state.drawingLine.style === 'curvedArrow') {
-                const cp = calcCurveControlPoint(state.drawingLine.sx, state.drawingLine.sy, fx, fy);
-                state.drawingLine.cx = cp.cx; state.drawingLine.cy = cp.cy;
+                if (state.drawingLine.phase === 'end') {
+                    state.drawingLine.ex = fx; state.drawingLine.ey = fy;
+                } else if (state.drawingLine.phase === 'curve') {
+                    state.drawingLine.cx = fx; state.drawingLine.cy = fy;
+                }
+            } else {
+                state.drawingLine.ex = fx; state.drawingLine.ey = fy;
             }
             render();
         } else if (state.mode === "draw" && state.multiPoints) {
@@ -452,18 +514,18 @@
             render();
         } else if (state.mode === "select") {
             if (hitTest(px, py)) canvas.style.cursor = "grab";
+            else if (hitTestCurveHandle(px, py)) canvas.style.cursor = "move";
             else if (hitTestLine(px, py)) canvas.style.cursor = "pointer";
             else canvas.style.cursor = "default";
         }
     });
 
     canvas.addEventListener("pointerup", () => {
-        if (state.mode === "select") { state.dragging = null; }
-        else if (state.mode === "draw" && state.drawingLine) {
+        if (state.mode === "select") { state.dragging = null; state.draggingHandle = null; }
+        else if (state.mode === "draw" && state.drawingLine && state.drawingLine.style !== 'curvedArrow') {
             const l = state.drawingLine;
             if (Math.sqrt((l.ex - l.sx) ** 2 + (l.ey - l.sy) ** 2) > 0.01) {
-                if (l.style === 'curvedArrow') state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color });
-                else state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color });
+                state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId });
             }
             state.drawingLine = null; render();
         }
@@ -516,9 +578,9 @@
         if (state.mode === "draw" && state.multiPoints) {
             if (state.multiPoints.length >= 2) {
                 const pts = state.multiPoints;
-                state.lines.push({ style: 'multiArrow', color: state.drawColor, points: [...pts], sx: pts[0].fx, sy: pts[0].fy, ex: pts[pts.length-1].fx, ey: pts[pts.length-1].fy });
+                state.lines.push({ style: 'multiArrow', color: state.drawColor, points: [...pts], sx: pts[0].fx, sy: pts[0].fy, ex: pts[pts.length-1].fx, ey: pts[pts.length-1].fy, attachedPlayerId: state.multiAttachedPlayerId || null });
             }
-            state.multiPoints = null; state.multiPreviewEnd = null; render();
+            state.multiPoints = null; state.multiPreviewEnd = null; state.multiAttachedPlayerId = null; render();
             return;
         }
         if (state.mode === "select") {
@@ -535,7 +597,8 @@
     function setMode(mode, drawStyle) {
         state.mode = mode;
         if (drawStyle) state.drawStyle = drawStyle;
-        if (state.multiPoints) { state.multiPoints = null; state.multiPreviewEnd = null; render(); }
+        if (state.multiPoints) { state.multiPoints = null; state.multiPreviewEnd = null; state.multiAttachedPlayerId = null; render(); }
+        if (state.drawingLine && state.drawingLine.style === 'curvedArrow') { state.drawingLine = null; render(); }
         btnSelect.classList.toggle("active", mode === "select");
         drawModeBtns.forEach((b) => b.classList.toggle("active", mode === "draw" && b.dataset.draw === state.drawStyle));
         canvas.style.cursor = mode === "draw" ? "crosshair" : "default";
@@ -648,9 +711,9 @@
             formationB: state.formationB,
             players: state.players.map((p) => ({ id: p.id, team: p.team, x: p.x, y: p.y, name: p.name, number: p.number })),
             lines: state.lines.map((l) => {
-                if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color };
-                if (l.style === 'multiArrow') return { points: l.points, sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color };
-                return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color };
+                if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null };
+                if (l.style === 'multiArrow') return { points: l.points, sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null };
+                return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null };
             }),
             teamAId: state.teamA ? state.teamA.id : null,
             teamBId: state.teamB ? state.teamB.id : null,
@@ -668,9 +731,9 @@
         state.players = data.players || [];
         // backward compat: old saves use "arrows"
         state.lines = (data.lines || data.arrows || []).map((l) => {
-            if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)" };
-            if (l.style === 'multiArrow') return { points: l.points || [], sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: 'multiArrow', color: l.color || "rgba(255,255,255,0.85)" };
-            return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style || "arrow", color: l.color || "rgba(255,255,255,0.85)" };
+            if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null };
+            if (l.style === 'multiArrow') return { points: l.points || [], sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: 'multiArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null };
+            return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style || "arrow", color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null };
         });
         render(); renderBench();
     }
