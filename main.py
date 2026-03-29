@@ -32,23 +32,21 @@ TEAMS = [
     # K2 리그 (17팀)
     {"id": "suwon",    "name": "수원 삼성 블루윙즈",  "short": "수원",   "league": "K2", "primary": "#2553a5", "secondary": "#e7e6ec", "accent": "#c8102e", "emblem": "emblem_K02.png", "border_home": "#253052", "border_away": "#1f4183"},
     {"id": "busan",    "name": "부산 아이파크",      "short": "부산",   "league": "K2", "primary": "#b4050f", "secondary": "#b7c6ca", "accent": "#ffffff", "emblem": "emblem_K06.png", "border_home": "#120d11", "border_away": "#ffffff"},
-    
-    # 여기서 부터 수정 필요
-    {"id": "jeonnam",  "name": "전남 드래곤즈",      "short": "전남",   "league": "K2", "primary": "#ffe600", "secondary": "#ffffff", "accent": "#000000", "emblem": "emblem_K07.png", "border_home": "#000000", "border_away": "#ffe600"},
-    {"id": "seongnam", "name": "성남 FC",           "short": "성남",   "league": "K2", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K08.png", "border_home": "#ffffff", "border_away": "#000000"},
-    {"id": "daegu",    "name": "대구 FC",           "short": "대구",   "league": "K2", "primary": "#1e3a8a", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K17.png", "border_home": "#ffffff", "border_away": "#1e3a8a"},
-    {"id": "gyeongnam","name": "경남 FC",           "short": "경남",   "league": "K2", "primary": "#c8102e", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K20.png", "border_home": "#ffffff", "border_away": "#c8102e"},
-    {"id": "suwon_fc", "name": "수원 FC",           "short": "수원FC", "league": "K2", "primary": "#e30613", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K29.png", "border_home": "#ffffff", "border_away": "#e30613"},
-    {"id": "seouland", "name": "서울 이랜드 FC",     "short": "이랜드", "league": "K2", "primary": "#e30613", "secondary": "#ffffff", "accent": "#1e3a8a", "emblem": "emblem_K31.png", "border_home": "#1e3a8a", "border_away": "#e30613"},
-    {"id": "ansan",    "name": "안산 그리너스 FC",    "short": "안산",   "league": "K2", "primary": "#006b3f", "secondary": "#ffffff", "accent": "#ffd700", "emblem": "emblem_K32.png", "border_home": "#ffffff", "border_away": "#006b3f"},
-    {"id": "asan",     "name": "충남 아산 FC",       "short": "아산",   "league": "K2", "primary": "#004b87", "secondary": "#ffffff", "accent": "#e30613", "emblem": "emblem_K34.png", "border_home": "#ffffff", "border_away": "#004b87"},
-    {"id": "gimpo",    "name": "김포 FC",           "short": "김포",   "league": "K2", "primary": "#7bbe3a", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K36.png", "border_home": "#ffffff", "border_away": "#7bbe3a"},
-    {"id": "cheongju", "name": "충북 청주 FC",       "short": "청주",   "league": "K2", "primary": "#161c4a", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K37.png", "border_home": "#ffffff", "border_away": "#161c4a"},
-    {"id": "cheonan",  "name": "천안 시티 FC",       "short": "천안",   "league": "K2", "primary": "#58b4e5", "secondary": "#ffffff", "accent": "#e30613", "emblem": "emblem_K38.png", "border_home": "#ffffff", "border_away": "#58b4e5"},
-    {"id": "hwaseong", "name": "화성 FC",           "short": "화성",   "league": "K2", "primary": "#d24e20", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K39.png", "border_home": "#ffffff", "border_away": "#d24e20"},
-    {"id": "paju",     "name": "파주 시민축구단",     "short": "파주",   "league": "K2", "primary": "#1b287a", "secondary": "#ffffff", "accent": "#c8102e", "emblem": "emblem_K40.png", "border_home": "#ffffff", "border_away": "#1b287a"},
-    {"id": "gimhae",   "name": "김해 FC",           "short": "김해",   "league": "K2", "primary": "#ad1416", "secondary": "#ffffff", "accent": "#ffd700", "emblem": "emblem_K41.png", "border_home": "#ffffff", "border_away": "#ad1416"},
-    {"id": "yongin",   "name": "용인 시민축구단",     "short": "용인",   "league": "K2", "primary": "#a61e34", "secondary": "#ffffff", "accent": "#ffd700", "emblem": "emblem_K42.png", "border_home": "#ffffff", "border_away": "#a61e34"},
+    {"id": "jeonnam",  "name": "전남 드래곤즈",      "short": "전남",   "league": "K2", "primary": "#fbea09", "secondary": "#f0f0f2", "accent": "#000000", "emblem": "emblem_K07.png", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "seongnam", "name": "성남 FC",           "short": "성남",   "league": "K2", "primary": "#0e131b", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K08.png", "border_home": "#ffffff", "border_away": "#1a222d"},
+    {"id": "daegu",    "name": "대구 FC",           "short": "대구",   "league": "K2", "primary": "#86c5e8", "secondary": "#e2e5ea", "accent": "#ffffff", "emblem": "emblem_K17.png", "border_home": "#e2e5ea", "border_away": "#86c5e8"},
+    {"id": "gyeongnam","name": "경남 FC",           "short": "경남",   "league": "K2", "primary": "#ac101b", "secondary": "#d9d9d9", "accent": "#ffffff", "emblem": "emblem_K20.png", "border_home": "#121211", "border_away": "#121211"},
+    {"id": "suwon_fc", "name": "수원 FC",           "short": "수원FC", "league": "K2", "primary": "#07306a", "secondary": "#cac3c3", "accent": "#ffffff", "emblem": "emblem_K29.png", "border_home": "#c9232e", "border_away": "#0b3972"},
+    {"id": "seouland", "name": "서울 이랜드 FC",     "short": "이랜드", "league": "K2", "primary": "#030a1b", "secondary": "#d7dddd", "accent": "#1e3a8a", "emblem": "emblem_K31.png", "border_home": "#051025", "border_away": "#051025"},
+    {"id": "ansan",    "name": "안산 그리너스 FC",    "short": "안산",   "league": "K2", "primary": "#0087a7", "secondary": "#eaedf4", "accent": "#ffd700", "emblem": "emblem_K32.png", "border_home": "#272c3d", "border_away": "#00677f"},
+    {"id": "asan",     "name": "충남 아산 FC",       "short": "아산",   "league": "K2", "primary": "#12122c", "secondary": "#dfdfdf", "accent": "#e30613", "emblem": "emblem_K34.png", "border_home": "#d3a84c", "border_away": "#d3a84c"},
+    {"id": "gimpo",    "name": "김포 FC",           "short": "김포",   "league": "K2", "primary": "#78bc36", "secondary": "#ebebeb", "accent": "#ffffff", "emblem": "emblem_K36.png", "border_home": "#0f2716", "border_away": "#0f2716"},
+    {"id": "cheongju", "name": "충북 청주 FC",       "short": "청주",   "league": "K2", "primary": "#0d1026", "secondary": "#f0f0f0", "accent": "#ffffff", "emblem": "emblem_K37.png", "border_home": "#ae1d25", "border_away": "#0d1026"},    
+    {"id": "cheonan",  "name": "천안 시티 FC",       "short": "천안",   "league": "K2", "primary": "#3e8fb3", "secondary": "#e2e2e2", "accent": "#e30613", "emblem": "emblem_K38.png", "border_home": "#201d1d", "border_away": "#3e8fb3"},
+    {"id": "hwaseong", "name": "화성 FC",           "short": "화성",   "league": "K2", "primary": "#d45820", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K39.png", "border_home": "#fbf5f6", "border_away": "#090811"},
+    {"id": "paju",     "name": "파주 시민축구단",     "short": "파주",   "league": "K2", "primary": "#042ba0", "secondary": "#f8f8f8", "accent": "#c8102e", "emblem": "emblem_K40.png", "border_home": "#d381a2", "border_away": "#d381a2"},
+    {"id": "gimhae",   "name": "김해 FC",           "short": "김해",   "league": "K2", "primary": "#ac0d0e", "secondary": "#f3f3f3", "accent": "#ffd700", "emblem": "emblem_K41.png", "border_home": "#2c2c2c", "border_away": "#bba473"},
+    {"id": "yongin",   "name": "용인 시민축구단",     "short": "용인",   "league": "K2", "primary": "#910c26", "secondary": "#dddddd", "accent": "#ffd700", "emblem": "emblem_K42.png", "border_home": "#54bfe1", "border_away": "#8c0e29"},
 ]
 
 

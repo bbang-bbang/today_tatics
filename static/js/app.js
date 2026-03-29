@@ -15,6 +15,9 @@
         drawColor: "rgba(255,255,255,0.85)",
         players: [],            // {id, team, x, y, name, number}
         lines: [],              // {sx,sy,ex,ey, style, color}
+        animations: [],         // {player, line, progress, duration}
+        multiPoints: null,      // [{fx,fy},...] when drawing multi-point path
+        multiPreviewEnd: null,  // {px,py} canvas coords of current mouse for preview
         dragging: null,
         dragOffset: { dx: 0, dy: 0 },
         drawingLine: null,
@@ -121,11 +124,63 @@
         ctx.globalAlpha = 1.0;
     }
 
+    function calcCurveControlPoint(sx, sy, ex, ey) {
+        const from = fieldToCanvas(sx, sy), to = fieldToCanvas(ex, ey);
+        const mx = (from.px + to.px) / 2, my = (from.py + to.py) / 2;
+        const dx = to.px - from.px, dy = to.py - from.py;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1) return { cx: sx, cy: sy };
+        const offset = len * 0.3;
+        const cp = canvasToField(mx - dy / len * offset, my + dx / len * offset);
+        return { cx: cp.fx, cy: cp.fy };
+    }
+
+    function drawCurvedLine(sx, sy, cx, cy, ex, ey, color, isPreview) {
+        const from = fieldToCanvas(sx, sy), ctrl = fieldToCanvas(cx, cy), to = fieldToCanvas(ex, ey);
+        ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+        if (isPreview) ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(from.px, from.py);
+        ctx.quadraticCurveTo(ctrl.px, ctrl.py, to.px, to.py);
+        ctx.stroke();
+        const tx = to.px - ctrl.px, ty = to.py - ctrl.py;
+        const tlen = Math.sqrt(tx * tx + ty * ty);
+        if (tlen > 0) drawArrowHead(to.px - tx / tlen * 20, to.py - ty / tlen * 20, to.px, to.py, color);
+        ctx.globalAlpha = 1;
+    }
+
+    function drawMultiLine(points, color, isPreview, previewEnd) {
+        if (points.length < 1) return;
+        const all = points.map(p => fieldToCanvas(p.fx, p.fy));
+        if (previewEnd) all.push(previewEnd);
+        ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+        if (isPreview) ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(all[0].px, all[0].py);
+        for (let i = 1; i < all.length; i++) ctx.lineTo(all[i].px, all[i].py);
+        ctx.stroke();
+        if (all.length >= 2) drawArrowHead(all[all.length - 2].px, all[all.length - 2].py, all[all.length - 1].px, all[all.length - 1].py, color);
+        // 중간 꺾임 점 표시
+        for (let i = 1; i < all.length - (previewEnd ? 0 : 1); i++) {
+            ctx.beginPath(); ctx.arc(all[i].px, all[i].py, 3, 0, Math.PI * 2);
+            ctx.fillStyle = color; ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+    }
+
     function drawLines() {
-        for (const l of state.lines) drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, false);
+        for (const l of state.lines) {
+            if (l.style === 'curvedArrow') drawCurvedLine(l.sx, l.sy, l.cx, l.cy, l.ex, l.ey, l.color, false);
+            else if (l.style === 'multiArrow') drawMultiLine(l.points, l.color, false, null);
+            else drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, false);
+        }
         if (state.drawingLine) {
             const l = state.drawingLine;
-            drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, true);
+            if (l.style === 'curvedArrow') drawCurvedLine(l.sx, l.sy, l.cx, l.cy, l.ex, l.ey, l.color, true);
+            else drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, true);
+        }
+        if (state.multiPoints && state.multiPoints.length > 0) {
+            drawMultiLine(state.multiPoints, state.drawColor, true, state.multiPreviewEnd);
         }
     }
 
@@ -222,6 +277,128 @@
         return null;
     }
 
+    // ── Line hit test & animation helpers ─────────────────
+    function distToSegment(px, py, x1, y1, x2, y2) {
+        const dx = x2 - x1, dy = y2 - y1;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+        const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+        return Math.sqrt((px - (x1 + t * dx)) ** 2 + (py - (y1 + t * dy)) ** 2);
+    }
+
+    function hitTestLine(px, py) {
+        for (let i = state.lines.length - 1; i >= 0; i--) {
+            const l = state.lines[i];
+            if (l.style === 'multiArrow') {
+                const pts = l.points.map(p => fieldToCanvas(p.fx, p.fy));
+                for (let j = 1; j < pts.length; j++) {
+                    if (distToSegment(px, py, pts[j-1].px, pts[j-1].py, pts[j].px, pts[j].py) <= 8) return l;
+                }
+            } else if (l.style === 'curvedArrow') {
+                const from = fieldToCanvas(l.sx, l.sy), ctrl = fieldToCanvas(l.cx, l.cy), to = fieldToCanvas(l.ex, l.ey);
+                let prev = from;
+                for (let t = 0.15; t <= 1.0; t += 0.15) {
+                    const mt = 1 - t;
+                    const cur = { px: mt*mt*from.px + 2*mt*t*ctrl.px + t*t*to.px, py: mt*mt*from.py + 2*mt*t*ctrl.py + t*t*to.py };
+                    if (distToSegment(px, py, prev.px, prev.py, cur.px, cur.py) <= 8) return l;
+                    prev = cur;
+                }
+            } else {
+                const from = fieldToCanvas(l.sx, l.sy), to = fieldToCanvas(l.ex, l.ey);
+                if (distToSegment(px, py, from.px, from.py, to.px, to.py) <= 8) return l;
+            }
+        }
+        return null;
+    }
+
+    function getBezierPoint(line, t) {
+        const mt = 1 - t;
+        return { x: mt*mt*line.sx + 2*mt*t*line.cx + t*t*line.ex, y: mt*mt*line.sy + 2*mt*t*line.cy + t*t*line.ey };
+    }
+
+    function getMultiPathPoint(line, t) {
+        const pts = line.points;
+        const lengths = [];
+        let total = 0;
+        for (let i = 1; i < pts.length; i++) {
+            const d = Math.sqrt((pts[i].fx - pts[i-1].fx)**2 + (pts[i].fy - pts[i-1].fy)**2);
+            lengths.push(d); total += d;
+        }
+        if (total === 0) return { x: pts[pts.length-1].fx, y: pts[pts.length-1].fy };
+        let target = t * total;
+        for (let i = 0; i < lengths.length; i++) {
+            if (target <= lengths[i] || i === lengths.length - 1) {
+                const st = lengths[i] > 0 ? Math.min(1, target / lengths[i]) : 1;
+                return { x: pts[i].fx + (pts[i+1].fx - pts[i].fx) * st, y: pts[i].fy + (pts[i+1].fy - pts[i].fy) * st };
+            }
+            target -= lengths[i];
+        }
+        return { x: pts[pts.length-1].fx, y: pts[pts.length-1].fy };
+    }
+
+    function getLinePoint(line, t) {
+        if (line.style === 'curvedArrow') return getBezierPoint(line, t);
+        if (line.style === 'multiArrow') return getMultiPathPoint(line, t);
+        return { x: line.sx + (line.ex - line.sx) * t, y: line.sy + (line.ey - line.sy) * t };
+    }
+
+    function calcPathDuration(line) {
+        let dist = 0;
+        if (line.style === 'multiArrow') {
+            const pts = line.points;
+            for (let i = 1; i < pts.length; i++) dist += Math.sqrt((pts[i].fx - pts[i-1].fx)**2 + (pts[i].fy - pts[i-1].fy)**2);
+        } else if (line.style === 'curvedArrow') {
+            let prev = { x: line.sx, y: line.sy };
+            for (let t = 0.1; t <= 1.0; t += 0.1) { const pos = getBezierPoint(line, t); dist += Math.sqrt((pos.x-prev.x)**2+(pos.y-prev.y)**2); prev = pos; }
+        } else {
+            dist = Math.sqrt((line.ex - line.sx)**2 + (line.ey - line.sy)**2);
+        }
+        return Math.max(400, Math.min(2000, dist * 4000));
+    }
+
+    function nearestPlayerToPoint(fx, fy) {
+        let best = null, bestDist = Infinity;
+        for (const p of state.players) {
+            const d = Math.sqrt((p.x - fx) ** 2 + (p.y - fy) ** 2);
+            if (d < bestDist) { bestDist = d; best = p; }
+        }
+        return best;
+    }
+
+    function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+
+    let animFrameId = null;
+    let lastAnimTime = null;
+
+    function animTick(ts) {
+        if (!lastAnimTime) lastAnimTime = ts;
+        const dt = ts - lastAnimTime;
+        lastAnimTime = ts;
+        let anyActive = false;
+        for (const anim of state.animations) {
+            anim.progress = Math.min(1, anim.progress + dt / anim.duration);
+            const pos = getLinePoint(anim.line, easeInOut(anim.progress));
+            anim.player.x = pos.x; anim.player.y = pos.y;
+            if (anim.progress < 1) anyActive = true;
+        }
+        state.animations = state.animations.filter(a => a.progress < 1);
+        render();
+        if (anyActive) { animFrameId = requestAnimationFrame(animTick); }
+        else { animFrameId = null; lastAnimTime = null; }
+    }
+
+    function startLineAnimation(line) {
+        const startFx = line.style === 'multiArrow' ? line.points[0].fx : line.sx;
+        const startFy = line.style === 'multiArrow' ? line.points[0].fy : line.sy;
+        const player = nearestPlayerToPoint(startFx, startFy);
+        if (!player) return;
+        state.animations = state.animations.filter(a => a.player !== player);
+        // 시작점으로 선수를 순간이동 후 path 따라 이동
+        player.x = startFx; player.y = startFy;
+        state.animations.push({ player, line, progress: 0, duration: calcPathDuration(line) });
+        if (!animFrameId) { lastAnimTime = null; animFrameId = requestAnimationFrame(animTick); }
+    }
+
     // ── Pointer events ─────────────────────────────────────
     function getPointerPos(e) {
         const rect = canvas.getBoundingClientRect();
@@ -239,10 +416,21 @@
                 const { px: cx, py: cy } = fieldToCanvas(player.x, player.y);
                 state.dragOffset = { dx: cx - px, dy: cy - py };
                 canvas.setPointerCapture(e.pointerId);
+            } else {
+                const line = hitTestLine(px, py);
+                if (line) startLineAnimation(line);
             }
         } else if (state.mode === "draw") {
-            state.drawingLine = { sx: fx, sy: fy, ex: fx, ey: fy, style: state.drawStyle, color: state.drawColor };
-            canvas.setPointerCapture(e.pointerId);
+            if (state.drawStyle === 'multiArrow') {
+                if (!state.multiPoints) state.multiPoints = [{ fx, fy }];
+                else state.multiPoints.push({ fx, fy });
+                render();
+            } else {
+                const dl = { sx: fx, sy: fy, ex: fx, ey: fy, style: state.drawStyle, color: state.drawColor };
+                if (state.drawStyle === 'curvedArrow') { dl.cx = fx; dl.cy = fy; }
+                state.drawingLine = dl;
+                canvas.setPointerCapture(e.pointerId);
+            }
         }
     });
 
@@ -253,9 +441,19 @@
             state.dragging.x = fx; state.dragging.y = fy; render();
         } else if (state.mode === "draw" && state.drawingLine) {
             const { fx, fy } = canvasToField(px, py);
-            state.drawingLine.ex = fx; state.drawingLine.ey = fy; render();
+            state.drawingLine.ex = fx; state.drawingLine.ey = fy;
+            if (state.drawingLine.style === 'curvedArrow') {
+                const cp = calcCurveControlPoint(state.drawingLine.sx, state.drawingLine.sy, fx, fy);
+                state.drawingLine.cx = cp.cx; state.drawingLine.cy = cp.cy;
+            }
+            render();
+        } else if (state.mode === "draw" && state.multiPoints) {
+            state.multiPreviewEnd = { px, py };
+            render();
         } else if (state.mode === "select") {
-            canvas.style.cursor = hitTest(px, py) ? "grab" : "default";
+            if (hitTest(px, py)) canvas.style.cursor = "grab";
+            else if (hitTestLine(px, py)) canvas.style.cursor = "pointer";
+            else canvas.style.cursor = "default";
         }
     });
 
@@ -264,7 +462,8 @@
         else if (state.mode === "draw" && state.drawingLine) {
             const l = state.drawingLine;
             if (Math.sqrt((l.ex - l.sx) ** 2 + (l.ey - l.sy) ** 2) > 0.01) {
-                state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color });
+                if (l.style === 'curvedArrow') state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color });
+                else state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color });
             }
             state.drawingLine = null; render();
         }
@@ -311,14 +510,21 @@
         if (player) openEditPopup(player, e.clientX, e.clientY);
     });
 
-    // ── Right-click to remove player ──────────────────────
+    // ── Right-click: 꺾기 완료 or 선수 제거 ──────────────────
     canvas.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        const { px, py } = getPointerPos(e);
-        const player = hitTest(px, py);
-        if (player) {
-            state.players = state.players.filter((p) => p !== player);
-            render(); renderBench();
+        if (state.mode === "draw" && state.multiPoints) {
+            if (state.multiPoints.length >= 2) {
+                const pts = state.multiPoints;
+                state.lines.push({ style: 'multiArrow', color: state.drawColor, points: [...pts], sx: pts[0].fx, sy: pts[0].fy, ex: pts[pts.length-1].fx, ey: pts[pts.length-1].fy });
+            }
+            state.multiPoints = null; state.multiPreviewEnd = null; render();
+            return;
+        }
+        if (state.mode === "select") {
+            const { px, py } = getPointerPos(e);
+            const player = hitTest(px, py);
+            if (player) { state.players = state.players.filter((p) => p !== player); render(); renderBench(); }
         }
     });
 
@@ -329,10 +535,15 @@
     function setMode(mode, drawStyle) {
         state.mode = mode;
         if (drawStyle) state.drawStyle = drawStyle;
+        if (state.multiPoints) { state.multiPoints = null; state.multiPreviewEnd = null; render(); }
         btnSelect.classList.toggle("active", mode === "select");
         drawModeBtns.forEach((b) => b.classList.toggle("active", mode === "draw" && b.dataset.draw === state.drawStyle));
         canvas.style.cursor = mode === "draw" ? "crosshair" : "default";
     }
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && state.multiPoints) { state.multiPoints = null; state.multiPreviewEnd = null; render(); }
+    });
 
     btnSelect.addEventListener("click", () => setMode("select"));
     drawModeBtns.forEach((btn) => btn.addEventListener("click", () => setMode("draw", btn.dataset.draw)));
@@ -436,7 +647,11 @@
             formationA: state.formationA,
             formationB: state.formationB,
             players: state.players.map((p) => ({ id: p.id, team: p.team, x: p.x, y: p.y, name: p.name, number: p.number })),
-            lines: state.lines.map((l) => ({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color })),
+            lines: state.lines.map((l) => {
+                if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color };
+                if (l.style === 'multiArrow') return { points: l.points, sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color };
+                return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color };
+            }),
             teamAId: state.teamA ? state.teamA.id : null,
             teamBId: state.teamB ? state.teamB.id : null,
         };
@@ -452,10 +667,11 @@
         document.querySelector('.formation-select-team[data-side="B"]').value = state.formationB;
         state.players = data.players || [];
         // backward compat: old saves use "arrows"
-        state.lines = (data.lines || data.arrows || []).map((l) => ({
-            sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey,
-            style: l.style || "arrow", color: l.color || "rgba(255,255,255,0.85)",
-        }));
+        state.lines = (data.lines || data.arrows || []).map((l) => {
+            if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)" };
+            if (l.style === 'multiArrow') return { points: l.points || [], sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: 'multiArrow', color: l.color || "rgba(255,255,255,0.85)" };
+            return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style || "arrow", color: l.color || "rgba(255,255,255,0.85)" };
+        });
         render(); renderBench();
     }
 
