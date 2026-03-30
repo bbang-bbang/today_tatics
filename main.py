@@ -8,10 +8,37 @@ from flask import Flask, render_template, jsonify, request
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
-SAVES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saves")
-SQUADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "squads")
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+SAVES_DIR  = os.path.join(BASE_DIR, "saves")
+SQUADS_DIR = os.path.join(BASE_DIR, "squads")
 os.makedirs(SAVES_DIR, exist_ok=True)
 os.makedirs(SQUADS_DIR, exist_ok=True)
+
+def _init_default_squads():
+    """kleague_players_2026.json 을 읽어 팀별 기본 스쿼드 파일을 생성한다."""
+    players_file = os.path.join(BASE_DIR, "kleague_players_2026.json")
+    if not os.path.exists(players_file):
+        return
+    with open(players_file, "r", encoding="utf-8") as f:
+        all_data = json.load(f)
+    now = datetime.now().isoformat()
+    for team_id, tdata in all_data.items():
+        fpath = os.path.join(SQUADS_DIR, f"default_{team_id}.json")
+        if os.path.exists(fpath):       # 이미 있으면 덮어쓰지 않음
+            continue
+        players = [{"number": p["number"], "name": p["name"], "position": p.get("position",""), "height": p.get("height",0), "weight": p.get("weight",0), "dob": p.get("dob","")} for p in tdata.get("players", [])]
+        data = {
+            "id": f"default_{team_id}",
+            "teamId": team_id,
+            "name": f"2026 시즌 ({tdata.get('team_name', team_id)})",
+            "players": players,
+            "createdAt": now,
+            "updatedAt": now,
+        }
+        with open(fpath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+_init_default_squads()
 
 # ── K리그 2026 팀 데이터 (K리그 데이터 포털 기준) ─────────
 TEAMS = [

@@ -283,7 +283,7 @@
     // ── Draw soccer ball ──────────────────────────────────
     function drawBall(bx, by, isDragging) {
         const r = fieldRect();
-        const br = Math.max(5, r.w * 0.011);
+        const br = Math.max(4, r.w * 0.007);
 
         ctx.save();
         if (isDragging) { ctx.shadowColor = "rgba(255,255,255,0.6)"; ctx.shadowBlur = 10; }
@@ -635,6 +635,7 @@
             const { fx, fy } = canvasToField(px + state.dragOffset.dx, py + state.dragOffset.dy);
             state.draggingBall.x = fx; state.draggingBall.y = fy; render();
         } else if (state.mode === "select" && state.dragging) {
+            playerTooltip.style.display = "none"; tooltipTarget = null;
             const { fx: dfx, fy: dfy } = canvasToField(px, py);
             state.dragging.x = dfx; state.dragging.y = dfy; render();
         } else if (state.mode === "select" && state.draggingCurve) {
@@ -659,7 +660,9 @@
             state.multiPreviewEnd = { px, py };
             render();
         } else if (state.mode === "select") {
-            if (hitTest(px, py)) canvas.style.cursor = "grab";
+            const hovered = hitTest(px, py);
+            showPlayerTooltip(hovered, e.clientX, e.clientY);
+            if (hovered) canvas.style.cursor = "grab";
             else if (hitTestLine(px, py)) canvas.style.cursor = "pointer";
             else canvas.style.cursor = "default";
         } else if (state.mode === "erase") {
@@ -839,6 +842,57 @@
     });
     document.querySelectorAll(".formation-select-team").forEach((sel) => {
         sel.addEventListener("change", (e) => { loadFormationSide(sel.dataset.side, e.target.value); });
+    });
+
+    // ── Player tooltip ────────────────────────────────────
+    const playerTooltip = document.getElementById("player-tooltip");
+    let tooltipTarget = null;
+
+    function calcAge(dob) {
+        if (!dob) return null;
+        const [y, m, d] = dob.split("/").map(Number);
+        const today = new Date();
+        let age = today.getFullYear() - y;
+        if (today.getMonth() + 1 < m || (today.getMonth() + 1 === m && today.getDate() < d)) age--;
+        return age;
+    }
+
+    function showPlayerTooltip(player, clientX, clientY) {
+        if (!player) {
+            playerTooltip.style.display = "none";
+            tooltipTarget = null;
+            return;
+        }
+        if (tooltipTarget === player) {
+            // 위치만 업데이트
+            const x = Math.min(clientX + 14, window.innerWidth - 160);
+            const y = Math.min(clientY - 10, window.innerHeight - 140);
+            playerTooltip.style.left = x + "px";
+            playerTooltip.style.top = y + "px";
+            return;
+        }
+        tooltipTarget = player;
+        const age = calcAge(player.dob);
+        const lines = [
+            `<b>${player.name}</b>`,
+            player.position ? `포지션: ${player.position}` : "",
+            `등번호: ${player.number}`,
+            player.height ? `신장: ${player.height}cm` : "",
+            player.weight ? `체중: ${player.weight}kg` : "",
+            age !== null ? `나이: ${age}세` : "",
+            player.dob ? `생년월일: ${player.dob.replace(/\//g, ".")}` : "",
+        ].filter(Boolean).join("<br>");
+        playerTooltip.innerHTML = lines;
+        const x = Math.min(clientX + 14, window.innerWidth - 160);
+        const y = Math.min(clientY - 10, window.innerHeight - 140);
+        playerTooltip.style.left = x + "px";
+        playerTooltip.style.top = y + "px";
+        playerTooltip.style.display = "block";
+    }
+
+    canvas.addEventListener("pointerleave", () => {
+        playerTooltip.style.display = "none";
+        tooltipTarget = null;
     });
 
     // ── Toast ─────────────────────────────────────────────
