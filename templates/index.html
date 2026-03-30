@@ -113,6 +113,7 @@
                     <div class="bench-squad-bar">
                         <button class="squad-btn squad-save-btn" data-side="A" title="현재 선수 명단 저장">스쿼드 저장</button>
                         <button class="squad-btn squad-load-btn" data-side="A" title="저장된 스쿼드 불러오기">스쿼드 불러오기</button>
+                        <button class="squad-btn team-reset-btn" data-side="A" title="HOME 팀 초기화">초기화</button>
                     </div>
                 </div>
                 <div class="bench-section" data-side="B">
@@ -124,6 +125,7 @@
                     <div class="bench-squad-bar">
                         <button class="squad-btn squad-save-btn" data-side="B" title="현재 선수 명단 저장">스쿼드 저장</button>
                         <button class="squad-btn squad-load-btn" data-side="B" title="저장된 스쿼드 불러오기">스쿼드 불러오기</button>
+                        <button class="squad-btn team-reset-btn" data-side="B" title="AWAY 팀 초기화">초기화</button>
                     </div>
                 </div>
             </aside>
@@ -145,6 +147,15 @@
             <input type="text" id="add-player-name" maxlength="20" placeholder="예: 홍길동 (ST)">
         </div>
         <button id="add-player-confirm" class="player-edit-confirm-btn">추가</button>
+    </div>
+
+    <!-- 슬롯 선수 선택 팝업 -->
+    <div id="slot-picker" class="slot-picker hidden">
+        <div class="slot-picker-header">
+            <span id="slot-picker-label"></span>
+            <button id="slot-picker-close" class="player-edit-close-btn">&times;</button>
+        </div>
+        <div id="slot-picker-list" class="slot-picker-list"></div>
     </div>
 
     <!-- 선수 편집 팝업 -->

@@ -645,6 +645,17 @@ body {
     color: #fff;
 }
 
+.team-reset-btn {
+    background: #4a1010;
+    border-color: #8b2020;
+    color: #e08080;
+}
+
+.team-reset-btn:hover {
+    background: #8b2020;
+    color: #fff;
+}
+
 #field {
     display: block;
     border-radius: 4px;
@@ -886,6 +897,86 @@ body {
 
 .toast.show {
     opacity: 1;
+}
+
+/* Slot Picker */
+.slot-picker {
+    position: fixed;
+    z-index: 1600;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 10px;
+    padding: 10px 12px;
+    width: 210px;
+    max-height: 300px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+}
+
+.slot-picker.hidden { display: none; }
+
+.slot-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #e0e0ff;
+}
+
+.slot-picker-list {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.slot-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 7px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.slot-picker-item:hover { background: rgba(255,255,255,0.08); }
+
+.slot-picker-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.slot-picker-name {
+    font-size: 0.82rem;
+    color: #c0c0d0;
+}
+
+.slot-picker-pos {
+    margin-left: auto;
+    font-size: 0.68rem;
+    color: #6060a0;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+.slot-picker-empty {
+    font-size: 0.75rem;
+    color: #555;
+    text-align: center;
+    padding: 12px 0;
 }
 
 /* Player Edit Popup */

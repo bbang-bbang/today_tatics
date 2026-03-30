@@ -255,17 +255,10 @@
                 ctx.fillText(slot.label, px, py);
             }
         }
-        // 배치된 선수 그리기
+        // 배치된 선수 그리기 (항상 p.x/y 기준, slotIdx는 자국 표시 여부만 사용)
         for (const p of state.players) {
             if (p.onField === false) continue;
-            // slotIdx가 있으면 슬롯 좌표 사용 (드래그 중엔 p.x/y 사용)
-            const drawX = (p.slotIdx != null && state.dragging !== p)
-                ? (state.slots[p.team]?.find(s => s.idx === p.slotIdx)?.x ?? p.x)
-                : p.x;
-            const drawY = (p.slotIdx != null && state.dragging !== p)
-                ? (state.slots[p.team]?.find(s => s.idx === p.slotIdx)?.y ?? p.y)
-                : p.y;
-            const { px, py } = fieldToCanvas(drawX, drawY);
+            const { px, py } = fieldToCanvas(p.x, p.y);
             const color = getTeamColor(p.team);
             const isDragging = state.dragging === p;
             const r = isDragging ? PLAYER_RADIUS + 3 : PLAYER_RADIUS;
@@ -281,7 +274,8 @@
             ctx.font = "bold 10px 'Segoe UI', sans-serif";
             ctx.fillStyle = "#fff";
             ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 3;
-            ctx.fillText(p.name, px, py + r + 12);
+            const label = p.name + (p.position ? ` (${p.position})` : "");
+            ctx.fillText(label, px, py + r + 12);
             ctx.shadowColor = "transparent"; ctx.shadowBlur = 0;
         }
     }
@@ -380,6 +374,21 @@
         renderBench();
     }
 
+    // ── Slot hit test ─────────────────────────────────────
+    function hitTestEmptySlot(px, py) {
+        for (const side of ["A", "B"]) {
+            const filledIdxs = new Set(
+                state.players.filter(p => p.team === side && p.onField !== false && p.slotIdx != null).map(p => p.slotIdx)
+            );
+            for (const slot of (state.slots[side] || [])) {
+                if (filledIdxs.has(slot.idx)) continue;
+                const { px: sx, py: sy } = fieldToCanvas(slot.x, slot.y);
+                if (Math.sqrt((px - sx) ** 2 + (py - sy) ** 2) <= PLAYER_RADIUS + 4) return slot;
+            }
+        }
+        return null;
+    }
+
     // ── Ball hit test ──────────────────────────────────────
     function hitTestBall(px, py) {
         const r = fieldRect();
@@ -394,11 +403,6 @@
 
     // ── Hit test ───────────────────────────────────────────
     function getPlayerDrawPos(p) {
-        // 슬롯에 배치된 선수는 슬롯 좌표 기준
-        if (p.slotIdx != null) {
-            const slot = state.slots[p.team]?.find(s => s.idx === p.slotIdx);
-            if (slot) return { x: slot.x, y: slot.y };
-        }
         return { x: p.x, y: p.y };
     }
 
@@ -559,11 +563,10 @@
             const player = hitTest(px, py);
             if (player) {
                 state.dragging = player;
-                // 드래그 시작: 슬롯 좌표를 실제 x,y로 동기화
+                // 드래그 시작: 슬롯 좌표를 p.x/y로 동기화 (slotIdx 유지 → 슬롯 자국 안 보임)
                 const drawPos = getPlayerDrawPos(player);
                 player.x = drawPos.x; player.y = drawPos.y;
-                const { px: cx, py: cy } = fieldToCanvas(player.x, player.y);
-                state.dragOffset = { dx: cx - px, dy: cy - py };
+                state.dragOffset = { dx: 0, dy: 0 };
                 canvas.setPointerCapture(e.pointerId);
             } else {
                 const line = hitTestLine(px, py);
@@ -575,6 +578,10 @@
                     } else {
                         startLineAnimation(line);
                     }
+                } else {
+                    // 선수도 라인도 없을 때만 빈 슬롯 체크
+                    const emptySlot = hitTestEmptySlot(px, py);
+                    if (emptySlot) openSlotPicker(emptySlot, e.clientX, e.clientY);
                 }
             }
         } else if (state.mode === "erase") {
@@ -628,7 +635,7 @@
             const { fx, fy } = canvasToField(px + state.dragOffset.dx, py + state.dragOffset.dy);
             state.draggingBall.x = fx; state.draggingBall.y = fy; render();
         } else if (state.mode === "select" && state.dragging) {
-            const { fx: dfx, fy: dfy } = canvasToField(px + state.dragOffset.dx, py + state.dragOffset.dy);
+            const { fx: dfx, fy: dfy } = canvasToField(px, py);
             state.dragging.x = dfx; state.dragging.y = dfy; render();
         } else if (state.mode === "select" && state.draggingCurve) {
             const dc = state.draggingCurve;
@@ -663,22 +670,6 @@
     canvas.addEventListener("pointerup", () => {
         if (state.mode === "select") {
             if (state.dragging) {
-                const p = state.dragging;
-                // 드래그 끝: 가장 가까운 슬롯에 스냅 (같은 팀, 40px 이내)
-                const slots = state.slots[p.team] || [];
-                let nearest = null, minDist = Infinity;
-                for (const slot of slots) {
-                    const { px: sx, py: sy } = fieldToCanvas(slot.x, slot.y);
-                    const { px: ex, py: ey } = fieldToCanvas(p.x, p.y);
-                    const d = Math.sqrt((sx - ex) ** 2 + (sy - ey) ** 2);
-                    if (d < minDist) { minDist = d; nearest = slot; }
-                }
-                if (nearest && minDist < PLAYER_RADIUS * 3) {
-                    // 해당 슬롯에 이미 다른 선수가 있으면 서로 위치 교환
-                    const occupant = state.players.find(pl => pl !== p && pl.team === p.team && pl.onField !== false && pl.slotIdx === nearest.idx);
-                    if (occupant) { occupant.slotIdx = p.slotIdx; }
-                    p.slotIdx = nearest.idx;
-                }
                 state.dragging = null;
             }
             if (state.draggingBall) { state.draggingBall = null; }
@@ -772,7 +763,12 @@
             const ball = hitTestBall(px, py);
             if (ball) { state.balls = state.balls.filter(b => b !== ball); render(); return; }
             const player = hitTest(px, py);
-            if (player) { state.players = state.players.filter((p) => p !== player); render(); renderBench(); }
+            if (player) {
+                // 완전 삭제 대신 벤치로 복귀
+                player.onField = false;
+                player.slotIdx = null;
+                render(); renderBench();
+            }
         }
     });
 
@@ -827,8 +823,19 @@
     document.getElementById("btn-reset").addEventListener("click", () => {
         state.lines = [];
         state.players.forEach(p => { p.onField = false; p.slotIdx = null; });
+        state.balls = [];
         loadFormationSide("A", state.formationA);
         loadFormationSide("B", state.formationB);
+    });
+
+    document.querySelectorAll(".team-reset-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const side = btn.dataset.side;
+            state.players.filter(p => p.team === side).forEach(p => { p.onField = false; p.slotIdx = null; });
+            loadFormationSide(side, side === "A" ? state.formationA : state.formationB);
+            renderBenchList();
+            render();
+        });
     });
     document.querySelectorAll(".formation-select-team").forEach((sel) => {
         sel.addEventListener("change", (e) => { loadFormationSide(sel.dataset.side, e.target.value); });
@@ -838,6 +845,72 @@
     let toastEl = document.createElement("div"); toastEl.className = "toast"; document.body.appendChild(toastEl);
     let toastTimer = null;
     function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2000); }
+
+    // ── Slot picker ───────────────────────────────────────
+    const slotPicker = document.getElementById("slot-picker");
+    const slotPickerLabel = document.getElementById("slot-picker-label");
+    const slotPickerList = document.getElementById("slot-picker-list");
+    document.getElementById("slot-picker-close").addEventListener("click", () => slotPicker.classList.add("hidden"));
+    document.addEventListener("pointerdown", (e) => {
+        if (!slotPicker.classList.contains("hidden") && !slotPicker.contains(e.target) && e.target !== canvas)
+            slotPicker.classList.add("hidden");
+    });
+
+    const POS_MAP = { GK: ["GK"], DF: ["CB","LB","RB","LWB","RWB"], MF: ["CM","CDM","LM","RM","AM"], FW: ["ST","LW","RW"] };
+
+    function openSlotPicker(slot, screenX, screenY) {
+        const side = slot.team;
+        const dotTeam = side === "A" ? state.teamA : state.teamB;
+        const dotColor = dotTeam ? dotTeam.primary : (side === "A" ? DEFAULT_A_COLOR : DEFAULT_B_COLOR);
+
+        // 해당 포지션에 맞는 벤치 선수 필터
+        const matchPos = Object.entries(POS_MAP).find(([, labels]) => labels.includes(slot.label))?.[0];
+        const bench = state.players.filter(p => p.team === side && p.onField === false);
+        // 포지션 매칭 → 나머지 순
+        const sorted = [
+            ...bench.filter(p => p.position === matchPos),
+            ...bench.filter(p => p.position !== matchPos),
+        ];
+
+        slotPickerLabel.textContent = `${slot.label} 슬롯 — 선수 선택`;
+        slotPickerList.innerHTML = "";
+
+        if (sorted.length === 0) {
+            slotPickerList.innerHTML = '<div class="slot-picker-empty">벤치에 선수가 없습니다</div>';
+        } else {
+            for (const p of sorted) {
+                const item = document.createElement("div");
+                item.className = "slot-picker-item";
+                const dot = document.createElement("div");
+                dot.className = "slot-picker-dot";
+                dot.style.background = dotColor;
+                dot.textContent = p.number;
+                const name = document.createElement("span");
+                name.className = "slot-picker-name";
+                name.textContent = p.name;
+                const pos = document.createElement("span");
+                pos.className = "slot-picker-pos";
+                pos.textContent = p.position || "—";
+                item.appendChild(dot); item.appendChild(name); item.appendChild(pos);
+                item.addEventListener("click", () => {
+                    p.x = slot.x; p.y = slot.y;
+                    p.slotIdx = slot.idx;
+                    p.onField = true;
+                    slotPicker.classList.add("hidden");
+                    render(); renderBench();
+                });
+                slotPickerList.appendChild(item);
+            }
+        }
+
+        // 팝업 위치 조정
+        let left = screenX + 10, top = screenY - 10;
+        if (left + 220 > window.innerWidth) left = screenX - 220;
+        if (top + 320 > window.innerHeight) top = window.innerHeight - 320;
+        slotPicker.style.left = left + "px";
+        slotPicker.style.top = Math.max(8, top) + "px";
+        slotPicker.classList.remove("hidden");
+    }
 
     // ── Bench panel ───────────────────────────────────────
     const benchListA = document.getElementById("bench-list-a");
@@ -1212,7 +1285,7 @@
         updateBanner(); updateLegend(); render();
         closeTeamModal();
 
-        // 이 팀 선수 제거 후 squad를 벤치에 로드 (슬롯은 유지)
+        // 이 팀 선수 제거 후 squad 로드 → 포메이션 슬롯에 자동 배치
         state.players = state.players.filter((p) => p.team !== side);
         try {
             const res = await fetch(`/api/squads?teamId=${team.id}`);
@@ -1220,25 +1293,43 @@
             if (squads.length > 0) {
                 const r = await fetch(`/api/squads/${squads[0].id}`);
                 const squadData = await r.json();
-                for (const sp of (squadData.players || [])) {
-                    state.players.push({
-                        id: state.nextId++, team: side,
-                        x: 0, y: 0, onField: false, slotIdx: null,
-                        name: sp.name, number: sp.number,
-                        position: sp.position || "",
-                        height: sp.height || null,
-                        weight: sp.weight || null,
-                        dob: sp.dob || "",
-                    });
+                const slots = state.slots[side] || [];
+                const usedSlots = new Set();
+
+                // 선수 객체 먼저 생성
+                const allPlayers = (squadData.players || []).map(sp => ({
+                    id: state.nextId++, team: side,
+                    x: 0, y: 0, onField: false, slotIdx: null,
+                    name: sp.name, number: sp.number,
+                    position: sp.position || "",
+                    height: sp.height || null,
+                    weight: sp.weight || null,
+                    dob: sp.dob || "",
+                }));
+
+                // 슬롯별 포지션 매핑으로 자동 배치
+                for (const slot of slots) {
+                    const matchPos = Object.entries(POS_MAP).find(([, labels]) => labels.includes(slot.label))?.[0];
+                    // 해당 포지션 미배치 선수 중 첫 번째
+                    const candidate = allPlayers.find(p =>
+                        !p.onField && (p.position === matchPos || (!matchPos && !p.onField))
+                    );
+                    if (candidate) {
+                        candidate.x = slot.x; candidate.y = slot.y;
+                        candidate.onField = true; candidate.slotIdx = slot.idx;
+                        usedSlots.add(slot.idx);
+                    }
                 }
-                showToast(`${team.name} 선택 완료 (${squadData.players.length}명)`);
+
+                state.players.push(...allPlayers);
+                showToast(`${team.name} 선택 완료 (${allPlayers.length}명)`);
             } else {
                 showToast(`${team.name} 선택 완료`);
             }
         } catch (e) {
             showToast(`${team.name} 선택 완료`);
         }
-        renderBench();
+        render(); renderBench();
     }
 
     function setBannerBadge(badgeEl, team, fallbackColor, fallbackLetter) {
@@ -1327,7 +1418,12 @@
                 body: JSON.stringify({
                     teamId: team ? team.id : "",
                     name: name,
-                    players: teamPlayers.map((p) => ({ number: p.number, name: p.name, position: p.position || "", height: p.height || null, weight: p.weight || null, dob: p.dob || "" })),
+                    players: teamPlayers.map((p) => ({
+                        number: p.number, name: p.name,
+                        position: p.position || "",
+                        height: p.height || null, weight: p.weight || null, dob: p.dob || "",
+                        x: p.x, y: p.y, onField: p.onField, slotIdx: p.slotIdx ?? null,
+                    })),
                 }),
             });
             showToast("스쿼드가 저장되었습니다.");
@@ -1367,28 +1463,62 @@
                     showToast("스쿼드를 적용했습니다.");
                 } else if (btn2.classList.contains("btn-delete-item")) {
                     if (!confirm("정말 삭제하시겠습니까?")) return;
-                    await fetch(`/api/squads/${id}`, { method: "DELETE" });
+                    const delRes = await fetch(`/api/squads/${id}`, { method: "DELETE" });
+                    if (!delRes.ok) { showToast("삭제 실패"); return; }
                     showToast("삭제되었습니다.");
-                    btn.click(); // re-open
+                    // 목록 새로고침
+                    const url2 = (squadLoadSide === "A" ? state.teamA : state.teamB)
+                        ? `/api/squads?teamId=${(squadLoadSide === "A" ? state.teamA : state.teamB).id}`
+                        : "/api/squads";
+                    const res2 = await fetch(url2);
+                    const squads2 = await res2.json();
+                    if (squads2.length === 0) { squadList.innerHTML = '<p class="empty-msg">저장된 스쿼드가 없습니다.</p>'; return; }
+                    squadList.innerHTML = "";
+                    for (const s2 of squads2) {
+                        const item2 = document.createElement("div"); item2.className = "save-item";
+                        const teamObj2 = state.teams.find((t) => t.id === s2.teamId);
+                        item2.innerHTML = `<div class="save-item-info"><div class="save-item-name">${escapeHtml(s2.name)}</div><div class="save-item-meta">${teamObj2 ? teamObj2.short : ""} &middot; ${s2.playerCount}명</div></div>
+                        <div class="save-item-actions"><button class="btn-load-item" data-id="${s2.id}">적용</button><button class="btn-delete-item" data-id="${s2.id}">삭제</button></div>`;
+                        squadList.appendChild(item2);
+                    }
                 }
             };
         });
     });
 
     function applySquad(side, squadData) {
-        // 이 팀 선수만 초기화 후 벤치에 적재 (슬롯 유지)
         state.players = state.players.filter((p) => p.team !== side);
-        for (const sp of (squadData.players || [])) {
-            state.players.push({
-                id: state.nextId++, team: side,
-                x: 0, y: 0, onField: false, slotIdx: null,
-                name: sp.name, number: sp.number,
-                position: sp.position || "",
-                height: sp.height || null,
-                weight: sp.weight || null,
-                dob: sp.dob || "",
-            });
+
+        const allPlayers = (squadData.players || []).map(sp => ({
+            id: state.nextId++, team: side,
+            x: sp.x ?? 0, y: sp.y ?? 0,
+            onField: sp.onField ?? false,
+            slotIdx: sp.slotIdx ?? null,
+            name: sp.name, number: sp.number,
+            position: sp.position || "",
+            height: sp.height || null,
+            weight: sp.weight || null,
+            dob: sp.dob || "",
+        }));
+
+        // 위치 정보가 없는 구버전 스쿼드 → 포지션 매칭으로 자동 배치
+        const hasPosition = allPlayers.some(p => p.onField);
+        if (!hasPosition) {
+            const slots = state.slots[side] || [];
+            for (const slot of slots) {
+                const matchPos = Object.entries(POS_MAP).find(([, labels]) => labels.includes(slot.label))?.[0];
+                const candidate = allPlayers.find(p =>
+                    !p.onField && p.position === matchPos
+                );
+                if (candidate) {
+                    candidate.x = slot.x; candidate.y = slot.y;
+                    candidate.onField = true; candidate.slotIdx = slot.idx;
+                }
+            }
         }
+
+        state.players.push(...allPlayers);
+
         if (squadData.teamId) {
             const team = state.teams.find((t) => t.id === squadData.teamId);
             if (team) {

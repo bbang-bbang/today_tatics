@@ -277,8 +277,21 @@ def get_squad(squad_id):
 
 @app.route("/api/squads/<squad_id>", methods=["DELETE"])
 def delete_squad(squad_id):
+    # 직접 파일명으로 시도
     fpath = os.path.join(SQUADS_DIR, f"{squad_id}.json")
     if not os.path.exists(fpath):
+        # 내부 id로 스캔
+        fpath = None
+        for fname in os.listdir(SQUADS_DIR):
+            if not fname.endswith(".json"):
+                continue
+            candidate = os.path.join(SQUADS_DIR, fname)
+            with open(candidate, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if d.get("id") == squad_id:
+                fpath = candidate
+                break
+    if not fpath:
         return jsonify({"error": "Not found"}), 404
     os.remove(fpath)
     return jsonify({"ok": True})
