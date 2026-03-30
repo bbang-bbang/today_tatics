@@ -111,14 +111,18 @@ def parse_players(html, portal_team_id):
                 name = name_match.group(2).strip()
                 info = info_match.group(1).strip()
 
+                # 포맷: "189Cm / 75Kg / 1991/09/25"
+                height_match = re.search(r'(\d+)\s*[Cc]m', info)
+                weight_match = re.search(r'(\d+)\s*[Kk]g', info)
                 date_match = re.search(r'(\d{4}/\d{2}/\d{2})', info)
-                dob = date_match.group(1) if date_match else ''
 
                 players.append({
                     'number': int(number),
                     'name': name,
                     'position': pos,
-                    'dob': dob
+                    'height': int(height_match.group(1)) if height_match else None,
+                    'weight': int(weight_match.group(1)) if weight_match else None,
+                    'dob': date_match.group(1) if date_match else '',
                 })
 
     return players
