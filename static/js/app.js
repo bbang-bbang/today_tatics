@@ -22,6 +22,7 @@
         dragOffset: { dx: 0, dy: 0 },
         drawingLine: null,
         draggingCurve: null,    // {line, t, px, py, moved}
+        slots: { A: [], B: [] },  // 포메이션 슬롯 { idx, x, y, label, team }
         formations: {},
         formationA: "4-4-2",
         formationB: "4-4-2",
@@ -229,14 +230,39 @@
             : (team.border_home || team.secondary);
     }
     function getTeamTextColor(side) {
-        return isAway(side) ? "#222222" : "#ffffff";
+        return isAway(side) ? "#000000" : "#ffffff";
     }
 
     // ── Draw players ───────────────────────────────────────
     function drawPlayers() {
+        // 빈 슬롯 그리기 (선수가 배치되지 않은 슬롯만)
+        for (const side of ["A", "B"]) {
+            const filledIdxs = new Set(
+                state.players.filter(p => p.team === side && p.onField !== false && p.slotIdx != null).map(p => p.slotIdx)
+            );
+            for (const slot of (state.slots[side] || [])) {
+                if (filledIdxs.has(slot.idx)) continue;
+                const { px, py } = fieldToCanvas(slot.x, slot.y);
+                ctx.beginPath(); ctx.arc(px, py, PLAYER_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.fill();
+                ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1.5; ctx.stroke();
+                ctx.fillStyle = "rgba(255,255,255,0.35)";
+                ctx.font = "bold 9px 'Segoe UI', sans-serif";
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                ctx.fillText(slot.label, px, py);
+            }
+        }
+        // 배치된 선수 그리기
         for (const p of state.players) {
             if (p.onField === false) continue;
-            const { px, py } = fieldToCanvas(p.x, p.y);
+            // slotIdx가 있으면 슬롯 좌표 사용 (드래그 중엔 p.x/y 사용)
+            const drawX = (p.slotIdx != null && state.dragging !== p)
+                ? (state.slots[p.team]?.find(s => s.idx === p.slotIdx)?.x ?? p.x)
+                : p.x;
+            const drawY = (p.slotIdx != null && state.dragging !== p)
+                ? (state.slots[p.team]?.find(s => s.idx === p.slotIdx)?.y ?? p.y)
+                : p.y;
+            const { px, py } = fieldToCanvas(drawX, drawY);
             const color = getTeamColor(p.team);
             const isDragging = state.dragging === p;
             const r = isDragging ? PLAYER_RADIUS + 3 : PLAYER_RADIUS;
@@ -267,14 +293,21 @@
     function loadFormationSide(side, name) {
         const f = state.formations[name];
         if (!f) return;
-        if (side === "A") state.formationA = name;
-        else state.formationB = name;
-        state.players = state.players.filter((p) => p.team !== side);
+        if (side === "A") state.formationA = name; else state.formationB = name;
+
         const positions = side === "A" ? f.teamA : f.teamB;
         const labels = side === "A" ? f.labelsA : f.labelsB;
-        for (let i = 0; i < positions.length; i++) {
-            state.players.push({ id: state.nextId++, team: side, x: positions[i].x, y: positions[i].y, name: labels[i] || "", number: i + 1 });
-        }
+
+        // 슬롯 업데이트 (선수는 그대로)
+        state.slots[side] = positions.map((pos, i) => ({ idx: i, team: side, x: pos.x, y: pos.y, label: labels[i] || "" }));
+
+        // 포메이션 슬롯 수보다 많은 on-field 선수는 벤치로
+        const onField = state.players.filter(p => p.team === side && p.onField !== false);
+        onField.forEach((p, i) => {
+            if (i >= positions.length) { p.onField = false; p.slotIdx = null; }
+            else if (p.slotIdx == null) { p.slotIdx = i; }
+        });
+
         render();
         renderBench();
     }
@@ -285,23 +318,29 @@
         state.players = [];
         const f = state.formations[name];
         if (!f) return;
-        for (let i = 0; i < f.teamA.length; i++) {
-            state.players.push({ id: state.nextId++, team: "A", x: f.teamA[i].x, y: f.teamA[i].y, name: f.labelsA[i] || "", number: i + 1 });
-        }
-        for (let i = 0; i < f.teamB.length; i++) {
-            state.players.push({ id: state.nextId++, team: "B", x: f.teamB[i].x, y: f.teamB[i].y, name: f.labelsB[i] || "", number: i + 1 });
-        }
+        state.slots.A = f.teamA.map((pos, i) => ({ idx: i, team: "A", x: pos.x, y: pos.y, label: f.labelsA[i] || "" }));
+        state.slots.B = f.teamB.map((pos, i) => ({ idx: i, team: "B", x: pos.x, y: pos.y, label: f.labelsB[i] || "" }));
         document.querySelectorAll(".formation-select-team").forEach((sel) => { sel.value = name; });
         render();
         renderBench();
     }
 
     // ── Hit test ───────────────────────────────────────────
+    function getPlayerDrawPos(p) {
+        // 슬롯에 배치된 선수는 슬롯 좌표 기준
+        if (p.slotIdx != null) {
+            const slot = state.slots[p.team]?.find(s => s.idx === p.slotIdx);
+            if (slot) return { x: slot.x, y: slot.y };
+        }
+        return { x: p.x, y: p.y };
+    }
+
     function hitTest(px, py) {
         for (let i = state.players.length - 1; i >= 0; i--) {
             const p = state.players[i];
             if (p.onField === false) continue;
-            const { px: cx, py: cy } = fieldToCanvas(p.x, p.y);
+            const pos = getPlayerDrawPos(p);
+            const { px: cx, py: cy } = fieldToCanvas(pos.x, pos.y);
             if (Math.sqrt((px - cx) ** 2 + (py - cy) ** 2) <= PLAYER_RADIUS + 4) return p;
         }
         return null;
@@ -445,6 +484,9 @@
             const player = hitTest(px, py);
             if (player) {
                 state.dragging = player;
+                // 드래그 시작: 슬롯 좌표를 실제 x,y로 동기화
+                const drawPos = getPlayerDrawPos(player);
+                player.x = drawPos.x; player.y = drawPos.y;
                 const { px: cx, py: cy } = fieldToCanvas(player.x, player.y);
                 state.dragOffset = { dx: cx - px, dy: cy - py };
                 canvas.setPointerCapture(e.pointerId);
@@ -542,7 +584,25 @@
 
     canvas.addEventListener("pointerup", () => {
         if (state.mode === "select") {
-            state.dragging = null;
+            if (state.dragging) {
+                const p = state.dragging;
+                // 드래그 끝: 가장 가까운 슬롯에 스냅 (같은 팀, 40px 이내)
+                const slots = state.slots[p.team] || [];
+                let nearest = null, minDist = Infinity;
+                for (const slot of slots) {
+                    const { px: sx, py: sy } = fieldToCanvas(slot.x, slot.y);
+                    const { px: ex, py: ey } = fieldToCanvas(p.x, p.y);
+                    const d = Math.sqrt((sx - ex) ** 2 + (sy - ey) ** 2);
+                    if (d < minDist) { minDist = d; nearest = slot; }
+                }
+                if (nearest && minDist < PLAYER_RADIUS * 3) {
+                    // 해당 슬롯에 이미 다른 선수가 있으면 서로 위치 교환
+                    const occupant = state.players.find(pl => pl !== p && pl.team === p.team && pl.onField !== false && pl.slotIdx === nearest.idx);
+                    if (occupant) { occupant.slotIdx = p.slotIdx; }
+                    p.slotIdx = nearest.idx;
+                }
+                state.dragging = null;
+            }
             if (state.draggingCurve) {
                 if (!state.draggingCurve.moved) startLineAnimation(state.draggingCurve.line);
                 state.draggingCurve = null;
@@ -567,12 +627,30 @@
     const editTeamLabel = document.getElementById("player-edit-team-label");
     let editingPlayer = null;
 
+    const editMeta     = document.getElementById("player-edit-meta");
+    const editPos      = document.getElementById("player-edit-pos");
+    const editBody     = document.getElementById("player-edit-body");
+    const editDob      = document.getElementById("player-edit-dob");
+
     function openEditPopup(player, screenX, screenY) {
         editingPlayer = player;
         editNumber.value = player.number;
         editName.value = player.name;
         editTeamLabel.style.background = getTeamColor(player.team);
         editTeamLabel.textContent = player.team === "A" ? (state.teamA ? state.teamA.short : "HOME") : (state.teamB ? state.teamB.short : "AWAY");
+
+        // 선수 추가 정보 (squad에서 로드된 경우)
+        if (player.position || player.height || player.dob) {
+            editPos.textContent = player.position || "—";
+            const parts = [];
+            if (player.height) parts.push(player.height + "cm");
+            if (player.weight) parts.push(player.weight + "kg");
+            editBody.textContent = parts.join(" / ");
+            editDob.textContent = player.dob ? "생년월일 " + player.dob : "";
+            editMeta.classList.remove("hidden");
+        } else {
+            editMeta.classList.add("hidden");
+        }
         let left = screenX + 12, top = screenY - 20;
         if (left + 200 > window.innerWidth) left = screenX - 212;
         if (top + 160 > window.innerHeight) top = window.innerHeight - 168;
@@ -660,7 +738,12 @@
     // ── Toolbar actions ───────────────────────────────────
     document.getElementById("btn-clear-lines").addEventListener("click", () => { state.lines = []; render(); });
     document.getElementById("btn-undo-line").addEventListener("click", () => { state.lines.pop(); render(); });
-    document.getElementById("btn-reset").addEventListener("click", () => { state.lines = []; loadFormationSide("A", state.formationA); loadFormationSide("B", state.formationB); });
+    document.getElementById("btn-reset").addEventListener("click", () => {
+        state.lines = [];
+        state.players.forEach(p => { p.onField = false; p.slotIdx = null; });
+        loadFormationSide("A", state.formationA);
+        loadFormationSide("B", state.formationB);
+    });
     document.querySelectorAll(".formation-select-team").forEach((sel) => {
         sel.addEventListener("change", (e) => { loadFormationSide(sel.dataset.side, e.target.value); });
     });
@@ -693,15 +776,30 @@
         for (const p of teamPlayers) {
             const item = document.createElement("div");
             item.className = "bench-player-item";
+            // 벤치 선수만 드래그 가능
+            if (p.onField === false) {
+                item.draggable = true;
+                item.title = "필드로 드래그해서 배치";
+                item.style.cursor = "grab";
+                item.addEventListener("dragstart", (e) => {
+                    e.dataTransfer.setData("playerId", String(p.id));
+                    e.dataTransfer.effectAllowed = "move";
+                    item.style.opacity = "0.4";
+                });
+                item.addEventListener("dragend", () => { item.style.opacity = ""; });
+            }
 
             const dot = document.createElement("div");
             dot.className = "bench-player-dot";
-            dot.style.background = getTeamColor(side);
+            // 벤치 dot은 킷 여부와 무관하게 팀 primary 색상 사용
+            const dotTeam = side === "A" ? state.teamA : state.teamB;
+            dot.style.background = dotTeam ? dotTeam.primary : (side === "A" ? DEFAULT_A_COLOR : DEFAULT_B_COLOR);
+            dot.style.color = "#ffffff";
             dot.textContent = p.number;
 
             const name = document.createElement("span");
             name.className = "bench-player-name";
-            name.textContent = p.name;
+            name.textContent = p.name + (p.position ? ` (${p.position})` : "");
 
             const editBtn = document.createElement("button");
             editBtn.className = "bench-player-edit";
@@ -719,10 +817,25 @@
                 placeBtn.textContent = "⊕";
                 placeBtn.title = "필드에 배치";
                 placeBtn.addEventListener("click", () => {
-                    const defaultX = p.team === "A" ? 0.25 : 0.75;
-                    p.x = defaultX + (Math.random() - 0.5) * 0.15;
-                    p.y = 0.3 + Math.random() * 0.4;
-                    p.onField = true;
+                    const slots = state.slots[side] || [];
+                    const filledIdxs = new Set(
+                        state.players.filter(pl => pl.team === side && pl.onField !== false && pl.slotIdx != null).map(pl => pl.slotIdx)
+                    );
+                    // 포지션 라벨 매핑
+                    const posMap = { GK: ["GK"], DF: ["CB","LB","RB","LWB","RWB"], MF: ["CM","CDM","LM","RM","AM"], FW: ["ST","LW","RW"] };
+                    const preferred = posMap[p.position] || [];
+                    const emptySlots = slots.filter(s => !filledIdxs.has(s.idx));
+                    const targetSlot = emptySlots.find(s => preferred.includes(s.label)) || emptySlots[0];
+                    if (targetSlot) {
+                        p.slotIdx = targetSlot.idx;
+                        p.x = targetSlot.x; p.y = targetSlot.y;
+                        p.onField = true;
+                    } else {
+                        // 슬롯이 꽉 찬 경우: 자유 배치
+                        p.x = side === "A" ? 0.25 : 0.75;
+                        p.y = 0.5;
+                        p.onField = true;
+                    }
                     render(); renderBench();
                 });
                 item.style.opacity = "0.6";
@@ -733,19 +846,90 @@
                 removeBtn2.addEventListener("click", () => { state.players = state.players.filter(pl => pl !== p); renderBench(); });
                 item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(placeBtn); item.appendChild(removeBtn2);
             } else {
+                const unplaceBtn = document.createElement("button");
+                unplaceBtn.className = "bench-player-edit";
+                unplaceBtn.textContent = "↩";
+                unplaceBtn.title = "필드에서 제거 (벤치로)";
+                unplaceBtn.addEventListener("click", () => {
+                    p.onField = false;
+                    p.slotIdx = null;
+                    render(); renderBench();
+                });
                 const removeBtn = document.createElement("button");
                 removeBtn.className = "bench-player-remove";
                 removeBtn.innerHTML = "&times;";
-                removeBtn.title = "필드에서 제거";
+                removeBtn.title = "완전 삭제";
                 removeBtn.addEventListener("click", () => {
                     state.players = state.players.filter((pl) => pl !== p);
                     render(); renderBench();
                 });
-                item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(removeBtn);
+                item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(unplaceBtn); item.appendChild(removeBtn);
             }
             container.appendChild(item);
         }
     }
+
+    // ── Bench → Canvas drag-and-drop ─────────────────────
+    canvas.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        // 가장 가까운 빈 슬롯 하이라이트
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left, py = e.clientY - rect.top;
+        state._dragOverPos = { px, py };
+        render();
+        // 드롭 가능한 슬롯 강조
+        for (const side of ["A", "B"]) {
+            const filledIdxs = new Set(state.players.filter(pl => pl.team === side && pl.onField !== false && pl.slotIdx != null).map(pl => pl.slotIdx));
+            for (const slot of (state.slots[side] || [])) {
+                if (filledIdxs.has(slot.idx)) continue;
+                const { px: sx, py: sy } = fieldToCanvas(slot.x, slot.y);
+                const d = Math.sqrt((px - sx) ** 2 + (py - sy) ** 2);
+                if (d < PLAYER_RADIUS * 3) {
+                    ctx.beginPath(); ctx.arc(sx, sy, PLAYER_RADIUS + 4, 0, Math.PI * 2);
+                    ctx.strokeStyle = "rgba(255,255,100,0.9)"; ctx.lineWidth = 2.5; ctx.stroke();
+                }
+            }
+        }
+    });
+
+    canvas.addEventListener("dragleave", () => {
+        state._dragOverPos = null; render();
+    });
+
+    canvas.addEventListener("drop", (e) => {
+        e.preventDefault();
+        state._dragOverPos = null;
+        const playerId = parseInt(e.dataTransfer.getData("playerId"), 10);
+        const p = state.players.find(pl => pl.id === playerId);
+        if (!p || p.onField !== false) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left, py = e.clientY - rect.top;
+
+        // 가장 가까운 빈 슬롯 찾기
+        const slots = state.slots[p.team] || [];
+        const filledIdxs = new Set(state.players.filter(pl => pl.team === p.team && pl.onField !== false && pl.slotIdx != null).map(pl => pl.slotIdx));
+        let nearest = null, minDist = Infinity;
+        for (const slot of slots) {
+            if (filledIdxs.has(slot.idx)) continue;
+            const { px: sx, py: sy } = fieldToCanvas(slot.x, slot.y);
+            const d = Math.sqrt((px - sx) ** 2 + (py - sy) ** 2);
+            if (d < minDist) { minDist = d; nearest = slot; }
+        }
+
+        if (nearest) {
+            p.slotIdx = nearest.idx;
+            p.x = nearest.x; p.y = nearest.y;
+        } else {
+            // 빈 슬롯 없으면 드롭 위치에 자유 배치
+            const { fx, fy } = canvasToField(px, py);
+            p.x = fx; p.y = fy;
+            p.slotIdx = null;
+        }
+        p.onField = true;
+        render(); renderBench();
+    });
 
     // ── Add player popup ──────────────────────────────────
     const addPopup = document.getElementById("add-player-popup");
@@ -790,7 +974,8 @@
             formation: state.formationA,
             formationA: state.formationA,
             formationB: state.formationB,
-            players: state.players.map((p) => ({ id: p.id, team: p.team, x: p.x, y: p.y, name: p.name, number: p.number })),
+            slots: state.slots,
+            players: state.players.map((p) => ({ id: p.id, team: p.team, x: p.x, y: p.y, onField: p.onField, slotIdx: p.slotIdx ?? null, name: p.name, number: p.number, position: p.position || "", height: p.height || null, weight: p.weight || null, dob: p.dob || "" })),
             lines: state.lines.map((l) => {
                 if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null };
                 if (l.style === 'multiArrow') return { points: l.points, sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null };
@@ -809,7 +994,8 @@
         state.formationB = data.formationB || data.formation || "4-4-2";
         document.querySelector('.formation-select-team[data-side="A"]').value = state.formationA;
         document.querySelector('.formation-select-team[data-side="B"]').value = state.formationB;
-        state.players = data.players || [];
+        if (data.slots) state.slots = data.slots;
+        state.players = (data.players || []).map(p => ({ ...p, slotIdx: p.slotIdx ?? null }));
         // backward compat: old saves use "arrows"
         state.lines = (data.lines || data.arrows || []).map((l) => {
             if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null };
@@ -932,11 +1118,39 @@
         }
     }
 
-    function selectTeam(team) {
-        console.log("selectTeam:", team.id, team.name, "league:", team.league, "primary:", team.primary, "side:", pickingSide);
-        if (pickingSide === "A") state.teamA = team; else state.teamB = team;
-        updateBanner(); updateLegend(); render(); renderBench();
-        closeTeamModal(); showToast(`${team.name} 선택 완료`);
+    async function selectTeam(team) {
+        const side = pickingSide;
+        if (side === "A") state.teamA = team; else state.teamB = team;
+        updateBanner(); updateLegend(); render();
+        closeTeamModal();
+
+        // 이 팀 선수 제거 후 squad를 벤치에 로드 (슬롯은 유지)
+        state.players = state.players.filter((p) => p.team !== side);
+        try {
+            const res = await fetch(`/api/squads?teamId=${team.id}`);
+            const squads = await res.json();
+            if (squads.length > 0) {
+                const r = await fetch(`/api/squads/${squads[0].id}`);
+                const squadData = await r.json();
+                for (const sp of (squadData.players || [])) {
+                    state.players.push({
+                        id: state.nextId++, team: side,
+                        x: 0, y: 0, onField: false, slotIdx: null,
+                        name: sp.name, number: sp.number,
+                        position: sp.position || "",
+                        height: sp.height || null,
+                        weight: sp.weight || null,
+                        dob: sp.dob || "",
+                    });
+                }
+                showToast(`${team.name} 선택 완료 (${squadData.players.length}명)`);
+            } else {
+                showToast(`${team.name} 선택 완료`);
+            }
+        } catch (e) {
+            showToast(`${team.name} 선택 완료`);
+        }
+        renderBench();
     }
 
     function setBannerBadge(badgeEl, team, fallbackColor, fallbackLetter) {
@@ -1025,7 +1239,7 @@
                 body: JSON.stringify({
                     teamId: team ? team.id : "",
                     name: name,
-                    players: teamPlayers.map((p) => ({ number: p.number, name: p.name })),
+                    players: teamPlayers.map((p) => ({ number: p.number, name: p.name, position: p.position || "", height: p.height || null, weight: p.weight || null, dob: p.dob || "" })),
                 }),
             });
             showToast("스쿼드가 저장되었습니다.");
@@ -1074,21 +1288,19 @@
     });
 
     function applySquad(side, squadData) {
-        // Remove existing players of this side
+        // 이 팀 선수만 초기화 후 벤치에 적재 (슬롯 유지)
         state.players = state.players.filter((p) => p.team !== side);
-        // Get formation positions for this side
-        const f = state.formations[side === "A" ? state.formationA : state.formationB];
-        const positions = side === "A" ? f.teamA : f.teamB;
-        const squadPlayers = squadData.players || [];
-        for (let i = 0; i < squadPlayers.length; i++) {
-            const pos = positions[i] || { x: side === "A" ? 0.25 : 0.75, y: 0.3 + (i * 0.04) };
+        for (const sp of (squadData.players || [])) {
             state.players.push({
                 id: state.nextId++, team: side,
-                x: pos.x, y: pos.y,
-                name: squadPlayers[i].name, number: squadPlayers[i].number,
+                x: 0, y: 0, onField: false, slotIdx: null,
+                name: sp.name, number: sp.number,
+                position: sp.position || "",
+                height: sp.height || null,
+                weight: sp.weight || null,
+                dob: sp.dob || "",
             });
         }
-        // Also set the team from squad if not already set
         if (squadData.teamId) {
             const team = state.teams.find((t) => t.id === squadData.teamId);
             if (team) {

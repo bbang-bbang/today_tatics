@@ -567,7 +567,7 @@ body {
 
 .bench-player-name {
     flex: 1;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     color: #c0c0d0;
     white-space: nowrap;
     overflow: hidden;
@@ -968,6 +968,43 @@ body {
     flex: none;
 }
 
+.player-edit-meta {
+    margin: 4px 0 6px;
+    padding: 6px 8px;
+    background: #0d1426;
+    border-radius: 6px;
+    border: 1px solid #2a2a4a;
+}
+
+.player-edit-meta.hidden { display: none; }
+
+.player-edit-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 3px;
+}
+
+.player-meta-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #e94560;
+    color: #fff;
+    letter-spacing: 0.04em;
+}
+
+.player-meta-body {
+    font-size: 0.78rem;
+    color: #c0c0d0;
+}
+
+.player-meta-dob {
+    font-size: 0.72rem;
+    color: #7070a0;
+}
+
 .player-edit-confirm-btn {
     width: 100%;
     padding: 6px;
@@ -1006,7 +1043,7 @@ body {
 
     #bench-panel { width: clamp(120px, 18vw, 160px); }
     .bench-team-name { font-size: 0.72rem; }
-    .bench-player-name { font-size: 0.68rem; }
+    .bench-player-name { font-size: 0.75rem; }
     .squad-btn { font-size: 0.58rem; padding: 3px; }
 
     .color-swatch { width: 16px; height: 16px; }
