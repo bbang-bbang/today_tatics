@@ -22,6 +22,8 @@
         dragOffset: { dx: 0, dy: 0 },
         drawingLine: null,
         draggingCurve: null,    // {line, t, px, py, moved}
+        balls: [],               // [{id, x, y}] 드래그 가능한 축구공
+        draggingBall: null,
         slots: { A: [], B: [] },  // 포메이션 슬롯 { idx, x, y, label, team }
         formations: {},
         formationA: "4-4-2",
@@ -77,6 +79,7 @@
         const ccr = (9.15 / 105) * r.w;
         ctx.beginPath(); ctx.arc(cx, r.y + r.h / 2, ccr, 0, Math.PI * 2); ctx.stroke();
         ctx.fillStyle = LINE_COLOR; ctx.beginPath(); ctx.arc(cx, r.y + r.h / 2, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = LINE_COLOR;
         const paW = (16.5 / 105) * r.w, paH = (40.32 / 68) * r.h, paY = r.y + (r.h - paH) / 2;
         ctx.strokeRect(r.x, paY, paW, paH); ctx.strokeRect(r.x + r.w - paW, paY, paW, paH);
         const gaW = (5.5 / 105) * r.w, gaH = (18.32 / 68) * r.h, gaY = r.y + (r.h - gaH) / 2;
@@ -283,10 +286,62 @@
         }
     }
 
+    // ── Draw soccer ball ──────────────────────────────────
+    function drawBall(bx, by, isDragging) {
+        const r = fieldRect();
+        const br = Math.max(5, r.w * 0.011);
+
+        ctx.save();
+        if (isDragging) { ctx.shadowColor = "rgba(255,255,255,0.6)"; ctx.shadowBlur = 10; }
+
+        // 공 본체
+        ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fillStyle = "#f5f5f5"; ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 1; ctx.stroke();
+
+        // 축구공 패치 패턴 (클리핑)
+        ctx.save();
+        ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.clip();
+
+        // 중앙 오각형
+        ctx.fillStyle = "#1a1a1a";
+        const drawPatch = (cx2, cy2, r2, rot) => {
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const a = rot + (i * 2 * Math.PI) / 5;
+                i === 0 ? ctx.moveTo(cx2 + r2 * Math.cos(a), cy2 + r2 * Math.sin(a))
+                        : ctx.lineTo(cx2 + r2 * Math.cos(a), cy2 + r2 * Math.sin(a));
+            }
+            ctx.closePath(); ctx.fill();
+        };
+        drawPatch(bx, by, br * 0.38, -Math.PI / 2);
+        // 주변 오각형 5개
+        const off = br * 0.72;
+        for (let i = 0; i < 5; i++) {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+            drawPatch(bx + off * Math.cos(a), by + off * Math.sin(a), br * 0.28, a + Math.PI / 5);
+        }
+
+        ctx.restore();
+
+        // 외곽선
+        ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.lineWidth = 1.5; ctx.stroke();
+
+        ctx.restore();
+    }
+
+    function drawBalls() {
+        for (const ball of state.balls) {
+            const { px, py } = fieldToCanvas(ball.x, ball.y);
+            drawBall(px, py, state.draggingBall === ball);
+        }
+    }
+
     // ── Render ─────────────────────────────────────────────
     function render() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawField(); drawLines(); drawPlayers();
+        drawField(); drawLines(); drawPlayers(); drawBalls();
     }
 
     // ── Formation loading ──────────────────────────────────
@@ -323,6 +378,18 @@
         document.querySelectorAll(".formation-select-team").forEach((sel) => { sel.value = name; });
         render();
         renderBench();
+    }
+
+    // ── Ball hit test ──────────────────────────────────────
+    function hitTestBall(px, py) {
+        const r = fieldRect();
+        const br = Math.max(5, r.w * 0.011) + 4;
+        for (let i = state.balls.length - 1; i >= 0; i--) {
+            const b = state.balls[i];
+            const { px: bx, py: by } = fieldToCanvas(b.x, b.y);
+            if (Math.sqrt((px - bx) ** 2 + (py - by) ** 2) <= br) return b;
+        }
+        return null;
     }
 
     // ── Hit test ───────────────────────────────────────────
@@ -481,6 +548,14 @@
         const { px, py } = getPointerPos(e);
         const { fx, fy } = canvasToField(px, py);
         if (state.mode === "select") {
+            const ball = hitTestBall(px, py);
+            if (ball) {
+                state.draggingBall = ball;
+                const { px: bx, py: by } = fieldToCanvas(ball.x, ball.y);
+                state.dragOffset = { dx: bx - px, dy: by - py };
+                canvas.setPointerCapture(e.pointerId);
+                return;
+            }
             const player = hitTest(px, py);
             if (player) {
                 state.dragging = player;
@@ -549,7 +624,10 @@
     canvas.addEventListener("pointermove", (e) => {
         const { px, py } = getPointerPos(e);
         const { fx, fy } = canvasToField(px, py);
-        if (state.mode === "select" && state.dragging) {
+        if (state.mode === "select" && state.draggingBall) {
+            const { fx, fy } = canvasToField(px + state.dragOffset.dx, py + state.dragOffset.dy);
+            state.draggingBall.x = fx; state.draggingBall.y = fy; render();
+        } else if (state.mode === "select" && state.dragging) {
             const { fx: dfx, fy: dfy } = canvasToField(px + state.dragOffset.dx, py + state.dragOffset.dy);
             state.dragging.x = dfx; state.dragging.y = dfy; render();
         } else if (state.mode === "select" && state.draggingCurve) {
@@ -603,6 +681,7 @@
                 }
                 state.dragging = null;
             }
+            if (state.draggingBall) { state.draggingBall = null; }
             if (state.draggingCurve) {
                 if (!state.draggingCurve.moved) startLineAnimation(state.draggingCurve.line);
                 state.draggingCurve = null;
@@ -690,6 +769,8 @@
         }
         if (state.mode === "select") {
             const { px, py } = getPointerPos(e);
+            const ball = hitTestBall(px, py);
+            if (ball) { state.balls = state.balls.filter(b => b !== ball); render(); return; }
             const player = hitTest(px, py);
             if (player) { state.players = state.players.filter((p) => p !== player); render(); renderBench(); }
         }
@@ -736,6 +817,11 @@
     });
 
     // ── Toolbar actions ───────────────────────────────────
+    document.getElementById("btn-add-ball").addEventListener("click", () => {
+        state.balls.push({ id: state.nextId++, x: 0.5, y: 0.5 });
+        render();
+    });
+
     document.getElementById("btn-clear-lines").addEventListener("click", () => { state.lines = []; render(); });
     document.getElementById("btn-undo-line").addEventListener("click", () => { state.lines.pop(); render(); });
     document.getElementById("btn-reset").addEventListener("click", () => {
@@ -983,6 +1069,7 @@
             }),
             teamAId: state.teamA ? state.teamA.id : null,
             teamBId: state.teamB ? state.teamB.id : null,
+            balls: state.balls.map(b => ({ id: b.id, x: b.x, y: b.y })),
         };
     }
 
@@ -996,6 +1083,7 @@
         document.querySelector('.formation-select-team[data-side="B"]').value = state.formationB;
         if (data.slots) state.slots = data.slots;
         state.players = (data.players || []).map(p => ({ ...p, slotIdx: p.slotIdx ?? null }));
+        state.balls = (data.balls || []).map(b => ({ id: b.id ?? state.nextId++, x: b.x, y: b.y }));
         // backward compat: old saves use "arrows"
         state.lines = (data.lines || data.arrows || []).map((l) => {
             if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null };

@@ -55,7 +55,7 @@ def teams():
     return jsonify(TEAMS)
 
 
-PLAYER_STEP = 0.20  # 선수 간 고정 세로 간격
+PLAYER_STEP = 0.16  # 선수 간 고정 세로 간격
 
 def compute_formation(formation_str):
     """포메이션 문자열을 파싱하여 선수 좌표(0~1 정규화)를 계산한다."""
@@ -63,17 +63,21 @@ def compute_formation(formation_str):
     positions = []
 
     # 골키퍼
-    positions.append({"x": 0.06, "y": 0.5})
+    positions.append({"x": 0.05, "y": 0.5})
 
     num_rows = len(rows)
     for row_idx, count in enumerate(rows):
-        x = 0.15 + (row_idx / max(num_rows - 1, 1)) * 0.33
+        # x: 0.12 ~ 0.44 (하프라인 직전까지, 중앙 여백 확보)
+        x = 0.12 + (row_idx / max(num_rows - 1, 1)) * 0.32
         for player_idx in range(count):
             if count == 1:
                 y = 0.5
             else:
-                start = 0.5 - (count - 1) * PLAYER_STEP / 2
-                y = start + player_idx * PLAYER_STEP
+                # 최대 5명 기준 전체 높이 0.8 사용
+                total_h = min((count - 1) * PLAYER_STEP, 0.80)
+                step = total_h / (count - 1)
+                start = 0.5 - total_h / 2
+                y = start + player_idx * step
             positions.append({"x": round(x, 3), "y": round(y, 3)})
 
     return positions
