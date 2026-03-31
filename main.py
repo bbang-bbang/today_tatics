@@ -360,9 +360,22 @@ def get_team_stats():
         return jsonify({})
     with open(STATS_FILE, "r", encoding="utf-8") as f:
         stats = json.load(f)
+    meta = stats.get("_meta", {})
     if team_id:
-        return jsonify(stats.get(team_id, {}))
+        data = stats.get(team_id, {})
+        if data:
+            data["_years"] = meta.get("years", [])
+        return jsonify(data)
     return jsonify(stats)
+
+
+@app.route("/api/stats-meta")
+def get_stats_meta():
+    if not os.path.exists(STATS_FILE):
+        return jsonify({})
+    with open(STATS_FILE, "r", encoding="utf-8") as f:
+        stats = json.load(f)
+    return jsonify(stats.get("_meta", {}))
 
 
 if __name__ == "__main__":

@@ -152,12 +152,16 @@
         });
         col.appendChild(statsRow);
 
-        // 홈/원정 5년 승률
+        // 홈/원정 승률 (집계 연도 동적 표시)
         if (stats && stats.home) {
             const hrLabel = document.createElement("div");
             hrLabel.className = "matchup-form-label";
             hrLabel.style.marginTop = "12px";
-            hrLabel.textContent = "홈 · 원정 승률 (최근 5년)";
+            const years = stats._years && stats._years.length > 0 ? stats._years : null;
+            const yearLabel = years
+                ? (years.length === 1 ? `${years[0]} 시즌` : `${years[0]}~${years[years.length - 1]}`)
+                : "최근 3년";
+            hrLabel.textContent = `홈 · 원정 승률 (${yearLabel})`;
             col.appendChild(hrLabel);
             col.appendChild(buildWinrateSection(stats));
         }
