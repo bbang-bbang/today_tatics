@@ -1,0 +1,329 @@
+{
+  "id": "default_daegu",
+  "teamId": "daegu",
+  "name": "2026 시즌 (대구)",
+  "players": [
+    {
+      "number": 1,
+      "name": "고동민",
+      "position": "GK",
+      "height": 188,
+      "weight": 72,
+      "dob": "1999/01/12"
+    },
+    {
+      "number": 41,
+      "name": "박상영",
+      "position": "GK",
+      "height": 188,
+      "weight": 78,
+      "dob": "2005/09/17"
+    },
+    {
+      "number": 13,
+      "name": "박성수",
+      "position": "GK",
+      "height": 192,
+      "weight": 83,
+      "dob": "1996/05/12"
+    },
+    {
+      "number": 31,
+      "name": "한태희",
+      "position": "GK",
+      "height": 196,
+      "weight": 90,
+      "dob": "2004/07/05"
+    },
+    {
+      "number": 20,
+      "name": "김강산",
+      "position": "DF",
+      "height": 184,
+      "weight": 77,
+      "dob": "1998/09/15"
+    },
+    {
+      "number": 6,
+      "name": "김주원",
+      "position": "DF",
+      "height": 185,
+      "weight": 83,
+      "dob": "1991/07/29"
+    },
+    {
+      "number": 50,
+      "name": "김형진",
+      "position": "DF",
+      "height": 185,
+      "weight": 72,
+      "dob": "1993/12/20"
+    },
+    {
+      "number": 33,
+      "name": "박재현",
+      "position": "DF",
+      "height": 177,
+      "weight": 69,
+      "dob": "2003/09/16"
+    },
+    {
+      "number": 40,
+      "name": "변정우",
+      "position": "DF",
+      "height": 185,
+      "weight": 76,
+      "dob": "2007/07/19"
+    },
+    {
+      "number": 46,
+      "name": "성권석",
+      "position": "DF",
+      "height": 168,
+      "weight": 60,
+      "dob": "2006/01/09"
+    },
+    {
+      "number": 70,
+      "name": "유지운",
+      "position": "DF",
+      "height": 172,
+      "weight": 68,
+      "dob": "2004/07/22"
+    },
+    {
+      "number": 35,
+      "name": "윤태민",
+      "position": "DF",
+      "height": 187,
+      "weight": 80,
+      "dob": "2004/10/13"
+    },
+    {
+      "number": 66,
+      "name": "이림",
+      "position": "DF",
+      "height": 180,
+      "weight": 72,
+      "dob": "2003/08/12"
+    },
+    {
+      "number": 44,
+      "name": "이예준",
+      "position": "DF",
+      "height": 187,
+      "weight": 70,
+      "dob": "2007/10/24"
+    },
+    {
+      "number": 15,
+      "name": "이원우",
+      "position": "DF",
+      "height": 191,
+      "weight": 80,
+      "dob": "2003/03/16"
+    },
+    {
+      "number": 22,
+      "name": "장성원",
+      "position": "DF",
+      "height": 175,
+      "weight": 70,
+      "dob": "1997/06/17"
+    },
+    {
+      "number": 3,
+      "name": "정우재",
+      "position": "DF",
+      "height": 179,
+      "weight": 70,
+      "dob": "1992/06/28"
+    },
+    {
+      "number": 27,
+      "name": "정헌택",
+      "position": "DF",
+      "height": 177,
+      "weight": 69,
+      "dob": "2002/07/31"
+    },
+    {
+      "number": 72,
+      "name": "최강민",
+      "position": "DF",
+      "height": 176,
+      "weight": 70,
+      "dob": "2002/04/24"
+    },
+    {
+      "number": 26,
+      "name": "황인택",
+      "position": "DF",
+      "height": 183,
+      "weight": 74,
+      "dob": "2003/04/01"
+    },
+    {
+      "number": 2,
+      "name": "황재원",
+      "position": "DF",
+      "height": 180,
+      "weight": 73,
+      "dob": "2002/08/16"
+    },
+    {
+      "number": 39,
+      "name": "권광덕",
+      "position": "MF",
+      "height": 178,
+      "weight": 75,
+      "dob": "2005/01/28"
+    },
+    {
+      "number": 25,
+      "name": "김대우",
+      "position": "MF",
+      "height": 179,
+      "weight": 80,
+      "dob": "2000/12/02"
+    },
+    {
+      "number": 29,
+      "name": "류재문",
+      "position": "MF",
+      "height": 184,
+      "weight": 72,
+      "dob": "1993/11/08"
+    },
+    {
+      "number": 37,
+      "name": "문정원",
+      "position": "MF",
+      "height": 179,
+      "weight": 72,
+      "dob": "2004/03/11"
+    },
+    {
+      "number": 21,
+      "name": "손승민",
+      "position": "MF",
+      "height": 175,
+      "weight": 68,
+      "dob": "2005/05/09"
+    },
+    {
+      "number": 88,
+      "name": "카를로스",
+      "position": "MF",
+      "height": 181,
+      "weight": 78,
+      "dob": "1995/09/15"
+    },
+    {
+      "number": 8,
+      "name": "한국영",
+      "position": "MF",
+      "height": 183,
+      "weight": 76,
+      "dob": "1990/04/19"
+    },
+    {
+      "number": 30,
+      "name": "한종무",
+      "position": "MF",
+      "height": 180,
+      "weight": 67,
+      "dob": "2003/05/02"
+    },
+    {
+      "number": 43,
+      "name": "김민영",
+      "position": "FW",
+      "height": 178,
+      "weight": 67,
+      "dob": "2000/02/07"
+    },
+    {
+      "number": 47,
+      "name": "김민준",
+      "position": "FW",
+      "height": 186,
+      "weight": 74,
+      "dob": "2006/07/05"
+    },
+    {
+      "number": 77,
+      "name": "김주공",
+      "position": "FW",
+      "height": 180,
+      "weight": 66,
+      "dob": "1996/04/23"
+    },
+    {
+      "number": 16,
+      "name": "데커스",
+      "position": "FW",
+      "height": 200,
+      "weight": 96,
+      "dob": "2003/01/09"
+    },
+    {
+      "number": 34,
+      "name": "박기현",
+      "position": "FW",
+      "height": 175,
+      "weight": 68,
+      "dob": "2004/04/10"
+    },
+    {
+      "number": 80,
+      "name": "박대훈",
+      "position": "FW",
+      "height": 178,
+      "weight": 74,
+      "dob": "1996/03/30"
+    },
+    {
+      "number": 99,
+      "name": "박인혁",
+      "position": "FW",
+      "height": 187,
+      "weight": 80,
+      "dob": "1995/12/29"
+    },
+    {
+      "number": 10,
+      "name": "세라핌",
+      "position": "FW",
+      "height": 178,
+      "weight": 73,
+      "dob": "1998/05/14"
+    },
+    {
+      "number": 11,
+      "name": "세징야",
+      "position": "FW",
+      "height": 177,
+      "weight": 74,
+      "dob": "1989/11/29"
+    },
+    {
+      "number": 9,
+      "name": "에드가",
+      "position": "FW",
+      "height": 191,
+      "weight": 87,
+      "dob": "1987/01/03"
+    },
+    {
+      "number": 7,
+      "name": "지오바니",
+      "position": "FW",
+      "height": 175,
+      "weight": 72,
+      "dob": "2001/05/15"
+    }
+  ],
+  "createdAt": "2026-03-31T09:19:42.701970",
+  "updatedAt": "2026-03-31T09:19:42.701970"
+}

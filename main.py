@@ -324,5 +324,46 @@ def delete_squad(squad_id):
     return jsonify({"ok": True})
 
 
+# ── 경기 결과 / H2H / 팀 스탯 API ──────────────────────
+RESULTS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kleague_results_2026.json")
+H2H_FILE      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kleague_h2h.json")
+STATS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kleague_team_stats.json")
+
+@app.route("/api/results")
+def get_results():
+    team_id = request.args.get("teamId")
+    if not os.path.exists(RESULTS_FILE):
+        return jsonify([])
+    with open(RESULTS_FILE, "r", encoding="utf-8") as f:
+        all_results = json.load(f)
+    if team_id:
+        return jsonify(all_results.get(team_id, []))
+    return jsonify(all_results)
+
+@app.route("/api/h2h")
+def get_h2h():
+    team_a = request.args.get("teamA")
+    team_b = request.args.get("teamB")
+    if not team_a or not team_b:
+        return jsonify({"error": "teamA and teamB required"}), 400
+    if not os.path.exists(H2H_FILE):
+        return jsonify({"w": 0, "d": 0, "l": 0, "total": 0})
+    with open(H2H_FILE, "r", encoding="utf-8") as f:
+        h2h = json.load(f)
+    key = f"{team_a}|{team_b}"
+    return jsonify(h2h.get(key, {"w": 0, "d": 0, "l": 0, "total": 0}))
+
+@app.route("/api/team-stats")
+def get_team_stats():
+    team_id = request.args.get("teamId")
+    if not os.path.exists(STATS_FILE):
+        return jsonify({})
+    with open(STATS_FILE, "r", encoding="utf-8") as f:
+        stats = json.load(f)
+    if team_id:
+        return jsonify(stats.get(team_id, {}))
+    return jsonify(stats)
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

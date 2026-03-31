@@ -1,0 +1,321 @@
+{
+  "id": "default_pohang",
+  "teamId": "pohang",
+  "name": "2026 시즌 (포항)",
+  "players": [
+    {
+      "number": 91,
+      "name": "권능",
+      "position": "GK",
+      "height": 188,
+      "weight": 76,
+      "dob": "2005/10/13"
+    },
+    {
+      "number": 1,
+      "name": "윤평국",
+      "position": "GK",
+      "height": 189,
+      "weight": 85,
+      "dob": "1992/02/08"
+    },
+    {
+      "number": 23,
+      "name": "이승환",
+      "position": "GK",
+      "height": 187,
+      "weight": 78,
+      "dob": "2003/04/05"
+    },
+    {
+      "number": 29,
+      "name": "홍성민",
+      "position": "GK",
+      "height": 183,
+      "weight": 76,
+      "dob": "2006/09/29"
+    },
+    {
+      "number": 21,
+      "name": "황인재",
+      "position": "GK",
+      "height": 187,
+      "weight": 73,
+      "dob": "1994/04/22"
+    },
+    {
+      "number": 13,
+      "name": "강민준",
+      "position": "DF",
+      "height": 172,
+      "weight": 65,
+      "dob": "2003/04/08"
+    },
+    {
+      "number": 3,
+      "name": "김예성",
+      "position": "DF",
+      "height": 172,
+      "weight": 69,
+      "dob": "1996/10/21"
+    },
+    {
+      "number": 36,
+      "name": "김호진",
+      "position": "DF",
+      "height": 184,
+      "weight": 80,
+      "dob": "2005/09/29"
+    },
+    {
+      "number": 20,
+      "name": "박찬용",
+      "position": "DF",
+      "height": 188,
+      "weight": 80,
+      "dob": "1996/01/27"
+    },
+    {
+      "number": 17,
+      "name": "신광훈",
+      "position": "DF",
+      "height": 178,
+      "weight": 73,
+      "dob": "1987/03/18"
+    },
+    {
+      "number": 2,
+      "name": "어정원",
+      "position": "DF",
+      "height": 175,
+      "weight": 68,
+      "dob": "1999/07/08"
+    },
+    {
+      "number": 77,
+      "name": "완델손",
+      "position": "DF",
+      "height": 172,
+      "weight": 62,
+      "dob": "1989/03/31"
+    },
+    {
+      "number": 55,
+      "name": "윤대근",
+      "position": "DF",
+      "height": 184,
+      "weight": 81,
+      "dob": "2007/06/18"
+    },
+    {
+      "number": 14,
+      "name": "이창우",
+      "position": "DF",
+      "height": 177,
+      "weight": 69,
+      "dob": "2006/03/12"
+    },
+    {
+      "number": 4,
+      "name": "전민광",
+      "position": "DF",
+      "height": 187,
+      "weight": 73,
+      "dob": "1993/01/17"
+    },
+    {
+      "number": 33,
+      "name": "조성욱",
+      "position": "DF",
+      "height": 188,
+      "weight": 84,
+      "dob": "1995/03/22"
+    },
+    {
+      "number": 32,
+      "name": "조영준",
+      "position": "DF",
+      "height": 176,
+      "weight": 67,
+      "dob": "2007/12/21"
+    },
+    {
+      "number": 5,
+      "name": "진시우",
+      "position": "DF",
+      "height": 190,
+      "weight": 80,
+      "dob": "2002/08/05"
+    },
+    {
+      "number": 24,
+      "name": "한현서",
+      "position": "DF",
+      "height": 184,
+      "weight": 75,
+      "dob": "2004/01/02"
+    },
+    {
+      "number": 40,
+      "name": "기성용",
+      "position": "MF",
+      "height": 189,
+      "weight": 75,
+      "dob": "1989/01/24"
+    },
+    {
+      "number": 16,
+      "name": "김동진",
+      "position": "MF",
+      "height": 180,
+      "weight": 71,
+      "dob": "2003/07/30"
+    },
+    {
+      "number": 26,
+      "name": "김범준",
+      "position": "MF",
+      "height": 172,
+      "weight": 65,
+      "dob": "2007/05/25"
+    },
+    {
+      "number": 8,
+      "name": "김승호",
+      "position": "MF",
+      "height": 173,
+      "weight": 70,
+      "dob": "1998/10/01"
+    },
+    {
+      "number": 31,
+      "name": "니시야 켄토",
+      "position": "MF",
+      "height": 175,
+      "weight": 68,
+      "dob": "1999/11/07"
+    },
+    {
+      "number": 47,
+      "name": "이수아",
+      "position": "MF",
+      "height": 178,
+      "weight": 71,
+      "dob": "2005/05/28"
+    },
+    {
+      "number": 71,
+      "name": "이헌재",
+      "position": "MF",
+      "height": 178,
+      "weight": 73,
+      "dob": "2006/03/23"
+    },
+    {
+      "number": 70,
+      "name": "황서웅",
+      "position": "MF",
+      "height": 175,
+      "weight": 67,
+      "dob": "2005/01/22"
+    },
+    {
+      "number": 12,
+      "name": "황재환",
+      "position": "MF",
+      "height": 170,
+      "weight": 60,
+      "dob": "2001/04/12"
+    },
+    {
+      "number": 30,
+      "name": "김용학",
+      "position": "FW",
+      "height": 172,
+      "weight": 64,
+      "dob": "2003/05/20"
+    },
+    {
+      "number": 7,
+      "name": "김인성",
+      "position": "FW",
+      "height": 180,
+      "weight": 77,
+      "dob": "1989/09/09"
+    },
+    {
+      "number": 34,
+      "name": "백승원",
+      "position": "FW",
+      "height": 172,
+      "weight": 67,
+      "dob": "2006/02/15"
+    },
+    {
+      "number": 28,
+      "name": "손승범",
+      "position": "FW",
+      "height": 180,
+      "weight": 65,
+      "dob": "2004/05/04"
+    },
+    {
+      "number": 9,
+      "name": "안재준",
+      "position": "FW",
+      "height": 185,
+      "weight": 80,
+      "dob": "2001/04/03"
+    },
+    {
+      "number": 19,
+      "name": "이호재",
+      "position": "FW",
+      "height": 191,
+      "weight": 85,
+      "dob": "2000/10/14"
+    },
+    {
+      "number": 37,
+      "name": "정한민",
+      "position": "FW",
+      "height": 183,
+      "weight": 76,
+      "dob": "2001/01/08"
+    },
+    {
+      "number": 25,
+      "name": "조르지",
+      "position": "FW",
+      "height": 192,
+      "weight": 90,
+      "dob": "1999/06/21"
+    },
+    {
+      "number": 18,
+      "name": "조상혁",
+      "position": "FW",
+      "height": 189,
+      "weight": 86,
+      "dob": "2004/01/23"
+    },
+    {
+      "number": 11,
+      "name": "주닝요",
+      "position": "FW",
+      "height": 172,
+      "weight": 64,
+      "dob": "1997/11/05"
+    },
+    {
+      "number": 10,
+      "name": "트란지스카",
+      "position": "FW",
+      "height": 189,
+      "weight": 82,
+      "dob": "2001/06/25"
+    }
+  ],
+  "createdAt": "2026-03-31T09:19:42.701970",
+  "updatedAt": "2026-03-31T09:19:42.701970"
+}

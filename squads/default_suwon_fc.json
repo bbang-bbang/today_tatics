@@ -1,0 +1,313 @@
+{
+  "id": "default_suwon_fc",
+  "teamId": "suwon_fc",
+  "name": "2026 시즌 (수원FC)",
+  "players": [
+    {
+      "number": 31,
+      "name": "문정우",
+      "position": "GK",
+      "height": 192,
+      "weight": 82,
+      "dob": "2007/03/03"
+    },
+    {
+      "number": 21,
+      "name": "양한빈",
+      "position": "GK",
+      "height": 195,
+      "weight": 90,
+      "dob": "1991/08/30"
+    },
+    {
+      "number": 1,
+      "name": "이윤오",
+      "position": "GK",
+      "height": 190,
+      "weight": 84,
+      "dob": "1999/03/23"
+    },
+    {
+      "number": 13,
+      "name": "정민기",
+      "position": "GK",
+      "height": 190,
+      "weight": 78,
+      "dob": "1996/02/09"
+    },
+    {
+      "number": 41,
+      "name": "최준영",
+      "position": "GK",
+      "height": 187,
+      "weight": 81,
+      "dob": "2008/05/30"
+    },
+    {
+      "number": 24,
+      "name": "강윤구",
+      "position": "DF",
+      "height": 167,
+      "weight": 67,
+      "dob": "1993/02/08"
+    },
+    {
+      "number": 40,
+      "name": "김민호",
+      "position": "DF",
+      "height": 180,
+      "weight": 72,
+      "dob": "2005/07/22"
+    },
+    {
+      "number": 2,
+      "name": "김정완",
+      "position": "DF",
+      "height": 178,
+      "weight": 70,
+      "dob": "2007/05/07"
+    },
+    {
+      "number": 6,
+      "name": "김지훈",
+      "position": "DF",
+      "height": 175,
+      "weight": 60,
+      "dob": "2000/06/26"
+    },
+    {
+      "number": 3,
+      "name": "델란",
+      "position": "DF",
+      "height": 188,
+      "weight": 80,
+      "dob": "1996/02/03"
+    },
+    {
+      "number": 88,
+      "name": "박재훈",
+      "position": "DF",
+      "height": 170,
+      "weight": 63,
+      "dob": "2007/08/24"
+    },
+    {
+      "number": 38,
+      "name": "백승환",
+      "position": "DF",
+      "height": 187,
+      "weight": 80,
+      "dob": "2005/09/17"
+    },
+    {
+      "number": 27,
+      "name": "이시영",
+      "position": "DF",
+      "height": 172,
+      "weight": 70,
+      "dob": "1997/04/21"
+    },
+    {
+      "number": 20,
+      "name": "이지솔",
+      "position": "DF",
+      "height": 185,
+      "weight": 80,
+      "dob": "1999/07/09"
+    },
+    {
+      "number": 5,
+      "name": "이현용",
+      "position": "DF",
+      "height": 188,
+      "weight": 87,
+      "dob": "2003/12/29"
+    },
+    {
+      "number": 66,
+      "name": "장연우",
+      "position": "DF",
+      "height": 180,
+      "weight": 73,
+      "dob": "2004/09/16"
+    },
+    {
+      "number": 25,
+      "name": "장영우",
+      "position": "DF",
+      "height": 178,
+      "weight": 75,
+      "dob": "2002/08/21"
+    },
+    {
+      "number": 16,
+      "name": "조진우",
+      "position": "DF",
+      "height": 189,
+      "weight": 81,
+      "dob": "1999/11/17"
+    },
+    {
+      "number": 15,
+      "name": "홍준호",
+      "position": "DF",
+      "height": 190,
+      "weight": 77,
+      "dob": "1993/10/11"
+    },
+    {
+      "number": 14,
+      "name": "구본철",
+      "position": "MF",
+      "height": 173,
+      "weight": 73,
+      "dob": "1999/10/11"
+    },
+    {
+      "number": 91,
+      "name": "김도윤",
+      "position": "MF",
+      "height": 171,
+      "weight": 62,
+      "dob": "2005/05/18"
+    },
+    {
+      "number": 11,
+      "name": "김정환",
+      "position": "MF",
+      "height": 175,
+      "weight": 65,
+      "dob": "1997/01/04"
+    },
+    {
+      "number": 22,
+      "name": "서재민",
+      "position": "MF",
+      "height": 171,
+      "weight": 67,
+      "dob": "1997/12/04"
+    },
+    {
+      "number": 23,
+      "name": "염도현",
+      "position": "MF",
+      "height": 180,
+      "weight": 70,
+      "dob": "2006/05/08"
+    },
+    {
+      "number": 7,
+      "name": "이재원",
+      "position": "MF",
+      "height": 173,
+      "weight": 66,
+      "dob": "1997/02/21"
+    },
+    {
+      "number": 34,
+      "name": "장윤호",
+      "position": "MF",
+      "height": 178,
+      "weight": 68,
+      "dob": "1996/08/25"
+    },
+    {
+      "number": 10,
+      "name": "프리조",
+      "position": "MF",
+      "height": 182,
+      "weight": 71,
+      "dob": "1998/07/24"
+    },
+    {
+      "number": 8,
+      "name": "한찬희",
+      "position": "MF",
+      "height": 181,
+      "weight": 78,
+      "dob": "1997/03/17"
+    },
+    {
+      "number": 19,
+      "name": "김경민",
+      "position": "FW",
+      "height": 185,
+      "weight": 78,
+      "dob": "1997/01/22"
+    },
+    {
+      "number": 9,
+      "name": "마테우스 바비",
+      "position": "FW",
+      "height": 191,
+      "weight": 80,
+      "dob": "1997/07/18"
+    },
+    {
+      "number": 77,
+      "name": "백경",
+      "position": "FW",
+      "height": 184,
+      "weight": 67,
+      "dob": "2007/04/12"
+    },
+    {
+      "number": 26,
+      "name": "안준규",
+      "position": "FW",
+      "height": 180,
+      "weight": 74,
+      "dob": "2004/02/14"
+    },
+    {
+      "number": 44,
+      "name": "윌리안",
+      "position": "FW",
+      "height": 170,
+      "weight": 69,
+      "dob": "1994/02/17"
+    },
+    {
+      "number": 70,
+      "name": "정승배",
+      "position": "FW",
+      "height": 172,
+      "weight": 70,
+      "dob": "2003/11/09"
+    },
+    {
+      "number": 29,
+      "name": "최기윤",
+      "position": "FW",
+      "height": 175,
+      "weight": 64,
+      "dob": "2002/04/09"
+    },
+    {
+      "number": 79,
+      "name": "최륜성",
+      "position": "FW",
+      "height": 173,
+      "weight": 69,
+      "dob": "2007/05/09"
+    },
+    {
+      "number": 99,
+      "name": "하정우",
+      "position": "FW",
+      "height": 191,
+      "weight": 87,
+      "dob": "2005/11/08"
+    },
+    {
+      "number": 17,
+      "name": "훌",
+      "position": "FW",
+      "height": 191,
+      "weight": 80,
+      "dob": "1995/12/04"
+    }
+  ],
+  "createdAt": "2026-03-31T09:19:42.701970",
+  "updatedAt": "2026-03-31T09:19:42.701970"
+}
