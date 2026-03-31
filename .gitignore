@@ -10,9 +10,8 @@ __pycache__/
 # Claude Code 설정
 .claude/
 
-# 데이터 저장 폴더 (로컬 전술/스쿼드 저장본)
+# 데이터 저장 폴더 (로컬 전술 저장본)
 saves/
-squads/
 
 # OS
 .DS_Store
