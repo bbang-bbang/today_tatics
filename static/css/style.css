@@ -1334,11 +1334,15 @@ body {
 }
 
 .matchup-form-label {
-    font-size: 0.7rem;
-    color: #5a7090;
+    font-size: 0.95rem;
+    color: #ffffff;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 2px;
+}
+
+.matchup-team-col.away .matchup-form-label {
+    text-align: right;
 }
 
 .matchup-stats-row {
@@ -1390,8 +1394,8 @@ body {
 }
 
 .matchup-record-title {
-    font-size: 0.72rem;
-    color: #5a7090;
+    font-size: 0.9rem;
+    color: #ffffff;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     margin-bottom: 14px;
@@ -1415,8 +1419,8 @@ body {
 }
 
 .matchup-record-total {
-    font-size: 0.7rem;
-    color: #3a4a6a;
+    font-size: 0.85rem;
+    color: #ffffff;
     margin-top: 10px;
 }
 

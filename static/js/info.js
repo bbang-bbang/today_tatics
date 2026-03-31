@@ -180,7 +180,7 @@
 
         const title = document.createElement("div");
         title.className = "matchup-record-title";
-        title.textContent = "최근 5년 맞대결";
+        title.textContent = "최근 10경기 맞대결";
         box.appendChild(title);
 
         const nums = document.createElement("div");
@@ -197,7 +197,7 @@
                 `<span class="record-l">${h2h.l}</span>`;
 
             const subLabel = document.createElement("div");
-            subLabel.style.cssText = "font-size:0.62rem;color:#3a5070;margin-top:2px;";
+            subLabel.style.cssText = "font-size:0.82rem;color:#ffffff;margin-top:4px;";
             subLabel.textContent = `${teamA.short} 승 · 무 · ${teamB.short} 승`;
             box.appendChild(nums);
             box.appendChild(subLabel);
