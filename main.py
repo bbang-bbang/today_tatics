@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+import urllib.request
 from datetime import datetime
 
 from flask import Flask, render_template, jsonify, request
@@ -363,6 +364,66 @@ def get_team_stats():
     if team_id:
         return jsonify(stats.get(team_id, {}))
     return jsonify(stats)
+
+
+KLEAGUE_CODE_MAP = {
+    "K01": "ulsan",  "K02": "suwon",    "K03": "pohang",  "K04": "jeju",
+    "K05": "jeonbuk","K06": "busan",    "K07": "jeonnam", "K08": "seongnam",
+    "K09": "fcseoul","K10": "daejeon",  "K17": "daegu",   "K18": "incheon",
+    "K20": "gyeongnam","K21": "gangwon","K22": "gwangju", "K26": "bucheon",
+    "K27": "anyang", "K29": "suwon_fc", "K31": "seouland","K32": "ansan",
+    "K34": "asan",   "K35": "gimcheon", "K36": "gimpo",   "K37": "cheongju",
+    "K38": "cheonan","K39": "hwaseong", "K40": "paju",    "K41": "gimhae",
+    "K42": "yongin",
+}
+TEAMS_BY_ID = {t["id"]: t for t in TEAMS}
+
+@app.route("/api/standings")
+def get_standings():
+    try:
+        req = urllib.request.Request(
+            "https://www.kleague.com/api/clubRank.do",
+            data=b"{}",
+            headers={"Content-Type": "application/json; charset=UTF-8",
+                     "Accept": "application/json", "User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as r:
+            raw_data = json.loads(r.read().decode("utf-8"))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+    result = {}
+    for league_key in ("league1", "league2"):
+        rows = raw_data.get("data", {}).get(league_key, [])
+        cleaned = []
+        for row in rows:
+            team_code = row.get("teamId", "")
+            internal_id = KLEAGUE_CODE_MAP.get(team_code)
+            team_info = TEAMS_BY_ID.get(internal_id, {}) if internal_id else {}
+            recent = []
+            for i in range(1, 7):
+                g = row.get(f"game0{i}", "").strip()
+                if g:
+                    recent.append(g)
+            cleaned.append({
+                "rank":    row.get("rank"),
+                "teamId":  internal_id or team_code,
+                "name":    team_info.get("name", team_code),
+                "short":   team_info.get("short", team_code),
+                "emblem":  team_info.get("emblem", ""),
+                "primary": team_info.get("primary", "#333"),
+                "games":   row.get("gameCount", 0),
+                "w":       row.get("winCnt", 0),
+                "d":       row.get("tieCnt", 0),
+                "l":       row.get("lossCnt", 0),
+                "gf":      row.get("gainGoal", 0),
+                "ga":      row.get("lossGoal", 0),
+                "gd":      row.get("gapCnt", 0),
+                "pts":     row.get("gainPoint", 0),
+                "recent":  recent,
+            })
+        result[league_key] = cleaned
+    return jsonify(result)
 
 
 if __name__ == "__main__":

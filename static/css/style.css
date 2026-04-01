@@ -1161,14 +1161,68 @@ body {
 #info-section {
     background: #0e1628;
     border-top: 2px solid #0f3460;
-    padding: 32px clamp(16px, 4vw, 60px) 48px;
+    padding: 24px clamp(16px, 4vw, 60px) 32px;
+}
+
+.info-main-layout {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+/* 공통 컨테이너 */
+.info-container {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.info-standings-sidebar {
+    width: 33.333%;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-height: 540px;
+    overflow-y: auto;
+}
+
+.sidebar-header {
+    margin-bottom: 12px;
+}
+
+.sidebar-league-dropdown {
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #e0e0e0;
+    font-size: 0.85rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.sidebar-league-dropdown:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.matchup-right-panel {
+    flex: 1;
+    min-width: 0;
+}
+
+#matchup-area {
+    min-width: 0;
 }
 
 .info-divider {
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-bottom: 28px;
+    margin-bottom: 20px;
 }
 
 .info-divider::before,
@@ -1424,9 +1478,9 @@ body {
     margin-top: 10px;
 }
 
-.record-w { color: #4cff80; }
-.record-d { color: #ffd93d; }
-.record-l { color: #ff6b6b; }
+.record-w { color: #4db6ff; }
+.record-d { color: #c0c0c0; }
+.record-l { color: #ff8a65; }
 
 /* 홈/원정 승률 바 */
 .winrate-section {
@@ -1499,3 +1553,65 @@ body {
         text-align: left;
     }
 }
+
+/* ── 순위표 ──────────────────────────────────────────── */
+.standings-league-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #7ab3ff;
+    letter-spacing: 0.08em;
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.standings-table-wrap { overflow-x: auto; }
+.standings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    color: #c8d6e8;
+}
+.standings-table thead tr { background: rgba(255,255,255,0.04); }
+.standings-table th {
+    padding: 7px 8px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #4a6080;
+    text-align: center;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    white-space: nowrap;
+}
+.standings-table td {
+    padding: 7px 8px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.standings-table tbody tr:last-child td { border-bottom: none; }
+.standings-table tbody tr:hover { background: rgba(255,255,255,0.04); }
+.col-rank { width: 28px; font-weight: 700; }
+.col-team { text-align: left !important; min-width: 100px; }
+.col-num  { width: 32px; }
+.col-pts  { width: 36px; font-weight: 700; color: #ffffff; }
+.col-recent { width: 110px; }
+.rank-top { color: #4db6ff; }
+.rank-mid { color: #c0c0c0; }
+.standings-table td.w { color: #4db6ff; }
+.standings-table td.d { color: #c0c0c0; }
+.standings-table td.l { color: #ff8a65; }
+.standings-table td.gd { font-weight: 600; }
+.st-team-cell { display: flex; align-items: center; gap: 7px; }
+.st-emblem { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.st-emblem-placeholder {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.st-team-name { font-size: 0.8rem; white-space: nowrap; }
+.st-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 4px;
+    font-size: 0.6rem; font-weight: 700; margin: 0 1px;
+}
+.st-badge.W { background: rgba(77,182,255,0.2); color: #4db6ff; }
+.st-badge.D { background: rgba(192,192,192,0.15); color: #c0c0c0; }
+.st-badge.L { background: rgba(255,138,101,0.2); color: #ff8a65; }
+@media (max-width: 900px) { .standings-wrap { flex-direction: column; } }

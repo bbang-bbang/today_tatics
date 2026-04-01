@@ -46,7 +46,7 @@
             tagEl.textContent = tag;
 
             const detail = document.createElement("span");
-            detail.style.cssText = "font-size:0.65rem;color:#4a6080;";
+            detail.style.cssText = "font-size:0.78rem;color:#ffffff;";
             detail.textContent = `${data.w}승 ${data.d}무 ${data.l}패`;
 
             const pctEl = document.createElement("span");
@@ -157,7 +157,7 @@
             const hrLabel = document.createElement("div");
             hrLabel.className = "matchup-form-label";
             hrLabel.style.marginTop = "12px";
-            hrLabel.textContent = "홈 · 원정 승률 (최근 5년)";
+            hrLabel.textContent = "홈 · 원정 승률 (최근 3년)";
             col.appendChild(hrLabel);
             col.appendChild(buildWinrateSection(stats));
         }
@@ -216,6 +216,34 @@
         return vsCol;
     }
 
+    // ── H2H 없는 빈 가운데 칸 ──────────────────────────────
+    function buildEmptyVsCol() {
+        const vsCol = document.createElement("div");
+        vsCol.className = "matchup-vs-col";
+        const vsText = document.createElement("div");
+        vsText.className = "matchup-vs-text";
+        vsText.textContent = "VS";
+        vsCol.appendChild(vsText);
+        const hint = document.createElement("div");
+        hint.style.cssText = "font-size:0.75rem;color:#4a6080;margin-top:8px;text-align:center;";
+        hint.textContent = "상대팀을 선택하면\n맞대결 전적이 표시됩니다";
+        hint.style.whiteSpace = "pre-line";
+        vsCol.appendChild(hint);
+        return vsCol;
+    }
+
+    // ── 팀 빈 플레이스홀더 칼럼 ────────────────────────────
+    function buildEmptyTeamCol(isAway) {
+        const col = document.createElement("div");
+        col.className = `matchup-team-col${isAway ? " away" : ""}`;
+        col.style.cssText = "display:flex;align-items:center;justify-content:center;min-height:120px;";
+        const msg = document.createElement("span");
+        msg.style.cssText = "font-size:0.8rem;color:#4a6080;";
+        msg.textContent = isAway ? "AWAY 팀을 선택해주세요" : "HOME 팀을 선택해주세요";
+        col.appendChild(msg);
+        return col;
+    }
+
     // ── 메인 렌더 ────────────────────────────────────────
     async function renderMatchup(teamA, teamB) {
         matchupArea.innerHTML = `<div class="matchup-placeholder"><span>불러오는 중...</span></div>`;
@@ -229,14 +257,35 @@
         ]);
 
         matchupArea.innerHTML = "";
-
         const grid = document.createElement("div");
         grid.className = "matchup-grid";
-
         grid.appendChild(buildTeamCol(teamA, resultsA, statsA, false));
         grid.appendChild(buildH2HBox(h2h, teamA, teamB));
         grid.appendChild(buildTeamCol(teamB, resultsB, statsB, true));
+        matchupArea.appendChild(grid);
+    }
 
+    async function renderSingle(team, isAway) {
+        matchupArea.innerHTML = `<div class="matchup-placeholder"><span>불러오는 중...</span></div>`;
+
+        const [results, stats] = await Promise.all([
+            fetch(`/api/results?teamId=${team.id}`).then(r => r.json()),
+            fetch(`/api/team-stats?teamId=${team.id}`).then(r => r.json()),
+        ]);
+
+        matchupArea.innerHTML = "";
+        const grid = document.createElement("div");
+        grid.className = "matchup-grid";
+
+        if (isAway) {
+            grid.appendChild(buildEmptyTeamCol(false));
+            grid.appendChild(buildEmptyVsCol());
+            grid.appendChild(buildTeamCol(team, results, stats, true));
+        } else {
+            grid.appendChild(buildTeamCol(team, results, stats, false));
+            grid.appendChild(buildEmptyVsCol());
+            grid.appendChild(buildEmptyTeamCol(true));
+        }
         matchupArea.appendChild(grid);
     }
 
@@ -253,10 +302,13 @@
         const observer = new MutationObserver(() => {
             const textA = nameA.textContent.trim();
             const textB = nameB.textContent.trim();
-            if (textA === "HOME" || textB === "AWAY") { clearMatchup(); return; }
             const teamA = teamsData.find(t => t.name === textA);
             const teamB = teamsData.find(t => t.name === textB);
-            if (teamA && teamB) renderMatchup(teamA, teamB);
+
+            if (teamA && teamB) { renderMatchup(teamA, teamB); return; }
+            if (teamA) { renderSingle(teamA, false); return; }
+            if (teamB) { renderSingle(teamB, true); return; }
+            clearMatchup();
         });
 
         observer.observe(nameA, { childList: true, characterData: true, subtree: true });

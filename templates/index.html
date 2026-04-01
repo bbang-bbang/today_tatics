@@ -253,16 +253,35 @@
 
     <!-- ── 매치업 비교 섹션 ─────────────────────────────── -->
     <section id="info-section">
-        <div class="info-divider">
-            <span class="info-divider-label">최근 5경기 전적 비교</span>
-        </div>
-        <div id="matchup-area">
-            <div class="matchup-placeholder">
-                <span>위에서 HOME · AWAY 팀을 선택하면 전적이 표시됩니다</span>
+        <div class="info-main-layout">
+            <div class="info-container info-standings-sidebar">
+                <div class="sidebar-header">
+                    <select id="sidebar-league-select" class="sidebar-league-dropdown">
+                        <option value="k1">K리그 1</option>
+                        <option value="k2">K리그 2</option>
+                    </select>
+                </div>
+                <div id="sidebar-standings-k1" class="standings-table-wrap">
+                    <div class="matchup-placeholder"><span>불러오는 중...</span></div>
+                </div>
+                <div id="sidebar-standings-k2" class="standings-table-wrap" style="display:none;">
+                    <div class="matchup-placeholder"><span>불러오는 중...</span></div>
+                </div>
+            </div>
+            <div class="info-container matchup-right-panel">
+                <div class="info-divider">
+                    <span class="info-divider-label">최근 5경기 전적 비교</span>
+                </div>
+                <div id="matchup-area">
+                    <div class="matchup-placeholder">
+                        <span>위에서 HOME · AWAY 팀을 선택하면 전적이 표시됩니다</span>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 
     <script src="/static/js/info.js?v=2"></script>
+    <script src="/static/js/standings.js?v=2"></script>
 </body>
 </html>
