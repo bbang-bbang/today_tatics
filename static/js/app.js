@@ -332,10 +332,113 @@
         }
     }
 
+    // ── Heatmap overlay ────────────────────────────────────
+    const heatmapState = { active: false, points: [], playerName: null, teamSide: null };
+
+    function drawHeatmap() {
+        if (!heatmapState.active || heatmapState.points.length === 0) return;
+        const r = fieldRect();
+
+        // 커널 반경 (필드 너비 기준)
+        const radius = r.w * 0.025;
+
+        // offscreen canvas로 부드러운 density map 생성
+        const off = document.createElement("canvas");
+        off.width = canvas.width;
+        off.height = canvas.height;
+        const offCtx = off.getContext("2d");
+
+        // SofaScore 좌표: x=0~100 (왼쪽→오른쪽), y=0~100 (위→아래)
+        const flip = heatmapState.teamSide === "B";
+        for (const pt of heatmapState.points) {
+            const nx = flip ? 100 - pt.x : pt.x;
+            const ny = flip ? 100 - pt.y : pt.y;
+            const px = r.x + (nx / 100) * r.w;
+            const py = r.y + (ny / 100) * r.h;
+            const grad = offCtx.createRadialGradient(px, py, 0, px, py, radius);
+            grad.addColorStop(0, "rgba(255,255,255,0.10)");
+            grad.addColorStop(1, "rgba(255,255,255,0)");
+            offCtx.fillStyle = grad;
+            offCtx.beginPath();
+            offCtx.arc(px, py, radius, 0, Math.PI * 2);
+            offCtx.fill();
+        }
+
+        // density를 색상으로 매핑 (더 강하게)
+        const imgData = offCtx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = imgData.data;
+        for (let i = 0; i < d.length; i += 4) {
+            const alpha = d[i + 3] / 255;
+            if (alpha < 0.005) continue;
+            // gamma 보정으로 저밀도도 잘 보이게
+            const t = Math.min(Math.pow(alpha * 6, 0.6), 1);
+            // 파랑 → 하늘 → 초록 → 노랑 → 빨강
+            let r_, g_, b_;
+            if (t < 0.25)      { const s = t / 0.25;       r_ = 0;               g_ = Math.round(s * 220);       b_ = 255; }
+            else if (t < 0.5)  { const s = (t-0.25)/0.25;  r_ = 0;               g_ = 220;                       b_ = Math.round(255*(1-s)); }
+            else if (t < 0.75) { const s = (t-0.5)/0.25;   r_ = Math.round(s*255); g_ = 220;                     b_ = 0; }
+            else               { const s = (t-0.75)/0.25;  r_ = 255;             g_ = Math.round(220*(1-s));      b_ = 0; }
+            d[i] = r_; d[i+1] = g_; d[i+2] = b_; d[i+3] = Math.round(Math.min(alpha * 8, 0.95) * 255);
+        }
+        offCtx.putImageData(imgData, 0, 0);
+
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(off, 0, 0);
+        ctx.restore();
+
+        // 선수 이름 레이블
+        ctx.save();
+        ctx.font = "bold 13px 'Segoe UI', sans-serif";
+        ctx.fillStyle = "rgba(255,255,100,0.95)";
+        ctx.textAlign = "left";
+        ctx.fillText(`히트맵: ${heatmapState.playerName}`, r.x + 8, r.y + 20);
+        ctx.restore();
+    }
+
+    async function loadHeatmap(playerName, playerTeamSide) {
+        if (heatmapState.playerName === playerName && heatmapState.active) {
+            // 같은 선수 클릭 → 토글 off
+            heatmapState.active = false;
+            heatmapState.points = [];
+            heatmapState.playerName = null;
+            heatmapState.teamSide = null;
+            render();
+            return;
+        }
+        heatmapState.active = false;
+        heatmapState.points = [];
+        render();
+
+        try {
+            // 상대팀 sofascore_id 결정 (A팀 선수면 B팀이 상대, B팀 선수면 A팀이 상대)
+            const opponentTeam = playerTeamSide === "A" ? state.teamB : state.teamA;
+            const opponentId = opponentTeam ? (opponentTeam.sofascore_id || "") : "";
+            const url = `/api/heatmap?name=${encodeURIComponent(playerName)}${opponentId ? `&opponentId=${opponentId}` : ""}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.found && data.points.length > 0) {
+                heatmapState.points = data.points;
+                heatmapState.playerName = playerName;
+                heatmapState.teamSide = playerTeamSide;
+                heatmapState.active = true;
+                render();
+            } else if (data.filtered) {
+                showToast(`${playerName} — 이 상대팀과의 경기 데이터 없음`);
+            } else {
+                showToast(`히트맵 데이터 없음: ${playerName}`);
+            }
+        } catch (e) {
+            showToast("히트맵 불러오기 실패");
+        }
+    }
+
     // ── Render ─────────────────────────────────────────────
     function render() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawField(); drawLines(); drawPlayers(); drawBalls();
+        drawField();
+        drawHeatmap();
+        drawLines(); drawPlayers(); drawBalls();
     }
 
     // ── Formation loading ──────────────────────────────────
@@ -563,6 +666,8 @@
             const player = hitTest(px, py);
             if (player) {
                 state.dragging = player;
+                state._clickedPlayer = player;
+                state._pointerMoved = false;
                 // 드래그 시작: 슬롯 좌표를 p.x/y로 동기화 (slotIdx 유지 → 슬롯 자국 안 보임)
                 const drawPos = getPlayerDrawPos(player);
                 player.x = drawPos.x; player.y = drawPos.y;
@@ -637,7 +742,9 @@
         } else if (state.mode === "select" && state.dragging) {
             playerTooltip.style.display = "none"; tooltipTarget = null;
             const { fx: dfx, fy: dfy } = canvasToField(px, py);
-            state.dragging.x = dfx; state.dragging.y = dfy; render();
+            state.dragging.x = dfx; state.dragging.y = dfy;
+            state._pointerMoved = true;
+            render();
         } else if (state.mode === "select" && state.draggingCurve) {
             const dc = state.draggingCurve;
             if (!dc.moved && Math.sqrt((px - dc.px) ** 2 + (py - dc.py) ** 2) > 5) dc.moved = true;
@@ -670,10 +777,21 @@
         }
     });
 
+    let _singleClickTimer = null;
     canvas.addEventListener("pointerup", () => {
         if (state.mode === "select") {
             if (state.dragging) {
+                // 이동 없이 클릭만 한 경우 → 싱글클릭 판정 (더블클릭과 구분)
+                if (!state._pointerMoved && state._clickedPlayer) {
+                    const p = state._clickedPlayer;
+                    clearTimeout(_singleClickTimer);
+                    _singleClickTimer = setTimeout(() => {
+                        if (p.name && p.name !== "선수") loadHeatmap(p.name, p.team);
+                    }, 250);
+                }
                 state.dragging = null;
+                state._clickedPlayer = null;
+                state._pointerMoved = false;
             }
             if (state.draggingBall) { state.draggingBall = null; }
             if (state.draggingCurve) {
@@ -745,6 +863,7 @@
     document.addEventListener("pointerdown", (e) => { if (editingPlayer && !editPopup.contains(e.target) && e.target !== canvas) closeEditPopup(); });
     canvas.addEventListener("dblclick", (e) => {
         if (state.mode !== "select") return;
+        clearTimeout(_singleClickTimer);
         const { px, py } = getPointerPos(e);
         const player = hitTest(px, py);
         if (player) openEditPopup(player, e.clientX, e.clientY);
@@ -1414,6 +1533,7 @@
 
     function updateLegend() {
         const la = document.querySelector(".legend-item.team-a"), lb = document.querySelector(".legend-item.team-b");
+        if (!la || !lb) return;
         la.textContent = state.teamA ? state.teamA.short : "HOME";
         lb.textContent = state.teamB ? state.teamB.short : "AWAY";
         la.style.setProperty("--team-color", getTeamColor("A"));
