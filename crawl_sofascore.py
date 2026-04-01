@@ -102,21 +102,41 @@ def init_db(conn):
     """)
     conn.commit()
 
+# ── 브라우저 내부 fetch (봇 감지 우회) ──────────────────
+async def api_fetch(page, path, retries=2):
+    for attempt in range(retries + 1):
+        try:
+            result = await page.evaluate(f"""() =>
+                fetch('{path}')
+                .then(r => r.ok ? r.json() : r.status)
+                .catch(e => ({{error: e.message}}))
+            """)
+            return result
+        except Exception as e:
+            if attempt < retries:
+                # 컨텍스트 파괴 등 에러 시 페이지 복구
+                try:
+                    await page.goto("https://www.sofascore.com/tournament/football/south-korea/k-league-1/410", wait_until="domcontentloaded", timeout=60000)
+                    await asyncio.sleep(2)
+                except Exception:
+                    pass
+            else:
+                return {"error": str(e)}
+
 # ── 시즌 ID 자동 탐지 ────────────────────────────────────
 async def get_latest_season_id(page, tournament_id):
-    resp = await page.request.get(f"https://www.sofascore.com/api/v1/unique-tournament/{tournament_id}/seasons")
-    data = await resp.json()
-    seasons = data.get("seasons", [])
-    if seasons:
-        return seasons[0]["id"]
+    data = await api_fetch(page, f"/api/v1/unique-tournament/{tournament_id}/seasons")
+    if isinstance(data, dict):
+        seasons = data.get("seasons", [])
+        if seasons:
+            return seasons[0]["id"]
     return None
 
 # ── 팀 목록 수집 ─────────────────────────────────────────
 async def fetch_teams(page, tournament_id, season_id):
-    resp = await page.request.get(
-        f"https://www.sofascore.com/api/v1/unique-tournament/{tournament_id}/season/{season_id}/standings/total"
-    )
-    data = await resp.json()
+    data = await api_fetch(page, f"/api/v1/unique-tournament/{tournament_id}/season/{season_id}/standings/total")
+    if not isinstance(data, dict):
+        return []
     rows = data.get("standings", [{}])[0].get("rows", [])
     teams = []
     for r in rows:
@@ -130,8 +150,9 @@ async def fetch_teams(page, tournament_id, season_id):
 
 # ── 선수 목록 수집 ───────────────────────────────────────
 async def fetch_players(page, team_id):
-    resp = await page.request.get(f"https://www.sofascore.com/api/v1/team/{team_id}/players")
-    data = await resp.json()
+    data = await api_fetch(page, f"/api/v1/team/{team_id}/players")
+    if not isinstance(data, dict):
+        return []
     result = []
     for entry in data.get("players", []):
         p = entry["player"]
@@ -149,43 +170,31 @@ async def fetch_players(page, team_id):
 
 # ── 선수 스탯 수집 ───────────────────────────────────────
 async def fetch_player_stats(page, player_id, tournament_id, season_id):
-    url = f"https://www.sofascore.com/api/v1/player/{player_id}/unique-tournament/{tournament_id}/season/{season_id}/statistics/overall"
-    resp = await page.request.get(url)
-    if resp.status != 200:
+    data = await api_fetch(page, f"/api/v1/player/{player_id}/unique-tournament/{tournament_id}/season/{season_id}/statistics/overall")
+    if not isinstance(data, dict):
         return None
-    data = await resp.json()
-    s = data.get("statistics", {})
-    if not s:
-        return None
-    return s
+    return data.get("statistics") or None
 
 # ── 선수 히트맵 수집 (경기별 좌표 누적) ─────────────────
 async def fetch_player_heatmap(page, player_id):
     points = []
     page_num = 0
     while True:
-        resp = await page.request.get(
-            f"https://www.sofascore.com/api/v1/player/{player_id}/events/last/{page_num}"
-        )
-        if resp.status != 200:
+        data = await api_fetch(page, f"/api/v1/player/{player_id}/events/last/{page_num}")
+        if not isinstance(data, dict):
             break
-        data = await resp.json()
         events = data.get("events", [])
         if not events:
             break
 
         for event in events:
             eid = event["id"]
-            hr = await page.request.get(
-                f"https://www.sofascore.com/api/v1/event/{eid}/player/{player_id}/heatmap"
-            )
-            if hr.status == 200:
-                hdata = await hr.json()
+            hdata = await api_fetch(page, f"/api/v1/event/{eid}/player/{player_id}/heatmap")
+            if isinstance(hdata, dict):
                 for pt in hdata.get("heatmap", []):
                     points.append({"event_id": eid, "x": pt["x"], "y": pt["y"]})
             await asyncio.sleep(DELAY * 0.5)
 
-        # 다음 페이지 없으면 중단
         if not data.get("hasNextPage", False):
             break
         page_num += 1
@@ -257,11 +266,22 @@ async def main():
     init_db(conn)
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False)
         ctx = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            extra_http_headers={
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Accept": "application/json, text/plain, */*",
+                "Referer": "https://www.sofascore.com/",
+            }
         )
         page = await ctx.new_page()
+
+        # sofascore 메인 방문으로 쿠키/세션 확보
+        log("sofascore 메인 페이지 접속 중...")
+        await page.goto("https://www.sofascore.com/tournament/football/south-korea/k-league-1/410", wait_until="domcontentloaded", timeout=60000)
+        await asyncio.sleep(3)
+        log("세션 준비 완료")
 
         for league in LEAGUES:
             tid = league["tournament_id"]
