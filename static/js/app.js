@@ -333,26 +333,28 @@
     }
 
     // ── Heatmap overlay ────────────────────────────────────
+    // ── 히트맵 상태 ───────────────────────────────────────
     const heatmapState = { active: false, points: [], playerName: null, teamSide: null };
+    // 경기별 포인트 캐시: eventId → points[]
+    const _matchCache = new Map();
+    // 선택된 경기 ID 목록 (null = 2026 전체 누적)
+    const _selectedMatches = new Set();
+    let _allMatchPoints = [];  // 2026 전체 누적 포인트
 
     function drawHeatmap() {
         if (!heatmapState.active || heatmapState.points.length === 0) return;
         const r = fieldRect();
-
-        // 커널 반경 (필드 너비 기준)
         const radius = r.w * 0.025;
 
-        // offscreen canvas로 부드러운 density map 생성
         const off = document.createElement("canvas");
         off.width = canvas.width;
         off.height = canvas.height;
         const offCtx = off.getContext("2d");
 
-        // SofaScore 좌표: x=0~100 (왼쪽→오른쪽), y=0~100 (위→아래)
         const flip = heatmapState.teamSide === "B";
         for (const pt of heatmapState.points) {
-            const nx = flip ? 100 - pt.x : pt.x;
-            const ny = flip ? 100 - pt.y : pt.y;
+            const nx = flip ? pt.x : 100 - pt.x;
+            const ny = flip ? pt.y : 100 - pt.y;
             const px = r.x + (nx / 100) * r.w;
             const py = r.y + (ny / 100) * r.h;
             const grad = offCtx.createRadialGradient(px, py, 0, px, py, radius);
@@ -364,21 +366,19 @@
             offCtx.fill();
         }
 
-        // density를 색상으로 매핑 (더 강하게)
         const imgData = offCtx.getImageData(0, 0, canvas.width, canvas.height);
         const d = imgData.data;
         for (let i = 0; i < d.length; i += 4) {
             const alpha = d[i + 3] / 255;
             if (alpha < 0.005) continue;
-            // gamma 보정으로 저밀도도 잘 보이게
             const t = Math.min(Math.pow(alpha * 6, 0.6), 1);
-            // 파랑 → 하늘 → 초록 → 노랑 → 빨강
             let r_, g_, b_;
-            if (t < 0.25)      { const s = t / 0.25;       r_ = 0;               g_ = Math.round(s * 220);       b_ = 255; }
-            else if (t < 0.5)  { const s = (t-0.25)/0.25;  r_ = 0;               g_ = 220;                       b_ = Math.round(255*(1-s)); }
-            else if (t < 0.75) { const s = (t-0.5)/0.25;   r_ = Math.round(s*255); g_ = 220;                     b_ = 0; }
-            else               { const s = (t-0.75)/0.25;  r_ = 255;             g_ = Math.round(220*(1-s));      b_ = 0; }
-            d[i] = r_; d[i+1] = g_; d[i+2] = b_; d[i+3] = Math.round(Math.min(alpha * 8, 0.95) * 255);
+            if (t < 0.25)      { const s = t / 0.25;       r_ = 0;                g_ = Math.round(s * 220); b_ = 255; }
+            else if (t < 0.5)  { const s = (t-0.25)/0.25;  r_ = 0;                g_ = 220;                 b_ = Math.round(255*(1-s)); }
+            else if (t < 0.75) { const s = (t-0.5)/0.25;   r_ = Math.round(s*255); g_ = 220;                b_ = 0; }
+            else               { const s = (t-0.75)/0.25;  r_ = 255;              g_ = Math.round(220*(1-s)); b_ = 0; }
+            d[i] = r_; d[i+1] = g_; d[i+2] = b_;
+            d[i+3] = Math.round(Math.min(alpha * 8, 0.95) * 255);
         }
         offCtx.putImageData(imgData, 0, 0);
 
@@ -387,49 +387,182 @@
         ctx.drawImage(off, 0, 0);
         ctx.restore();
 
-        // 선수 이름 레이블
+        // 선수 이름 + 선택 경기 수 레이블
         ctx.save();
-        ctx.font = "bold 13px 'Segoe UI', sans-serif";
+        ctx.font = "bold 12px 'Segoe UI', sans-serif";
         ctx.fillStyle = "rgba(255,255,100,0.95)";
         ctx.textAlign = "left";
-        ctx.fillText(`히트맵: ${heatmapState.playerName}`, r.x + 8, r.y + 20);
+        const label = _selectedMatches.size > 0
+            ? `히트맵: ${heatmapState.playerName} (${_selectedMatches.size}경기)`
+            : `히트맵: ${heatmapState.playerName} (전체)`;
+        ctx.fillText(label, r.x + 8, r.y + 20);
         ctx.restore();
     }
 
+    // 선택된 경기들의 포인트를 합산해서 heatmapState에 반영
+    function _rebuildHeatmapPoints() {
+        if (_selectedMatches.size === 0) {
+            heatmapState.active = false;
+            heatmapState.points = [];
+        } else {
+            const combined = [];
+            for (const eid of _selectedMatches) {
+                for (const p of (_matchCache.get(eid) || [])) combined.push(p);
+            }
+            heatmapState.active = combined.length > 0;
+            heatmapState.points = combined;
+        }
+        render();
+    }
+
     async function loadHeatmap(playerName, playerTeamSide) {
+        // 같은 선수 클릭 → 토글 off
         if (heatmapState.playerName === playerName && heatmapState.active) {
-            // 같은 선수 클릭 → 토글 off
             heatmapState.active = false;
             heatmapState.points = [];
             heatmapState.playerName = null;
-            heatmapState.teamSide = null;
+            _selectedMatches.clear();
+            _matchCache.clear();
+            _allMatchPoints = [];
+            closeMatchPicker();
             render();
             return;
         }
-        heatmapState.active = false;
+
+        // 새 선수 → 초기화 후 2026 전체 로드
+        _selectedMatches.clear();
+        _matchCache.clear();
+        _allMatchPoints = [];
+
+        // 히트맵은 비운 채로 패널만 열기
         heatmapState.points = [];
+        heatmapState.playerName = playerName;
+        heatmapState.teamSide = playerTeamSide;
+        heatmapState.active = false;
         render();
+        openMatchPicker(playerName, playerTeamSide);
+    }
+
+    // 경기 하나의 포인트를 fetch (캐시 우선)
+    async function _fetchMatchPoints(playerName, playerTeamSide, eventId) {
+        if (_matchCache.has(eventId)) return _matchCache.get(eventId);
+        try {
+            const res = await fetch(`/api/heatmap?name=${encodeURIComponent(playerName)}&eventId=${eventId}`);
+            const data = await res.json();
+            const pts = (data.found && data.points.length > 0) ? data.points : [];
+            _matchCache.set(eventId, pts);
+            return pts;
+        } catch { return []; }
+    }
+
+    // ── 경기별 선택 패널 ───────────────────────────────────
+    let _matchPickerName = null;
+    let _matchPickerSide = null;
+
+    function closeMatchPicker() {
+        const el = document.getElementById("match-picker");
+        if (el) el.classList.add("hidden");
+        _matchPickerName = null;
+        _matchPickerSide = null;
+    }
+
+    async function openMatchPicker(playerName, playerTeamSide) {
+        _matchPickerName = playerName;
+        _matchPickerSide = playerTeamSide;
+        const el = document.getElementById("match-picker");
+        const list = document.getElementById("match-picker-list");
+        const title = document.getElementById("match-picker-title");
+        title.textContent = `${playerName} 경기별`;
+        list.innerHTML = '<li class="mp-loading">불러오는 중...</li>';
+        el.classList.remove("hidden");
 
         try {
-            // 상대팀 sofascore_id 결정 (A팀 선수면 B팀이 상대, B팀 선수면 A팀이 상대)
-            const opponentTeam = playerTeamSide === "A" ? state.teamB : state.teamA;
-            const opponentId = opponentTeam ? (opponentTeam.sofascore_id || "") : "";
-            const url = `/api/heatmap?name=${encodeURIComponent(playerName)}${opponentId ? `&opponentId=${opponentId}` : ""}`;
-            const res = await fetch(url);
+            const res = await fetch(`/api/player-matches?name=${encodeURIComponent(playerName)}&year=2026`);
             const data = await res.json();
-            if (data.found && data.points.length > 0) {
-                heatmapState.points = data.points;
-                heatmapState.playerName = playerName;
-                heatmapState.teamSide = playerTeamSide;
-                heatmapState.active = true;
-                render();
-            } else if (data.filtered) {
-                showToast(`${playerName} — 이 상대팀과의 경기 데이터 없음`);
-            } else {
-                showToast(`히트맵 데이터 없음: ${playerName}`);
+            list.innerHTML = "";
+
+            // 전체 누적 항목 (기본 미선택)
+            const allLi = document.createElement("li");
+            allLi.className = "mp-item mp-item-all";
+            allLi.innerHTML = `<span class="mp-check">☐</span><span>2026 전체 (누적)</span>`;
+            allLi.dataset.all = "1";
+            allLi.addEventListener("click", async () => {
+                const isActive = allLi.classList.contains("active");
+                if (isActive) {
+                    // 해제 → 전체 선택 없애기
+                    allLi.classList.remove("active");
+                    allLi.querySelector(".mp-check").textContent = "☐";
+                    _selectedMatches.clear();
+                    _allMatchPoints = [];
+                    heatmapState.active = false;
+                    heatmapState.points = [];
+                    render();
+                } else {
+                    // 선택 → 2026 전체 누적 로드
+                    allLi.querySelector(".mp-check").textContent = "…";
+                    list.querySelectorAll(".mp-item[data-eid]").forEach(x => {
+                        x.classList.remove("active");
+                        x.querySelector(".mp-check").textContent = "☐";
+                    });
+                    _selectedMatches.clear();
+                    try {
+                        const r2 = await fetch(`/api/heatmap?name=${encodeURIComponent(playerName)}&year=2026`);
+                        const d2 = await r2.json();
+                        _allMatchPoints = (d2.found && d2.points.length > 0) ? d2.points : [];
+                    } catch { _allMatchPoints = []; }
+                    allLi.classList.add("active");
+                    allLi.querySelector(".mp-check").textContent = "☑";
+                    heatmapState.active = _allMatchPoints.length > 0;
+                    heatmapState.points = _allMatchPoints;
+                    render();
+                }
+            });
+            list.appendChild(allLi);
+
+            if (!data.found || data.matches.length === 0) {
+                list.appendChild(Object.assign(document.createElement("li"), { className: "mp-empty", textContent: "2026 경기 데이터 없음" }));
+                return;
+            }
+
+            for (const m of data.matches) {
+                const li = document.createElement("li");
+                li.className = "mp-item";
+                li.dataset.eid = m.id;
+                const date = m.datets
+                    ? new Date(m.datets * 1000).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })
+                    : "날짜미상";
+                const score = (m.homeScore != null && m.awayScore != null) ? `${m.homeScore}:${m.awayScore}` : "-";
+                const badge = m.isAway ? `<span class="mp-badge mp-away">AWAY</span>` : `<span class="mp-badge mp-home">HOME</span>`;
+                li.innerHTML = `<span class="mp-check">☐</span><span class="mp-date">${date}</span>${badge}<span class="mp-home-team">${m.home}</span><span class="mp-vs">vs</span><span class="mp-away-team">${m.away}</span><span class="mp-score">${score}</span>`;
+
+                li.addEventListener("click", async () => {
+                    const eid = m.id;
+                    const check = li.querySelector(".mp-check");
+                    if (_selectedMatches.has(eid)) {
+                        // 선택 해제
+                        _selectedMatches.delete(eid);
+                        li.classList.remove("active");
+                        check.textContent = "☐";
+                    } else {
+                        // 선택 추가 → 전체 항목 체크 해제
+                        allLi.classList.remove("active");
+                        allLi.querySelector(".mp-check").textContent = "☐";
+                        _selectedMatches.add(eid);
+                        li.classList.add("active");
+                        check.textContent = "☑";
+                        // 아직 캐시 없으면 fetch
+                        if (!_matchCache.has(eid)) {
+                            check.textContent = "…";
+                            await _fetchMatchPoints(playerName, playerTeamSide, eid);
+                            check.textContent = "☑";
+                        }
+                    }
+                    _rebuildHeatmapPoints();
+                });
+                list.appendChild(li);
             }
         } catch (e) {
-            showToast("히트맵 불러오기 실패");
+            list.innerHTML = '<li class="mp-empty">불러오기 실패</li>';
         }
     }
 
@@ -642,6 +775,30 @@
         player.x = startFx; player.y = startFy;
         state.animations.push({ player, line, progress: 0, duration: calcPathDuration(line) });
         if (!animFrameId) { lastAnimTime = null; animFrameId = requestAnimationFrame(animTick); }
+    }
+
+    // ── Play All (플래시맵) ────────────────────────────────
+    let _flashPlaying = false;
+
+    function playAllLines() {
+        if (state.lines.length === 0) return;
+        if (_flashPlaying) return;
+        _flashPlaying = true;
+
+        // 모든 선 애니메이션 시작
+        state.animations = [];
+        state.lines.forEach(line => startLineAnimation(line));
+
+        const maxDuration = state.lines.reduce((max, line) => Math.max(max, calcPathDuration(line)), 0);
+        const btnPlay = document.getElementById("btn-play-all");
+        btnPlay.disabled = true;
+        btnPlay.textContent = "⏹ 재생중";
+
+        setTimeout(() => {
+            _flashPlaying = false;
+            btnPlay.disabled = false;
+            btnPlay.textContent = "▶ 재생";
+        }, maxDuration + 100);
     }
 
     // ── Pointer events ─────────────────────────────────────
@@ -940,6 +1097,7 @@
         render();
     });
 
+    document.getElementById("btn-play-all").addEventListener("click", playAllLines);
     document.getElementById("btn-clear-lines").addEventListener("click", () => { state.lines = []; render(); });
     document.getElementById("btn-undo-line").addEventListener("click", () => { state.lines.pop(); render(); });
     document.getElementById("btn-reset").addEventListener("click", () => {
@@ -961,6 +1119,18 @@
     });
     document.querySelectorAll(".formation-select-team").forEach((sel) => {
         sel.addEventListener("change", (e) => { loadFormationSide(sel.dataset.side, e.target.value); });
+    });
+
+    // ── 경기 선택 패널 닫기 ───────────────────────────────
+    document.getElementById("match-picker-close").addEventListener("click", () => {
+        heatmapState.active = false;
+        heatmapState.points = [];
+        heatmapState.playerName = null;
+        _selectedMatches.clear();
+        _matchCache.clear();
+        _allMatchPoints = [];
+        closeMatchPicker();
+        render();
     });
 
     // ── Player tooltip ────────────────────────────────────
@@ -1439,6 +1609,7 @@
 
     function renderTeamGrid() {
         teamGrid.innerHTML = "";
+        teamGrid.style.gridTemplateColumns = "";
         const filtered = state.teams.filter((t) => t.league === currentLeague);
         const cur = pickingSide === "A" ? state.teamA : state.teamB;
         for (const team of filtered) {

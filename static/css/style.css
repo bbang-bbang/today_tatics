@@ -317,7 +317,7 @@ body {
 
 /* Team Modal */
 .team-modal-content {
-    width: 580px;
+    width: 660px;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
@@ -355,10 +355,11 @@ body {
 
 .team-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     overflow-y: auto;
-    max-height: 400px;
+    overflow-x: hidden;
+    flex: 1;
     padding-right: 4px;
     margin-bottom: 16px;
 }
@@ -413,9 +414,7 @@ body {
     font-size: 0.78rem;
     color: #d0d0d0;
     line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: keep-all;
 }
 
 /* Toolbar extras */
@@ -679,6 +678,106 @@ body {
 
 .load-btn:hover {
     background: #a0581b !important;
+}
+
+/* ── 경기별 히트맵 선택 패널 ─────────────────────────── */
+#match-picker {
+    position: fixed;
+    top: 60px;
+    right: 12px;
+    width: 420px;
+    max-height: calc(100vh - 80px);
+    background: #1a1e28;
+    border: 1px solid #3a3f52;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    z-index: 200;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    overflow: hidden;
+}
+#match-picker.hidden { display: none; }
+
+#match-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: #252a3a;
+    border-bottom: 1px solid #3a3f52;
+    flex-shrink: 0;
+}
+#match-picker-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #e0e4f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#match-picker-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    flex-shrink: 0;
+}
+#match-picker-close:hover { color: #fff; }
+
+#match-picker-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    overflow-y: auto;
+    flex: 1;
+}
+.mp-loading, .mp-empty {
+    padding: 12px;
+    color: #888;
+    font-size: 0.8rem;
+    text-align: center;
+}
+.mp-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #c0c6d8;
+    border-bottom: 1px solid #2a2f40;
+    transition: background 0.15s;
+}
+.mp-item:hover { background: #252a3a; }
+.mp-item.active { background: #1a3a5c; color: #7bbfff; }
+.mp-item-all { font-weight: 600; color: #a0c4ff; }
+.mp-check { flex-shrink: 0; width: 16px; font-size: 0.9rem; color: #7bbfff; }
+.mp-date { flex-shrink: 0; color: #888; width: 38px; }
+.mp-badge { flex-shrink: 0; font-size: 0.65rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; }
+.mp-home { background: #1a4a8a; color: #7bbfff; }
+.mp-away { background: #5a1a1a; color: #ff9a9a; }
+.mp-home-team { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.mp-vs { flex-shrink: 0; color: #555; padding: 0 4px; font-size: 0.7rem; }
+.mp-away-team { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-score { flex-shrink: 0; font-weight: 600; color: #e0e4f0; min-width: 28px; text-align: right; }
+
+.play-btn {
+    background: #1a5fa8 !important;
+    border-color: #2a7fd4 !important;
+    font-weight: bold;
+}
+
+.play-btn:hover {
+    background: #2a7fd4 !important;
+}
+
+.play-btn:disabled {
+    background: #555 !important;
+    border-color: #777 !important;
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 /* Modal */

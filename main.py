@@ -430,6 +430,43 @@ def get_standings():
 # ── 히트맵 API ───────────────────────────────────────────
 DB_PATH = os.path.join(BASE_DIR, "players.db")
 
+# sofascore_id → 한글 팀명 매핑
+_SS_TO_KO = {t["sofascore_id"]: t["name"] for t in TEAMS}
+
+def _ko_team(sofascore_id, fallback):
+    return _SS_TO_KO.get(sofascore_id, fallback)
+
+def _year_range(year_str):
+    """연도 문자열 → (start_ts, end_ts) UTC 기준"""
+    y = int(year_str)
+    start = int(datetime(y,   1, 1).timestamp())
+    end   = int(datetime(y+1, 1, 1).timestamp())
+    return start, end
+
+def _find_player(cur, name):
+    """(player_id, team_id, matched_name) 반환, 없으면 (None, None, None)"""
+    cur.execute("SELECT id, team_id, name_ko, name FROM players WHERE name_ko = ?", (name,))
+    row = cur.fetchone()
+    if not row:
+        cur.execute("SELECT id, team_id, name_ko, name FROM players WHERE name LIKE ?", (f"%{name}%",))
+        row = cur.fetchone()
+    if not row:
+        return (None, None, None)
+    matched = row["name_ko"] or row["name"]
+    return (row["id"], row["team_id"], matched)
+
+def _flip_points(rows, player_team_id):
+    """away 경기 포인트를 x축 반전 (x→100-x)"""
+    result = []
+    for r in rows:
+        if r["away_team_id"] == player_team_id:
+            result.append({"x": 100 - r["x"], "y": r["y"]})
+        else:
+            result.append({"x": r["x"], "y": r["y"]})
+    return result
+
+CURRENT_YEAR = str(datetime.now().year)
+
 @app.route("/api/heatmap")
 def get_heatmap():
     name = request.args.get("name", "").strip()
@@ -440,34 +477,105 @@ def get_heatmap():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    # 이름으로 선수 검색 (부분 일치)
-    # 한글 이름 우선 → 영문 이름 순으로 검색
-    cur.execute("SELECT id FROM players WHERE name_ko = ?", (name,))
-    row = cur.fetchone()
-    if not row:
-        cur.execute("SELECT id FROM players WHERE name LIKE ?", (f"%{name}%",))
-        row = cur.fetchone()
-    if not row:
+    player_id, player_team_id, matched_name = _find_player(cur, name)
+    if not player_id:
         conn.close()
         return jsonify({"points": [], "found": False})
-    player_id = row["id"]
-    opponent_id = request.args.get("opponentId", "").strip()
 
+    event_id    = request.args.get("eventId", "").strip()
+    opponent_id = request.args.get("opponentId", "").strip()
+    year        = request.args.get("year", CURRENT_YEAR).strip()
+    year_start, year_end = _year_range(year)
+
+    # 특정 경기 히트맵 → AWAY면 API에서 flip
+    if event_id:
+        cur.execute("""
+            SELECT h.x, h.y, e.away_team_id
+            FROM heatmap_points h
+            LEFT JOIN events e ON h.event_id = e.id
+            WHERE h.player_id = ? AND h.event_id = ?
+        """, (player_id, event_id))
+        points = _flip_points(cur.fetchall(), player_team_id)
+        conn.close()
+        return jsonify({"points": points, "found": True, "playerId": player_id,
+                        "filtered": True, "matchedName": matched_name})
+
+    # 누적 히트맵 — AWAY 경기도 flip 정규화 (Sofascore와 동일하게)
     if opponent_id:
         cur.execute("""
-            SELECT h.x, h.y FROM heatmap_points h
+            SELECT h.x, h.y, e.away_team_id
+            FROM heatmap_points h
             JOIN events e ON h.event_id = e.id
             WHERE h.player_id = ?
               AND (e.home_team_id = ? OR e.away_team_id = ?)
-        """, (player_id, opponent_id, opponent_id))
-        points = [{"x": r["x"], "y": r["y"]} for r in cur.fetchall()]
-        conn.close()
-        return jsonify({"points": points, "found": True, "playerId": player_id, "filtered": True})
+              AND e.date_ts >= ? AND e.date_ts < ?
+        """, (player_id, opponent_id, opponent_id, year_start, year_end))
     else:
-        cur.execute("SELECT x, y FROM heatmap_points WHERE player_id = ?", (player_id,))
-        points = [{"x": r["x"], "y": r["y"]} for r in cur.fetchall()]
+        cur.execute("""
+            SELECT h.x, h.y, e.away_team_id
+            FROM heatmap_points h
+            LEFT JOIN events e ON h.event_id = e.id
+            WHERE h.player_id = ?
+              AND (e.date_ts IS NULL OR (e.date_ts >= ? AND e.date_ts < ?))
+        """, (player_id, year_start, year_end))
+
+    points = _flip_points(cur.fetchall(), player_team_id)
+    conn.close()
+    return jsonify({"points": points, "found": True, "playerId": player_id,
+                    "filtered": bool(opponent_id), "matchedName": matched_name})
+
+@app.route("/api/player-matches")
+def get_player_matches():
+    name = request.args.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    if not os.path.exists(DB_PATH):
+        return jsonify({"matches": []})
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    player_id, player_team_id, matched_name = _find_player(cur, name)
+    if not player_id:
         conn.close()
-        return jsonify({"points": points, "found": True, "playerId": player_id, "filtered": False})
+        return jsonify({"matches": [], "found": False})
+
+    year = request.args.get("year", "all").strip()
+
+    if year == "all":
+        cur.execute("""
+            SELECT DISTINCT e.id, e.home_team_id, e.home_team_name,
+                            e.away_team_id, e.away_team_name,
+                            e.home_score, e.away_score, e.date_ts
+            FROM heatmap_points h
+            JOIN events e ON h.event_id = e.id
+            WHERE h.player_id = ? AND e.date_ts IS NOT NULL
+            ORDER BY e.date_ts DESC
+        """, (player_id,))
+    else:
+        ys, ye = _year_range(year)
+        cur.execute("""
+            SELECT DISTINCT e.id, e.home_team_id, e.home_team_name,
+                            e.away_team_id, e.away_team_name,
+                            e.home_score, e.away_score, e.date_ts
+            FROM heatmap_points h
+            JOIN events e ON h.event_id = e.id
+            WHERE h.player_id = ? AND e.date_ts >= ? AND e.date_ts < ?
+            ORDER BY e.date_ts DESC
+        """, (player_id, ys, ye))
+
+    matches = []
+    for r in cur.fetchall():
+        matches.append({
+            "id":        r["id"],
+            "home":      _ko_team(r["home_team_id"], r["home_team_name"]),
+            "away":      _ko_team(r["away_team_id"], r["away_team_name"]),
+            "homeScore": r["home_score"],
+            "awayScore": r["away_score"],
+            "datets":    r["date_ts"],
+            "isAway":    r["away_team_id"] == player_team_id,
+        })
+    conn.close()
+    return jsonify({"matches": matches, "found": True, "playerId": player_id})
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@
             </div>
             <div class="toolbar-group">
                 <button id="btn-add-ball" class="action-btn" title="축구공 추가">⚽ 공 추가</button>
+                <button id="btn-play-all" class="action-btn play-btn" title="모든 선 애니메이션 재생">▶ 재생</button>
                 <button id="btn-clear-lines" class="action-btn" title="그리기 지우기">그리기 지우기</button>
                 <button id="btn-undo-line" class="action-btn" title="마지막 선 취소">실행취소</button>
                 <button id="btn-reset" class="action-btn" title="전체 초기화">초기화</button>
@@ -185,6 +186,15 @@
             <div class="player-meta-dob" id="player-edit-dob"></div>
         </div>
         <button id="player-edit-confirm" class="player-edit-confirm-btn">확인</button>
+    </div>
+
+    <!-- 경기별 히트맵 선택 패널 -->
+    <div id="match-picker" class="hidden">
+        <div id="match-picker-header">
+            <span id="match-picker-title">경기별 히트맵</span>
+            <button id="match-picker-close">✕</button>
+        </div>
+        <ul id="match-picker-list"></ul>
     </div>
 
     <!-- 저장 모달 -->

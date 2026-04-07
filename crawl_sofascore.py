@@ -88,6 +88,18 @@ def init_db(conn):
             FOREIGN KEY(player_id) REFERENCES players(id)
         );
 
+        CREATE TABLE IF NOT EXISTS events (
+            id              INTEGER PRIMARY KEY,
+            home_team_id    INTEGER,
+            home_team_name  TEXT,
+            away_team_id    INTEGER,
+            away_team_name  TEXT,
+            date_ts         INTEGER,
+            home_score      INTEGER,
+            away_score      INTEGER,
+            tournament_id   INTEGER
+        );
+
         CREATE TABLE IF NOT EXISTS heatmap_points (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             player_id   INTEGER,
@@ -98,8 +110,20 @@ def init_db(conn):
         );
 
         CREATE INDEX IF NOT EXISTS idx_heatmap_player ON heatmap_points(player_id);
+        CREATE INDEX IF NOT EXISTS idx_heatmap_event ON heatmap_points(event_id);
         CREATE INDEX IF NOT EXISTS idx_stats_player ON player_stats(player_id);
     """)
+    # 기존 events 테이블에 컬럼 없으면 추가 (ALTER TABLE)
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(events)").fetchall()}
+    for col, typedef in [
+        ("date_ts",       "INTEGER"),
+        ("home_score",    "INTEGER"),
+        ("away_score",    "INTEGER"),
+        ("tournament_id", "INTEGER"),
+    ]:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE events ADD COLUMN {col} {typedef}")
+    conn.commit()
     conn.commit()
 
 # ── 시즌 ID 자동 탐지 ────────────────────────────────────
@@ -160,7 +184,7 @@ async def fetch_player_stats(page, player_id, tournament_id, season_id):
     return s
 
 # ── 선수 히트맵 수집 (경기별 좌표 누적) ─────────────────
-async def fetch_player_heatmap(page, player_id):
+async def fetch_player_heatmap(page, player_id, conn=None):
     points = []
     page_num = 0
     while True:
@@ -176,6 +200,11 @@ async def fetch_player_heatmap(page, player_id):
 
         for event in events:
             eid = event["id"]
+
+            # 경기 메타데이터 저장
+            if conn is not None:
+                save_event(conn, event)
+
             hr = await page.request.get(
                 f"https://www.sofascore.com/api/v1/event/{eid}/player/{player_id}/heatmap"
             )
@@ -243,6 +272,22 @@ def save_stats(conn, player_id, tournament_id, season_id, s):
         json.dumps(s, ensure_ascii=False)
     ))
 
+def save_event(conn, event):
+    eid = event["id"]
+    ht = event.get("homeTeam", {})
+    at = event.get("awayTeam", {})
+    hs = event.get("homeScore", {}).get("current")
+    as_ = event.get("awayScore", {}).get("current")
+    ts = event.get("startTimestamp")
+    tid = event.get("tournament", {}).get("uniqueTournament", {}).get("id")
+    conn.execute("""
+        INSERT OR REPLACE INTO events
+            (id, home_team_id, home_team_name, away_team_id, away_team_name,
+             date_ts, home_score, away_score, tournament_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (eid, ht.get("id"), ht.get("name"), at.get("id"), at.get("name"),
+          ts, hs, as_, tid))
+
 def save_heatmap(conn, player_id, points):
     # 기존 데이터 삭제 후 재저장
     conn.execute("DELETE FROM heatmap_points WHERE player_id = ?", (player_id,))
@@ -297,7 +342,7 @@ async def main():
                         save_stats(conn, player["id"], tid, sid, stats)
 
                     # 히트맵
-                    heatmap_pts = await fetch_player_heatmap(page, player["id"])
+                    heatmap_pts = await fetch_player_heatmap(page, player["id"], conn)
                     if heatmap_pts:
                         save_heatmap(conn, player["id"], heatmap_pts)
 
