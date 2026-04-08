@@ -448,6 +448,11 @@ def _find_player(cur, name):
     cur.execute("SELECT id, team_id, name_ko, name FROM players WHERE name_ko = ?", (name,))
     row = cur.fetchone()
     if not row:
+        # 공백 제거 후 재시도 (예: '브루노 실바' vs '브루노실바')
+        name_no_space = name.replace(" ", "")
+        cur.execute("SELECT id, team_id, name_ko, name FROM players WHERE REPLACE(name_ko, ' ', '') = ?", (name_no_space,))
+        row = cur.fetchone()
+    if not row:
         cur.execute("SELECT id, team_id, name_ko, name FROM players WHERE name LIKE ?", (f"%{name}%",))
         row = cur.fetchone()
     if not row:
