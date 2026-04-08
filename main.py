@@ -583,5 +583,109 @@ def get_player_matches():
     return jsonify({"matches": matches, "found": True, "playerId": player_id})
 
 
+@app.route("/api/kleague2/teams")
+def get_kleague2_teams():
+    """히트맵 데이터가 있는 K리그2 팀 목록 (수원 삼성 제외)"""
+    if not os.path.exists(DB_PATH):
+        return jsonify([])
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT DISTINCT team_id FROM match_player_stats
+        WHERE team_id != 7652
+        ORDER BY team_id
+    """).fetchall()
+    conn.close()
+    team_map = {t["sofascore_id"]: t for t in TEAMS}
+    result = []
+    for (tid,) in rows:
+        t = team_map.get(tid)
+        if t:
+            result.append({"id": t["id"], "sofascore_id": tid, "name": t["name"],
+                           "short": t["short"], "emblem": t["emblem"], "primary": t["primary"]})
+    result.sort(key=lambda x: x["name"])
+    return jsonify(result)
+
+
+@app.route("/api/kleague2/players")
+def get_kleague2_players():
+    """팀별 선수 목록 (player_id + 이름)"""
+    team_id = request.args.get("teamId", "").strip()
+    if not team_id:
+        return jsonify({"error": "teamId required"}), 400
+    if not os.path.exists(DB_PATH):
+        return jsonify([])
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT DISTINCT player_id, player_name, position,
+               COUNT(DISTINCT event_id) as games,
+               ROUND(AVG(rating), 2) as avg_rating
+        FROM match_player_stats
+        WHERE team_id = ? AND player_name IS NOT NULL
+        GROUP BY player_id
+        ORDER BY games DESC, player_name
+    """, (team_id,)).fetchall()
+    conn.close()
+    return jsonify([{
+        "playerId": r[0], "name": r[1], "position": r[2],
+        "games": r[3], "avgRating": r[4]
+    } for r in rows])
+
+
+@app.route("/api/kleague2/heatmap")
+def get_kleague2_heatmap():
+    """선수 ID 기반 히트맵 (수원 삼성 외 팀)"""
+    player_id = request.args.get("playerId", "").strip()
+    team_id   = request.args.get("teamId", "").strip()
+    event_id  = request.args.get("eventId", "").strip()
+    if not player_id or not team_id:
+        return jsonify({"error": "playerId and teamId required"}), 400
+    if not os.path.exists(DB_PATH):
+        return jsonify({"points": []})
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    if event_id:
+        rows = conn.execute("""
+            SELECT h.x, h.y, e.away_team_id
+            FROM heatmap_points h
+            LEFT JOIN events e ON h.event_id = e.id
+            WHERE h.player_id = ? AND h.event_id = ?
+        """, (player_id, event_id)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT h.x, h.y, e.away_team_id
+            FROM heatmap_points h
+            LEFT JOIN events e ON h.event_id = e.id
+            WHERE h.player_id = ?
+        """, (player_id,)).fetchall()
+
+    points = _flip_points(rows, int(team_id))
+
+    # 경기 목록
+    matches_rows = conn.execute("""
+        SELECT DISTINCT e.id, e.home_team_id, e.home_team_name,
+               e.away_team_id, e.away_team_name,
+               e.home_score, e.away_score, e.date_ts
+        FROM heatmap_points h
+        JOIN events e ON h.event_id = e.id
+        WHERE h.player_id = ? AND e.date_ts IS NOT NULL
+        ORDER BY e.date_ts DESC
+    """, (player_id,)).fetchall()
+
+    matches = [{
+        "id":        r["id"],
+        "home":      _ko_team(r["home_team_id"], r["home_team_name"]),
+        "away":      _ko_team(r["away_team_id"], r["away_team_name"]),
+        "homeScore": r["home_score"],
+        "awayScore": r["away_score"],
+        "datets":    r["date_ts"],
+        "isAway":    r["away_team_id"] == int(team_id),
+    } for r in matches_rows]
+
+    conn.close()
+    return jsonify({"points": points, "matches": matches, "playerId": player_id})
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

@@ -1714,3 +1714,97 @@ body {
 .st-badge.D { background: rgba(192,192,192,0.15); color: #c0c0c0; }
 .st-badge.L { background: rgba(255,138,101,0.2); color: #ff8a65; }
 @media (max-width: 900px) { .standings-wrap { flex-direction: column; } }
+
+/* ── K리그2 선수 히트맵 모달 ─────────────────────────── */
+.k2-heatmap-content {
+    width: 700px;
+    max-width: 95vw;
+    max-height: 88vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.k2-step-label { font-size: 13px; color: #aaa; margin-bottom: 6px; }
+.k2-team-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+.k2-team-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px;
+    border-radius: 8px;
+    border: 2px solid #444;
+    cursor: pointer;
+    background: #1e2130;
+    transition: background 0.15s, transform 0.1s;
+    font-size: 12px;
+    color: #ddd;
+}
+.k2-team-card:hover { background: #2a2f45; transform: scale(1.04); }
+.k2-team-card img { width: 40px; height: 40px; object-fit: contain; }
+.k2-nav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.k2-pos-header {
+    font-size: 11px;
+    color: #888;
+    padding: 4px 0 2px;
+    border-bottom: 1px solid #333;
+    margin-top: 6px;
+}
+.k2-player-list { max-height: 280px; overflow-y: auto; }
+.k2-player-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+.k2-player-row:hover { background: #2a2f45; }
+.k2-player-name { font-size: 13px; }
+.k2-player-meta { font-size: 11px; color: #888; }
+.k2-heatmap-wrap {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+}
+#k2-heatmap-canvas { display: block; width: 100%; border-radius: 8px; }
+.k2-loading {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    font-size: 14px;
+}
+.k2-match-list {
+    list-style: none;
+    max-height: 160px;
+    overflow-y: auto;
+    border: 1px solid #333;
+    border-radius: 6px;
+}
+.k2-match-item {
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #222;
+    transition: background 0.12s;
+}
+.k2-match-item:hover { background: #2a2f45; }
+.k2-match-item.active { background: #2d3a5a; color: #7eb8ff; }
+.k2-match-date { color: #888; margin-right: 6px; }

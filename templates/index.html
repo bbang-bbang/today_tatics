@@ -45,6 +45,9 @@
                 <button id="btn-save" class="action-btn save-btn" title="현재 전술 저장">저장</button>
                 <button id="btn-load" class="action-btn load-btn" title="저장된 전술 불러오기">불러오기</button>
             </div>
+            <div class="toolbar-group">
+                <button id="btn-k2-heatmap" class="action-btn" title="K리그2 선수 히트맵">🔥 히트맵</button>
+            </div>
         </header>
         <!-- 팀 선택 배너 -->
         <div id="team-banner">
@@ -188,6 +191,50 @@
         <button id="player-edit-confirm" class="player-edit-confirm-btn">확인</button>
     </div>
 
+    <!-- K리그2 선수 히트맵 모달 -->
+    <div id="k2-heatmap-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content k2-heatmap-content">
+            <h2>K리그2 선수 히트맵</h2>
+
+            <!-- STEP 1: 팀 선택 -->
+            <div id="k2-step-team">
+                <p class="k2-step-label">① 팀 선택</p>
+                <div id="k2-team-grid" class="k2-team-grid"></div>
+            </div>
+
+            <!-- STEP 2: 선수 선택 -->
+            <div id="k2-step-player" class="hidden">
+                <div class="k2-nav">
+                    <button id="k2-back-team" class="modal-btn cancel">← 팀 선택</button>
+                    <span id="k2-selected-team-name"></span>
+                </div>
+                <p class="k2-step-label">② 선수 선택</p>
+                <div id="k2-player-list" class="k2-player-list"></div>
+            </div>
+
+            <!-- STEP 3: 히트맵 -->
+            <div id="k2-step-heatmap" class="hidden">
+                <div class="k2-nav">
+                    <button id="k2-back-player" class="modal-btn cancel">← 선수 선택</button>
+                    <span id="k2-selected-player-name"></span>
+                </div>
+                <div class="k2-heatmap-wrap">
+                    <canvas id="k2-heatmap-canvas" width="600" height="390"></canvas>
+                    <div id="k2-heatmap-loading" class="k2-loading">로딩 중...</div>
+                </div>
+                <div id="k2-match-list-wrap">
+                    <p class="k2-step-label">경기별 보기</p>
+                    <ul id="k2-match-list" class="k2-match-list"></ul>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="k2-heatmap-close" class="modal-btn cancel">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 경기별 히트맵 선택 패널 -->
     <div id="match-picker" class="hidden">
         <div id="match-picker-header">
@@ -289,5 +336,6 @@
 
     <script src="/static/js/info.js?v=2"></script>
     <script src="/static/js/standings.js?v=2"></script>
+    <script src="/static/js/k2heatmap.js?v=1"></script>
 </body>
 </html>
