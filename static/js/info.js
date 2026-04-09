@@ -12,6 +12,11 @@
         return `${p[0]}/${parseInt(p[1])}/${parseInt(p[2])}`;
     }
 
+    function formatShortDate(dateStr) {
+        const p = dateStr.split("-");
+        return `${parseInt(p[1])}/${parseInt(p[2])}`;
+    }
+
     function calcFormStats(results) {
         let w = 0, d = 0, l = 0;
         results.forEach(r => { if (r.result === "W") w++; else if (r.result === "D") d++; else l++; });
@@ -71,7 +76,7 @@
     }
 
     // ── 홈/원정 승률 블록 (연도 탭 포함) ────────────────────
-    function buildWinrateSection(stats, statsByYear) {
+    function buildWinrateSection(stats, statsByYear, onYearChange) {
         const wrap = document.createElement("div");
 
         const tabRow = document.createElement("div");
@@ -79,26 +84,23 @@
 
         const years = statsByYear ? Object.keys(statsByYear).filter(k => k !== "전체").sort() : [];
         const tabs = ["전체", ...years];
-        let activeTab = "전체";
 
         const barsSection = document.createElement("div");
         barsSection.className = "winrate-section";
 
         function switchTab(yr) {
-            activeTab = yr;
             tabRow.querySelectorAll(".wr-year-tab").forEach(b => {
                 b.classList.toggle("active", b.dataset.yr === yr);
             });
+            let data;
             if (yr === "전체") {
-                const data = stats && stats.home ? stats : (statsByYear["전체"] || {});
-                renderWinrateBars(barsSection, data);
+                data = stats && stats.home ? stats : (statsByYear["전체"] || {});
             } else {
-                const data = statsByYear[yr];
-                if (data && (data.home || data.away)) renderWinrateBars(barsSection, data);
-                else {
-                    barsSection.innerHTML = `<div style="font-size:0.72rem;color:#4a6080;padding:8px 0;text-align:center;">${yr}년 데이터 없음</div>`;
-                }
+                data = statsByYear[yr];
             }
+            if (data && (data.home || data.away)) renderWinrateBars(barsSection, data);
+            else barsSection.innerHTML = `<div style="font-size:0.72rem;color:#4a6080;padding:8px 0;text-align:center;">${yr}년 데이터 없음</div>`;
+            if (onYearChange) onYearChange(yr, data);
         }
 
         tabs.forEach(yr => {
@@ -110,8 +112,8 @@
             tabRow.appendChild(btn);
         });
 
-        // "전체"는 K리그 포털 공식 집계(stats), 연도탭은 DB 기반
-        renderWinrateBars(barsSection, stats && stats.home ? stats : (statsByYear["전체"] || {}));
+        const initData = stats && stats.home ? stats : (statsByYear["전체"] || {});
+        renderWinrateBars(barsSection, initData);
 
         wrap.appendChild(tabRow);
         wrap.appendChild(barsSection);
@@ -131,7 +133,7 @@
 
             const dateSpan = document.createElement("span");
             dateSpan.className = "form-badge-date";
-            dateSpan.textContent = formatDate(r.date);
+            dateSpan.textContent = formatShortDate(r.date);
 
             badge.appendChild(resultSpan);
             badge.appendChild(dateSpan);
@@ -143,8 +145,93 @@
         return row;
     }
 
+    // ── 연속 기록 계산 ──────────────────────────────────────
+    function calcStreak(results) {
+        if (!results || results.length === 0) return null;
+        const last = results[0].result;
+        let count = 0;
+        for (const r of results) {
+            if (r.result === last) count++;
+            else break;
+        }
+        return { type: last, count };
+    }
+
+    // ── 평균 득실 렌더 (재사용) ─────────────────────────────
+    function renderAvgGoals(el, yearData, yearLabel) {
+        if (!yearData) { el.innerHTML = ""; return; }
+        const home = yearData.home || {};
+        const away = yearData.away || {};
+        const gf = (home.gf || 0) + (away.gf || 0);
+        const ga = (home.ga || 0) + (away.ga || 0);
+        const games = (home.games || 0) + (away.games || 0);
+        if (!games) { el.innerHTML = ""; return; }
+        const avgGf = (gf / games).toFixed(2);
+        const avgGa = (ga / games).toFixed(2);
+        const yrSpan = yearLabel ? `<span class="extra-year">${yearLabel}</span>` : "";
+        el.innerHTML =
+            yrSpan +
+            `<span class="extra-val goal-against">${avgGa}</span>` +
+            `<span class="extra-label">실점</span>` +
+            `<span class="extra-sep">/</span>` +
+            `<span class="extra-val goal-for">${avgGf}</span>` +
+            `<span class="extra-label">평균 득점</span>`;
+    }
+
+    // ── 평균 득실 + streak + top3 블록 ─────────────────────
+    function buildExtraStats(results, ranking, statsByYear, topPlayers) {
+        const wrap = document.createElement("div");
+        wrap.className = "extra-stats-wrap";
+
+        // 1. 평균 득점/실점 (연도 탭 연동)
+        const avgRow = document.createElement("div");
+        avgRow.className = "extra-avg-row";
+        // 초기값: 전체 데이터 (statsByYear["전체"] 우선)
+        const initData = statsByYear && statsByYear["전체"] ? statsByYear["전체"] : null;
+        const initYear = ranking && ranking.year ? ranking.year : "전체";
+        renderAvgGoals(avgRow, initData, initYear);
+        wrap.appendChild(avgRow);
+        // 연도 탭 변경 콜백용으로 avgRow를 외부에 노출
+        wrap._avgRow = avgRow;
+        wrap._statsByYear = statsByYear;
+
+        // 2. 현재 연속 기록 (W/L만)
+        const streak = calcStreak(results);
+        if (streak && streak.type !== "D") {
+            const cls = streak.type === "W" ? "streak-w" : "streak-l";
+            const label = streak.type === "W" ? "연승" : "연패";
+            const streakEl = document.createElement("div");
+            streakEl.className = `extra-streak ${cls}`;
+            streakEl.innerHTML = `<span class="streak-count">${streak.count}</span><span class="streak-label">${label} 중</span>`;
+            wrap.appendChild(streakEl);
+        }
+
+        // 3. 시즌 득점 Top 3
+        if (topPlayers && topPlayers.scorers && topPlayers.scorers.length > 0) {
+            const secLabel = document.createElement("div");
+            secLabel.className = "matchup-form-label";
+            secLabel.style.cssText = "margin-top:10px;font-size:0.72rem;";
+            secLabel.textContent = `${topPlayers.year || ""} 득점 TOP`;
+            wrap.appendChild(secLabel);
+            const list = document.createElement("div");
+            list.className = "top-scorers-list";
+            topPlayers.scorers.forEach((p, i) => {
+                const item = document.createElement("div");
+                item.className = "top-scorer-item";
+                item.innerHTML =
+                    `<span class="ts-rank">${i + 1}</span>` +
+                    `<span class="ts-name">${p.name}</span>` +
+                    `<span class="ts-goals">⚽ ${p.val}</span>`;
+                list.appendChild(item);
+            });
+            wrap.appendChild(list);
+        }
+
+        return wrap;
+    }
+
     // ── 팀 컬럼 (폼 + 승률 + 헤더 순위 뱃지) ──────────────
-    function buildTeamCol(team, results, stats, isAway, statsByYear, ranking) {
+    function buildTeamCol(team, results, stats, isAway, statsByYear, ranking, topPlayers) {
         const col = document.createElement("div");
         col.className = `matchup-team-col${isAway ? " away" : ""}`;
 
@@ -211,6 +298,9 @@
         });
         col.appendChild(statsRow);
 
+        // 추가 정보 (평균득실, streak, top scorer) — 홈/원정 탭보다 먼저 생성해야 콜백 연결 가능
+        const extraEl = buildExtraStats(results, ranking, statsByYear || null, topPlayers);
+
         // 홈/원정 승률 + 연도 탭
         if (stats && stats.home) {
             const hrLabel = document.createElement("div");
@@ -218,8 +308,17 @@
             hrLabel.style.cssText = "margin-top:12px; display:flex; align-items:center; gap:8px;";
             hrLabel.textContent = "홈 · 원정 승률";
             col.appendChild(hrLabel);
-            col.appendChild(buildWinrateSection(stats, statsByYear || null));
+            col.appendChild(buildWinrateSection(stats, statsByYear || null, (yr, data) => {
+                if (extraEl._avgRow) {
+                    const yrData = yr === "전체"
+                        ? (extraEl._statsByYear && extraEl._statsByYear["전체"])
+                        : data;
+                    renderAvgGoals(extraEl._avgRow, yrData, yr);
+                }
+            }));
         }
+
+        col.appendChild(extraEl);
 
         return col;
     }
@@ -268,6 +367,25 @@
             total.className = "matchup-record-total";
             total.textContent = `총 ${h2h.total}경기`;
             box.appendChild(total);
+
+            // 비율 바
+            const ratioWrap = document.createElement("div");
+            ratioWrap.className = "record-ratio-wrap";
+            const wPct = h2h.total ? Math.round((h2h.w / h2h.total) * 100) : 0;
+            const dPct = h2h.total ? Math.round((h2h.d / h2h.total) * 100) : 0;
+            const lPct = 100 - wPct - dPct;
+            ratioWrap.innerHTML = `
+                <div class="record-ratio-bar">
+                    <div class="rrb-w" style="width:${wPct}%"></div>
+                    <div class="rrb-d" style="width:${dPct}%"></div>
+                    <div class="rrb-l" style="width:${lPct}%"></div>
+                </div>
+                <div class="record-ratio-labels">
+                    <span class="record-w">${wPct}%</span>
+                    <span class="record-d">${dPct}%</span>
+                    <span class="record-l">${lPct}%</span>
+                </div>`;
+            box.appendChild(ratioWrap);
         }
         vsCol.appendChild(box);
         panel.appendChild(vsCol);
@@ -559,7 +677,7 @@
         matchupArea.innerHTML = `<div class="matchup-placeholder"><span>불러오는 중...</span></div>`;
 
         const [resultsA, resultsB, h2h, h2hMatches, statsA, statsB,
-               statsByYearA, statsByYearB, rankingA, rankingB] = await Promise.all([
+               statsByYearA, statsByYearB, rankingA, rankingB, topA, topB] = await Promise.all([
             fetch(`/api/results?teamId=${teamA.id}`).then(r => r.json()),
             fetch(`/api/results?teamId=${teamB.id}`).then(r => r.json()),
             fetch(`/api/h2h?teamA=${teamA.id}&teamB=${teamB.id}`).then(r => r.json()),
@@ -570,25 +688,28 @@
             fetch(`/api/team-stats-by-year?teamId=${teamB.id}`).then(r => r.json()),
             fetch(`/api/team-ranking?teamId=${teamA.id}`).then(r => r.json()),
             fetch(`/api/team-ranking?teamId=${teamB.id}`).then(r => r.json()),
+            fetch(`/api/team-top-players?teamId=${teamA.id}`).then(r => r.json()),
+            fetch(`/api/team-top-players?teamId=${teamB.id}`).then(r => r.json()),
         ]);
 
         matchupArea.innerHTML = "";
         const grid = document.createElement("div");
         grid.className = "matchup-grid";
-        grid.appendChild(buildTeamCol(teamA, resultsA, statsA, false, statsByYearA, rankingA));
+        grid.appendChild(buildTeamCol(teamA, resultsA, statsA, false, statsByYearA, rankingA, topA));
         grid.appendChild(buildCenterPanel(h2h, h2hMatches, teamA, teamB));
-        grid.appendChild(buildTeamCol(teamB, resultsB, statsB, true, statsByYearB, rankingB));
+        grid.appendChild(buildTeamCol(teamB, resultsB, statsB, true, statsByYearB, rankingB, topB));
         matchupArea.appendChild(grid);
     }
 
     async function renderSingle(team, isAway) {
         matchupArea.innerHTML = `<div class="matchup-placeholder"><span>불러오는 중...</span></div>`;
 
-        const [results, stats, statsByYear, ranking] = await Promise.all([
+        const [results, stats, statsByYear, ranking, topPlayers] = await Promise.all([
             fetch(`/api/results?teamId=${team.id}`).then(r => r.json()),
             fetch(`/api/team-stats?teamId=${team.id}`).then(r => r.json()),
             fetch(`/api/team-stats-by-year?teamId=${team.id}`).then(r => r.json()),
             fetch(`/api/team-ranking?teamId=${team.id}`).then(r => r.json()),
+            fetch(`/api/team-top-players?teamId=${team.id}`).then(r => r.json()),
         ]);
 
         matchupArea.innerHTML = "";
@@ -599,9 +720,9 @@
         if (isAway) {
             grid.appendChild(buildEmptyTeamCol(false));
             grid.appendChild(centerPanel);
-            grid.appendChild(buildTeamCol(team, results, stats, true, statsByYear, ranking));
+            grid.appendChild(buildTeamCol(team, results, stats, true, statsByYear, ranking, topPlayers));
         } else {
-            grid.appendChild(buildTeamCol(team, results, stats, false, statsByYear, ranking));
+            grid.appendChild(buildTeamCol(team, results, stats, false, statsByYear, ranking, topPlayers));
             grid.appendChild(centerPanel);
             grid.appendChild(buildEmptyTeamCol(true));
         }

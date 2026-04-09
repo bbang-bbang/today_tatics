@@ -52,7 +52,11 @@
     // ── Resize ─────────────────────────────────────────────
     function resize() {
         const container = document.getElementById("canvas-container");
-        const maxW = container.clientWidth - 32;
+        const toolbar = document.getElementById("left-toolbar");
+        const bench = document.getElementById("bench-panel");
+        const toolbarW = toolbar ? toolbar.offsetWidth : 0;
+        const benchW = bench ? bench.offsetWidth : 0;
+        const maxW = container.clientWidth - 32 - toolbarW - benchW;
         const maxH = container.clientHeight - 32;
         let w = maxW, h = w / PITCH_RATIO;
         if (h > maxH) { h = maxH; w = h * PITCH_RATIO; }

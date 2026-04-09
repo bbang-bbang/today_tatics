@@ -467,29 +467,33 @@ def get_team_stats_by_year():
                COUNT(CASE WHEN e.home_score = e.away_score THEN 1 END) as d,
                COUNT(CASE WHEN (e.home_team_id=? AND e.home_score < e.away_score)
                             OR (e.away_team_id=? AND e.away_score < e.home_score) THEN 1 END) as l,
-               COUNT(*) as games
+               COUNT(*) as games,
+               SUM(CASE WHEN e.home_team_id=? THEN e.home_score ELSE e.away_score END) as gf,
+               SUM(CASE WHEN e.home_team_id=? THEN e.away_score ELSE e.home_score END) as ga
         FROM events e
         WHERE (e.home_team_id = ? OR e.away_team_id = ?)
           AND e.home_score IS NOT NULL
           AND e.tournament_id = 777
         GROUP BY year, is_home
         ORDER BY year, is_home
-    """, (ss_id, ss_id, ss_id, ss_id, ss_id, ss_id, ss_id))
+    """, (ss_id, ss_id, ss_id, ss_id, ss_id, ss_id, ss_id, ss_id, ss_id))
     rows = cur.fetchall()
     conn.close()
 
     result = {}
-    total = {"home": {"w": 0, "d": 0, "l": 0, "games": 0},
-             "away": {"w": 0, "d": 0, "l": 0, "games": 0}}
-    for year, is_home, w, d, l, games in rows:
+    total = {"home": {"w": 0, "d": 0, "l": 0, "games": 0, "gf": 0, "ga": 0},
+             "away": {"w": 0, "d": 0, "l": 0, "games": 0, "gf": 0, "ga": 0}}
+    for year, is_home, w, d, l, games, gf, ga in rows:
         if year not in result:
             result[year] = {"home": {}, "away": {}}
         key = "home" if is_home else "away"
-        result[year][key] = {"w": w, "d": d, "l": l, "games": games}
+        result[year][key] = {"w": w, "d": d, "l": l, "games": games, "gf": gf or 0, "ga": ga or 0}
         total[key]["w"] += w
         total[key]["d"] += d
         total[key]["l"] += l
         total[key]["games"] += games
+        total[key]["gf"] += gf or 0
+        total[key]["ga"] += ga or 0
 
     result["전체"] = total
     return jsonify(result)

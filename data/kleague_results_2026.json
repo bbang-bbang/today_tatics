@@ -1,257 +1,232 @@
 {
-  "cheongju": [
+  "jeonbuk": [
     {
-      "date": "2026-03-29",
+      "date": "2026-04-04",
       "home": true,
-      "opponent": "busan",
-      "score": "1-2",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-21",
-      "home": true,
-      "opponent": "ansan",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-14",
-      "home": false,
-      "opponent": "gyeongnam",
-      "score": "2-2",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-08",
-      "home": false,
-      "opponent": "seongnam",
-      "score": "2-2",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-01",
-      "home": true,
-      "opponent": "suwon_fc",
-      "score": "1-4",
-      "result": "L"
-    }
-  ],
-  "busan": [
-    {
-      "date": "2026-03-29",
-      "home": false,
-      "opponent": "cheongju",
-      "score": "1-2",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-22",
-      "home": true,
-      "opponent": "daegu",
-      "score": "3-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-14",
-      "home": false,
-      "opponent": "seouland",
-      "score": "2-3",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-08",
-      "home": false,
-      "opponent": "ansan",
-      "score": "1-3",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-02",
-      "home": true,
-      "opponent": "seongnam",
-      "score": "1-1",
-      "result": "D"
-    }
-  ],
-  "suwon_fc": [
-    {
-      "date": "2026-03-29",
-      "home": true,
-      "opponent": "paju",
-      "score": "2-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-14",
-      "home": false,
-      "opponent": "gimhae",
-      "score": "1-2",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-07",
-      "home": true,
-      "opponent": "yongin",
-      "score": "3-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-01",
-      "home": false,
-      "opponent": "cheongju",
-      "score": "1-4",
-      "result": "W"
-    }
-  ],
-  "paju": [
-    {
-      "date": "2026-03-29",
-      "home": false,
-      "opponent": "suwon_fc",
-      "score": "2-1",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-21",
-      "home": true,
-      "opponent": "jeonnam",
+      "opponent": "ulsan",
       "score": "2-0",
       "result": "W"
     },
     {
-      "date": "2026-03-15",
-      "home": false,
-      "opponent": "ansan",
-      "score": "1-2",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-07",
-      "home": true,
-      "opponent": "suwon",
-      "score": "0-1",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-02",
-      "home": false,
-      "opponent": "asan",
-      "score": "3-2",
-      "result": "L"
-    }
-  ],
-  "daegu": [
-    {
-      "date": "2026-03-29",
-      "home": true,
-      "opponent": "seouland",
-      "score": "1-3",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-22",
-      "home": false,
-      "opponent": "busan",
-      "score": "3-1",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-15",
-      "home": false,
-      "opponent": "asan",
-      "score": "2-3",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-07",
-      "home": true,
-      "opponent": "jeonnam",
-      "score": "4-2",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-01",
-      "home": true,
-      "opponent": "hwaseong",
-      "score": "1-0",
-      "result": "W"
-    }
-  ],
-  "seouland": [
-    {
-      "date": "2026-03-29",
-      "home": false,
-      "opponent": "daegu",
-      "score": "1-3",
-      "result": "W"
-    },
-    {
       "date": "2026-03-21",
       "home": false,
-      "opponent": "cheonan",
+      "opponent": "daejeon",
+      "score": "0-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-18",
+      "home": true,
+      "opponent": "anyang",
+      "score": "2-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-14",
+      "home": false,
+      "opponent": "gwangju",
       "score": "0-0",
       "result": "D"
     },
     {
-      "date": "2026-03-14",
+      "date": "2026-03-08",
+      "home": false,
+      "opponent": "gimcheon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-01",
       "home": true,
-      "opponent": "busan",
+      "opponent": "bucheon",
       "score": "2-3",
       "result": "L"
     },
     {
-      "date": "2026-03-07",
+      "date": "2026-02-21",
       "home": true,
-      "opponent": "gyeongnam",
+      "opponent": "daejeon",
+      "score": "2-0",
+      "result": "W"
+    }
+  ],
+  "daejeon": [
+    {
+      "date": "2026-04-04",
+      "home": false,
+      "opponent": "pohang",
       "score": "1-0",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-21",
+      "home": true,
+      "opponent": "jeonbuk",
+      "score": "0-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-18",
+      "home": false,
+      "opponent": "incheon",
+      "score": "1-3",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-14",
+      "home": true,
+      "opponent": "gimcheon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-07",
+      "home": false,
+      "opponent": "bucheon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-02",
+      "home": true,
+      "opponent": "anyang",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-02-21",
+      "home": false,
+      "opponent": "jeonbuk",
+      "score": "2-0",
+      "result": "L"
+    }
+  ],
+  "incheon": [
+    {
+      "date": "2026-04-05",
+      "home": true,
+      "opponent": "gimcheon",
+      "score": "2-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-22",
+      "home": false,
+      "opponent": "anyang",
+      "score": "0-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-18",
+      "home": true,
+      "opponent": "daejeon",
+      "score": "1-3",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-15",
+      "home": false,
+      "opponent": "pohang",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-07",
+      "home": false,
+      "opponent": "gwangju",
+      "score": "3-2",
+      "result": "L"
+    },
+    {
+      "date": "2026-02-28",
+      "home": true,
+      "opponent": "fcseoul",
+      "score": "1-2",
+      "result": "L"
+    }
+  ],
+  "fcseoul": [
+    {
+      "date": "2026-04-05",
+      "home": false,
+      "opponent": "anyang",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-22",
+      "home": true,
+      "opponent": "gwangju",
+      "score": "5-0",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-18",
+      "home": false,
+      "opponent": "pohang",
+      "score": "0-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-15",
+      "home": false,
+      "opponent": "jeju",
+      "score": "1-2",
       "result": "W"
     },
     {
       "date": "2026-02-28",
       "home": false,
-      "opponent": "suwon",
-      "score": "2-1",
-      "result": "L"
+      "opponent": "incheon",
+      "score": "1-2",
+      "result": "W"
     }
   ],
-  "pohang": [
+  "ulsan": [
     {
-      "date": "2026-03-28",
-      "home": true,
-      "opponent": "gangwon",
-      "score": "1-0",
-      "result": "W"
+      "date": "2026-04-04",
+      "home": false,
+      "opponent": "jeonbuk",
+      "score": "2-0",
+      "result": "L"
     },
     {
       "date": "2026-03-22",
       "home": true,
-      "opponent": "bucheon",
+      "opponent": "gimcheon",
       "score": "0-0",
       "result": "D"
     },
     {
       "date": "2026-03-18",
-      "home": true,
-      "opponent": "fcseoul",
-      "score": "0-1",
-      "result": "L"
+      "home": false,
+      "opponent": "jeju",
+      "score": "0-2",
+      "result": "W"
     },
     {
       "date": "2026-03-15",
-      "home": true,
-      "opponent": "incheon",
-      "score": "1-1",
-      "result": "D"
+      "home": false,
+      "opponent": "bucheon",
+      "score": "1-2",
+      "result": "W"
     },
     {
       "date": "2026-02-28",
-      "home": false,
-      "opponent": "gimcheon",
-      "score": "1-1",
-      "result": "D"
+      "home": true,
+      "opponent": "gangwon",
+      "score": "3-1",
+      "result": "W"
     }
   ],
   "gangwon": [
+    {
+      "date": "2026-04-04",
+      "home": true,
+      "opponent": "gwangju",
+      "score": "3-0",
+      "result": "W"
+    },
     {
       "date": "2026-03-28",
       "home": false,
@@ -288,44 +263,359 @@
       "result": "L"
     }
   ],
-  "yongin": [
+  "gimcheon": [
     {
-      "date": "2026-03-28",
-      "home": true,
-      "opponent": "suwon",
-      "score": "0-1",
+      "date": "2026-04-05",
+      "home": false,
+      "opponent": "incheon",
+      "score": "2-1",
       "result": "L"
     },
     {
       "date": "2026-03-22",
       "home": false,
-      "opponent": "hwaseong",
+      "opponent": "ulsan",
       "score": "0-0",
       "result": "D"
     },
     {
-      "date": "2026-03-14",
+      "date": "2026-03-17",
       "home": true,
-      "opponent": "gimpo",
-      "score": "1-3",
+      "opponent": "gwangju",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-14",
+      "home": false,
+      "opponent": "daejeon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-08",
+      "home": true,
+      "opponent": "jeonbuk",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-02-28",
+      "home": true,
+      "opponent": "pohang",
+      "score": "1-1",
+      "result": "D"
+    }
+  ],
+  "pohang": [
+    {
+      "date": "2026-04-04",
+      "home": true,
+      "opponent": "daejeon",
+      "score": "1-0",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-28",
+      "home": true,
+      "opponent": "gangwon",
+      "score": "1-0",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-22",
+      "home": true,
+      "opponent": "bucheon",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-18",
+      "home": true,
+      "opponent": "fcseoul",
+      "score": "0-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-15",
+      "home": true,
+      "opponent": "incheon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-02-28",
+      "home": false,
+      "opponent": "gimcheon",
+      "score": "1-1",
+      "result": "D"
+    }
+  ],
+  "bucheon": [
+    {
+      "date": "2026-04-04",
+      "home": false,
+      "opponent": "jeju",
+      "score": "1-0",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-22",
+      "home": false,
+      "opponent": "pohang",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-18",
+      "home": true,
+      "opponent": "gangwon",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-15",
+      "home": true,
+      "opponent": "ulsan",
+      "score": "1-2",
       "result": "L"
     },
     {
       "date": "2026-03-07",
+      "home": true,
+      "opponent": "daejeon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-01",
       "home": false,
-      "opponent": "suwon_fc",
-      "score": "3-1",
+      "opponent": "jeonbuk",
+      "score": "2-3",
+      "result": "W"
+    }
+  ],
+  "jeju": [
+    {
+      "date": "2026-04-04",
+      "home": true,
+      "opponent": "bucheon",
+      "score": "1-0",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-22",
+      "home": false,
+      "opponent": "gangwon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-18",
+      "home": true,
+      "opponent": "ulsan",
+      "score": "0-2",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-15",
+      "home": true,
+      "opponent": "fcseoul",
+      "score": "1-2",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-08",
+      "home": false,
+      "opponent": "anyang",
+      "score": "2-1",
       "result": "L"
     },
     {
       "date": "2026-03-01",
       "home": true,
-      "opponent": "cheonan",
-      "score": "2-2",
+      "opponent": "gwangju",
+      "score": "0-0",
       "result": "D"
     }
   ],
+  "gwangju": [
+    {
+      "date": "2026-04-04",
+      "home": false,
+      "opponent": "gangwon",
+      "score": "3-0",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-22",
+      "home": false,
+      "opponent": "fcseoul",
+      "score": "5-0",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-17",
+      "home": false,
+      "opponent": "gimcheon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-14",
+      "home": true,
+      "opponent": "jeonbuk",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-07",
+      "home": true,
+      "opponent": "incheon",
+      "score": "3-2",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-01",
+      "home": false,
+      "opponent": "jeju",
+      "score": "0-0",
+      "result": "D"
+    }
+  ],
+  "anyang": [
+    {
+      "date": "2026-04-05",
+      "home": true,
+      "opponent": "fcseoul",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-22",
+      "home": true,
+      "opponent": "incheon",
+      "score": "0-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-18",
+      "home": false,
+      "opponent": "jeonbuk",
+      "score": "2-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-15",
+      "home": false,
+      "opponent": "gangwon",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-08",
+      "home": true,
+      "opponent": "jeju",
+      "score": "2-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-02",
+      "home": false,
+      "opponent": "daejeon",
+      "score": "1-1",
+      "result": "D"
+    }
+  ],
+  "gimhae": [
+    {
+      "date": "2026-04-05",
+      "home": false,
+      "opponent": "paju",
+      "score": "3-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-21",
+      "home": true,
+      "opponent": "suwon",
+      "score": "0-3",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-14",
+      "home": true,
+      "opponent": "suwon_fc",
+      "score": "1-2",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-08",
+      "home": false,
+      "opponent": "hwaseong",
+      "score": "2-0",
+      "result": "L"
+    },
+    {
+      "date": "2026-02-28",
+      "home": true,
+      "opponent": "ansan",
+      "score": "1-4",
+      "result": "L"
+    }
+  ],
+  "ansan": [
+    {
+      "date": "2026-04-05",
+      "home": true,
+      "opponent": "asan",
+      "score": "1-3",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-28",
+      "home": true,
+      "opponent": "gyeongnam",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-21",
+      "home": false,
+      "opponent": "cheongju",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-15",
+      "home": true,
+      "opponent": "paju",
+      "score": "1-2",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-08",
+      "home": true,
+      "opponent": "busan",
+      "score": "1-3",
+      "result": "L"
+    },
+    {
+      "date": "2026-02-28",
+      "home": false,
+      "opponent": "gimhae",
+      "score": "1-4",
+      "result": "W"
+    }
+  ],
   "suwon": [
+    {
+      "date": "2026-04-05",
+      "home": true,
+      "opponent": "cheongju",
+      "score": "0-0",
+      "result": "D"
+    },
     {
       "date": "2026-03-28",
       "home": false,
@@ -362,131 +652,92 @@
       "result": "W"
     }
   ],
-  "asan": [
+  "seouland": [
     {
-      "date": "2026-03-28",
+      "date": "2026-04-04",
       "home": true,
-      "opponent": "hwaseong",
-      "score": "1-0",
+      "opponent": "suwon_fc",
+      "score": "3-0",
       "result": "W"
     },
     {
-      "date": "2026-03-21",
-      "home": false,
-      "opponent": "seongnam",
-      "score": "2-1",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-15",
-      "home": true,
-      "opponent": "daegu",
-      "score": "2-3",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-02",
-      "home": true,
-      "opponent": "paju",
-      "score": "3-2",
-      "result": "W"
-    }
-  ],
-  "hwaseong": [
-    {
-      "date": "2026-03-28",
-      "home": false,
-      "opponent": "asan",
-      "score": "1-0",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-22",
-      "home": true,
-      "opponent": "yongin",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-15",
-      "home": true,
-      "opponent": "cheonan",
-      "score": "2-2",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-08",
-      "home": true,
-      "opponent": "gimhae",
-      "score": "2-0",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-01",
+      "date": "2026-03-29",
       "home": false,
       "opponent": "daegu",
-      "score": "1-0",
-      "result": "L"
-    }
-  ],
-  "seongnam": [
-    {
-      "date": "2026-03-28",
-      "home": true,
-      "opponent": "gimpo",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-21",
-      "home": true,
-      "opponent": "asan",
-      "score": "2-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-08",
-      "home": true,
-      "opponent": "cheongju",
-      "score": "2-2",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-02",
-      "home": false,
-      "opponent": "busan",
-      "score": "1-1",
-      "result": "D"
-    }
-  ],
-  "gimpo": [
-    {
-      "date": "2026-03-28",
-      "home": false,
-      "opponent": "seongnam",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-22",
-      "home": false,
-      "opponent": "gyeongnam",
-      "score": "1-0",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-14",
-      "home": false,
-      "opponent": "yongin",
       "score": "1-3",
       "result": "W"
     },
     {
-      "date": "2026-03-08",
+      "date": "2026-03-21",
       "home": false,
       "opponent": "cheonan",
-      "score": "0-1",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-14",
+      "home": true,
+      "opponent": "busan",
+      "score": "2-3",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-07",
+      "home": true,
+      "opponent": "gyeongnam",
+      "score": "1-0",
       "result": "W"
+    },
+    {
+      "date": "2026-02-28",
+      "home": false,
+      "opponent": "suwon",
+      "score": "2-1",
+      "result": "L"
+    }
+  ],
+  "yongin": [
+    {
+      "date": "2026-04-04",
+      "home": true,
+      "opponent": "jeonnam",
+      "score": "2-2",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-28",
+      "home": true,
+      "opponent": "suwon",
+      "score": "0-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-22",
+      "home": false,
+      "opponent": "hwaseong",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-14",
+      "home": true,
+      "opponent": "gimpo",
+      "score": "1-3",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-07",
+      "home": false,
+      "opponent": "suwon_fc",
+      "score": "3-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-01",
+      "home": true,
+      "opponent": "cheonan",
+      "score": "2-2",
+      "result": "D"
     }
   ],
   "cheonan": [
@@ -526,81 +777,183 @@
       "result": "D"
     }
   ],
-  "jeonnam": [
+  "daegu": [
+    {
+      "date": "2026-04-05",
+      "home": true,
+      "opponent": "gimpo",
+      "score": "3-3",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-29",
+      "home": true,
+      "opponent": "seouland",
+      "score": "1-3",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-22",
+      "home": false,
+      "opponent": "busan",
+      "score": "3-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-15",
+      "home": false,
+      "opponent": "asan",
+      "score": "2-3",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-07",
+      "home": true,
+      "opponent": "jeonnam",
+      "score": "4-2",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-01",
+      "home": true,
+      "opponent": "hwaseong",
+      "score": "1-0",
+      "result": "W"
+    }
+  ],
+  "hwaseong": [
+    {
+      "date": "2026-04-04",
+      "home": true,
+      "opponent": "seongnam",
+      "score": "1-3",
+      "result": "L"
+    },
     {
       "date": "2026-03-28",
       "home": false,
-      "opponent": "cheonan",
+      "opponent": "asan",
       "score": "1-0",
       "result": "L"
     },
     {
-      "date": "2026-03-21",
-      "home": false,
-      "opponent": "paju",
-      "score": "2-0",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-14",
-      "home": false,
-      "opponent": "suwon",
-      "score": "2-0",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-07",
-      "home": false,
-      "opponent": "daegu",
-      "score": "4-2",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-01",
-      "home": false,
-      "opponent": "gyeongnam",
-      "score": "1-4",
-      "result": "W"
-    }
-  ],
-  "ansan": [
-    {
-      "date": "2026-03-28",
+      "date": "2026-03-22",
       "home": true,
-      "opponent": "gyeongnam",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-21",
-      "home": false,
-      "opponent": "cheongju",
-      "score": "1-1",
+      "opponent": "yongin",
+      "score": "0-0",
       "result": "D"
     },
     {
       "date": "2026-03-15",
       "home": true,
-      "opponent": "paju",
-      "score": "1-2",
-      "result": "L"
+      "opponent": "cheonan",
+      "score": "2-2",
+      "result": "D"
     },
     {
       "date": "2026-03-08",
       "home": true,
+      "opponent": "gimhae",
+      "score": "2-0",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-01",
+      "home": false,
+      "opponent": "daegu",
+      "score": "1-0",
+      "result": "L"
+    }
+  ],
+  "cheongju": [
+    {
+      "date": "2026-04-05",
+      "home": false,
+      "opponent": "suwon",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-29",
+      "home": true,
       "opponent": "busan",
-      "score": "1-3",
+      "score": "1-2",
       "result": "L"
     },
     {
-      "date": "2026-02-28",
+      "date": "2026-03-21",
+      "home": true,
+      "opponent": "ansan",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-14",
+      "home": false,
+      "opponent": "gyeongnam",
+      "score": "2-2",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-08",
+      "home": false,
+      "opponent": "seongnam",
+      "score": "2-2",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-01",
+      "home": true,
+      "opponent": "suwon_fc",
+      "score": "1-4",
+      "result": "L"
+    }
+  ],
+  "suwon_fc": [
+    {
+      "date": "2026-04-04",
+      "home": false,
+      "opponent": "seouland",
+      "score": "3-0",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-29",
+      "home": true,
+      "opponent": "paju",
+      "score": "2-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-14",
       "home": false,
       "opponent": "gimhae",
+      "score": "1-2",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-07",
+      "home": true,
+      "opponent": "yongin",
+      "score": "3-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-01",
+      "home": false,
+      "opponent": "cheongju",
       "score": "1-4",
       "result": "W"
     }
   ],
   "gyeongnam": [
+    {
+      "date": "2026-04-04",
+      "home": true,
+      "opponent": "busan",
+      "score": "1-2",
+      "result": "L"
+    },
     {
       "date": "2026-03-28",
       "home": false,
@@ -637,390 +990,247 @@
       "result": "L"
     }
   ],
-  "fcseoul": [
+  "jeonnam": [
     {
-      "date": "2026-03-22",
-      "home": true,
-      "opponent": "gwangju",
-      "score": "5-0",
-      "result": "W"
+      "date": "2026-04-04",
+      "home": false,
+      "opponent": "yongin",
+      "score": "2-2",
+      "result": "D"
     },
     {
-      "date": "2026-03-18",
+      "date": "2026-03-28",
       "home": false,
-      "opponent": "pohang",
-      "score": "0-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-15",
-      "home": false,
-      "opponent": "jeju",
-      "score": "1-2",
-      "result": "W"
-    },
-    {
-      "date": "2026-02-28",
-      "home": false,
-      "opponent": "incheon",
-      "score": "1-2",
-      "result": "W"
-    }
-  ],
-  "gwangju": [
-    {
-      "date": "2026-03-22",
-      "home": false,
-      "opponent": "fcseoul",
-      "score": "5-0",
+      "opponent": "cheonan",
+      "score": "1-0",
       "result": "L"
     },
-    {
-      "date": "2026-03-17",
-      "home": false,
-      "opponent": "gimcheon",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-14",
-      "home": true,
-      "opponent": "jeonbuk",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-07",
-      "home": true,
-      "opponent": "incheon",
-      "score": "3-2",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-01",
-      "home": false,
-      "opponent": "jeju",
-      "score": "0-0",
-      "result": "D"
-    }
-  ],
-  "ulsan": [
-    {
-      "date": "2026-03-22",
-      "home": true,
-      "opponent": "gimcheon",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-18",
-      "home": false,
-      "opponent": "jeju",
-      "score": "0-2",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-15",
-      "home": false,
-      "opponent": "bucheon",
-      "score": "1-2",
-      "result": "W"
-    },
-    {
-      "date": "2026-02-28",
-      "home": true,
-      "opponent": "gangwon",
-      "score": "3-1",
-      "result": "W"
-    }
-  ],
-  "gimcheon": [
-    {
-      "date": "2026-03-22",
-      "home": false,
-      "opponent": "ulsan",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-17",
-      "home": true,
-      "opponent": "gwangju",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-14",
-      "home": false,
-      "opponent": "daejeon",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-08",
-      "home": true,
-      "opponent": "jeonbuk",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-02-28",
-      "home": true,
-      "opponent": "pohang",
-      "score": "1-1",
-      "result": "D"
-    }
-  ],
-  "anyang": [
-    {
-      "date": "2026-03-22",
-      "home": true,
-      "opponent": "incheon",
-      "score": "0-1",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-18",
-      "home": false,
-      "opponent": "jeonbuk",
-      "score": "2-1",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-15",
-      "home": false,
-      "opponent": "gangwon",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-08",
-      "home": true,
-      "opponent": "jeju",
-      "score": "2-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-02",
-      "home": false,
-      "opponent": "daejeon",
-      "score": "1-1",
-      "result": "D"
-    }
-  ],
-  "incheon": [
-    {
-      "date": "2026-03-22",
-      "home": false,
-      "opponent": "anyang",
-      "score": "0-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-18",
-      "home": true,
-      "opponent": "daejeon",
-      "score": "1-3",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-15",
-      "home": false,
-      "opponent": "pohang",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-07",
-      "home": false,
-      "opponent": "gwangju",
-      "score": "3-2",
-      "result": "L"
-    },
-    {
-      "date": "2026-02-28",
-      "home": true,
-      "opponent": "fcseoul",
-      "score": "1-2",
-      "result": "L"
-    }
-  ],
-  "jeju": [
-    {
-      "date": "2026-03-22",
-      "home": false,
-      "opponent": "gangwon",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-18",
-      "home": true,
-      "opponent": "ulsan",
-      "score": "0-2",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-15",
-      "home": true,
-      "opponent": "fcseoul",
-      "score": "1-2",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-08",
-      "home": false,
-      "opponent": "anyang",
-      "score": "2-1",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-01",
-      "home": true,
-      "opponent": "gwangju",
-      "score": "0-0",
-      "result": "D"
-    }
-  ],
-  "bucheon": [
-    {
-      "date": "2026-03-22",
-      "home": false,
-      "opponent": "pohang",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-18",
-      "home": true,
-      "opponent": "gangwon",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-15",
-      "home": true,
-      "opponent": "ulsan",
-      "score": "1-2",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-07",
-      "home": true,
-      "opponent": "daejeon",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-01",
-      "home": false,
-      "opponent": "jeonbuk",
-      "score": "2-3",
-      "result": "W"
-    }
-  ],
-  "daejeon": [
-    {
-      "date": "2026-03-21",
-      "home": true,
-      "opponent": "jeonbuk",
-      "score": "0-1",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-18",
-      "home": false,
-      "opponent": "incheon",
-      "score": "1-3",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-14",
-      "home": true,
-      "opponent": "gimcheon",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-07",
-      "home": false,
-      "opponent": "bucheon",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-02",
-      "home": true,
-      "opponent": "anyang",
-      "score": "1-1",
-      "result": "D"
-    }
-  ],
-  "jeonbuk": [
     {
       "date": "2026-03-21",
       "home": false,
-      "opponent": "daejeon",
-      "score": "0-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-18",
-      "home": true,
-      "opponent": "anyang",
-      "score": "2-1",
-      "result": "W"
-    },
-    {
-      "date": "2026-03-14",
-      "home": false,
-      "opponent": "gwangju",
-      "score": "0-0",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-08",
-      "home": false,
-      "opponent": "gimcheon",
-      "score": "1-1",
-      "result": "D"
-    },
-    {
-      "date": "2026-03-01",
-      "home": true,
-      "opponent": "bucheon",
-      "score": "2-3",
-      "result": "L"
-    }
-  ],
-  "gimhae": [
-    {
-      "date": "2026-03-21",
-      "home": true,
-      "opponent": "suwon",
-      "score": "0-3",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-14",
-      "home": true,
-      "opponent": "suwon_fc",
-      "score": "1-2",
-      "result": "L"
-    },
-    {
-      "date": "2026-03-08",
-      "home": false,
-      "opponent": "hwaseong",
+      "opponent": "paju",
       "score": "2-0",
       "result": "L"
     },
     {
-      "date": "2026-02-28",
-      "home": true,
-      "opponent": "ansan",
-      "score": "1-4",
+      "date": "2026-03-14",
+      "home": false,
+      "opponent": "suwon",
+      "score": "2-0",
       "result": "L"
+    },
+    {
+      "date": "2026-03-07",
+      "home": false,
+      "opponent": "daegu",
+      "score": "4-2",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-01",
+      "home": false,
+      "opponent": "gyeongnam",
+      "score": "1-4",
+      "result": "W"
+    }
+  ],
+  "asan": [
+    {
+      "date": "2026-04-05",
+      "home": false,
+      "opponent": "ansan",
+      "score": "1-3",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-28",
+      "home": true,
+      "opponent": "hwaseong",
+      "score": "1-0",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-21",
+      "home": false,
+      "opponent": "seongnam",
+      "score": "2-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-15",
+      "home": true,
+      "opponent": "daegu",
+      "score": "2-3",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-02",
+      "home": true,
+      "opponent": "paju",
+      "score": "3-2",
+      "result": "W"
+    }
+  ],
+  "paju": [
+    {
+      "date": "2026-04-05",
+      "home": true,
+      "opponent": "gimhae",
+      "score": "3-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-29",
+      "home": false,
+      "opponent": "suwon_fc",
+      "score": "2-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-21",
+      "home": true,
+      "opponent": "jeonnam",
+      "score": "2-0",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-15",
+      "home": false,
+      "opponent": "ansan",
+      "score": "1-2",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-07",
+      "home": true,
+      "opponent": "suwon",
+      "score": "0-1",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-02",
+      "home": false,
+      "opponent": "asan",
+      "score": "3-2",
+      "result": "L"
+    }
+  ],
+  "busan": [
+    {
+      "date": "2026-04-04",
+      "home": false,
+      "opponent": "gyeongnam",
+      "score": "1-2",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-29",
+      "home": false,
+      "opponent": "cheongju",
+      "score": "1-2",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-22",
+      "home": true,
+      "opponent": "daegu",
+      "score": "3-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-14",
+      "home": false,
+      "opponent": "seouland",
+      "score": "2-3",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-08",
+      "home": false,
+      "opponent": "ansan",
+      "score": "1-3",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-02",
+      "home": true,
+      "opponent": "seongnam",
+      "score": "1-1",
+      "result": "D"
+    }
+  ],
+  "seongnam": [
+    {
+      "date": "2026-04-04",
+      "home": false,
+      "opponent": "hwaseong",
+      "score": "1-3",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-28",
+      "home": true,
+      "opponent": "gimpo",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-21",
+      "home": true,
+      "opponent": "asan",
+      "score": "2-1",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-08",
+      "home": true,
+      "opponent": "cheongju",
+      "score": "2-2",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-02",
+      "home": false,
+      "opponent": "busan",
+      "score": "1-1",
+      "result": "D"
+    }
+  ],
+  "gimpo": [
+    {
+      "date": "2026-04-05",
+      "home": false,
+      "opponent": "daegu",
+      "score": "3-3",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-28",
+      "home": false,
+      "opponent": "seongnam",
+      "score": "0-0",
+      "result": "D"
+    },
+    {
+      "date": "2026-03-22",
+      "home": false,
+      "opponent": "gyeongnam",
+      "score": "1-0",
+      "result": "L"
+    },
+    {
+      "date": "2026-03-14",
+      "home": false,
+      "opponent": "yongin",
+      "score": "1-3",
+      "result": "W"
+    },
+    {
+      "date": "2026-03-08",
+      "home": false,
+      "opponent": "cheonan",
+      "score": "0-1",
+      "result": "W"
     }
   ]
 }
