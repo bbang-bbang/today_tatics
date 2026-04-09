@@ -15,7 +15,7 @@ body {
 #app {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    min-height: 100vh;
 }
 
 /* Toolbar */
@@ -27,6 +27,7 @@ body {
     background: #16213e;
     border-bottom: 2px solid #0f3460;
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 #toolbar h1 {
@@ -134,6 +135,7 @@ body {
     background: linear-gradient(135deg, #0f1a33 0%, #16213e 50%, #0f1a33 100%);
     border-bottom: 1px solid #0f3460;
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .team-slot {
@@ -457,9 +459,9 @@ body {
 
 /* Main area: canvas + bench side-by-side */
 #main-area {
-    flex: 1;
+    flex: none;
     display: flex;
-    min-height: 0;
+    height: 600px;
 }
 
 /* Canvas */
@@ -469,7 +471,6 @@ body {
     align-items: center;
     justify-content: center;
     padding: 16px;
-    min-height: 0;
 }
 
 /* Bench Panel */
@@ -1407,6 +1408,8 @@ body {
     grid-template-columns: 1fr auto 1fr;
     gap: 24px;
     align-items: start;
+    max-width: 960px;
+    margin: 0 auto;
 }
 
 .matchup-team-col {
@@ -1527,7 +1530,8 @@ body {
     align-items: center;
     gap: 12px;
     padding-top: 8px;
-    min-width: 200px;
+    min-width: 240px;
+    width: 260px;
 }
 
 .matchup-vs-text {
@@ -1808,3 +1812,437 @@ body {
 .k2-match-item:hover { background: #2a2f45; }
 .k2-match-item.active { background: #2d3a5a; color: #7eb8ff; }
 .k2-match-date { color: #888; margin-right: 6px; }
+
+
+
+/* ── VS 텍스트 ──────────────────────────────────────── */
+.vs-text {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: #e94560;
+    text-shadow: 0 0 12px rgba(233,69,96,0.4);
+    letter-spacing: 2px;
+}
+
+/* ── 배너 바로 아래 매치업 패널 ─────────────────────── */
+#banner-matchup {
+    background: linear-gradient(180deg, #0d1530 0%, #111827 100%);
+    border-bottom: 1px solid #0f3460;
+    padding: 16px clamp(12px, 3vw, 32px);
+    overflow-x: hidden;
+}
+#banner-matchup.hidden {
+    display: none;
+}
+
+/* matchup-area 안의 grid는 기존 info.js CSS 재사용 */
+/* info-section 아래 matchup-right-panel 최소화 */
+.matchup-right-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+}
+
+/* ── 승률 연도 탭 ─────────────────────────────────────── */
+.winrate-year-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+.wr-year-tab {
+    padding: 2px 8px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    border-radius: 4px;
+    border: 1px solid #1e3a5f;
+    background: #0f1a33;
+    color: #5a7090;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+}
+.wr-year-tab:hover {
+    border-color: #4a90d9;
+    color: #ccc;
+}
+.wr-year-tab.active {
+    background: #1e3a6e;
+    border-color: #4a90d9;
+    color: #7eb8ff;
+}
+
+/* ── 리그 순위 블록 ─────────────────────────────────── */
+.ranking-block {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-top: 6px;
+}
+.ranking-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 40px;
+}
+.ranking-num {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #7eb8ff;
+    line-height: 1;
+}
+.ranking-total {
+    font-size: 0.65rem;
+    color: #6a7f9a;
+    margin-top: 2px;
+}
+.ranking-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.ranking-year {
+    font-size: 0.65rem;
+    color: #6a7f9a;
+}
+.ranking-record {
+    font-size: 0.78rem;
+    color: #c8d8f0;
+}
+.ranking-pts {
+    font-size: 0.75rem;
+    color: #f0c040;
+    font-weight: 600;
+}
+.ranking-gd {
+    font-size: 0.68rem;
+    color: #8aa0bb;
+}
+
+/* ── 주요 선수 블록 ─────────────────────────────────── */
+.top-players-grid {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+.top-players-section {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+.top-players-label {
+    font-size: 0.68rem;
+    color: #6a7f9a;
+    font-weight: 600;
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+}
+.top-player-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.top-player-row:last-child { border-bottom: none; }
+.top-player-rank {
+    font-size: 0.65rem;
+    color: #4a6080;
+    min-width: 12px;
+}
+.top-player-name {
+    flex: 1;
+    font-size: 0.75rem;
+    color: #c8d8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.top-player-val {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #7eb8ff;
+    min-width: 16px;
+    text-align: right;
+}
+.top-players-empty {
+    font-size: 0.7rem;
+    color: #4a6080;
+}
+
+/* ── 헤더 인라인 순위 뱃지 ──────────────────────────────── */
+.matchup-team-name-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.rank-inline-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.rank-inline-num {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #7eb8ff;
+}
+.rank-inline-pts {
+    font-size: 0.68rem;
+    color: #f0c040;
+}
+.rank-inline-gd {
+    font-size: 0.65rem;
+    color: #8aa0bb;
+}
+
+/* ── H2H 경기 목록 ───────────────────────────────────── */
+.h2h-match-list-label {
+    font-size: 0.68rem;
+    color: #5a7090;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    margin: 10px 0 4px;
+    text-align: center;
+}
+.h2h-match-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+}
+.h2h-match-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 5px;
+    font-size: 0.72rem;
+}
+.h2h-date {
+    color: #5a7090;
+    min-width: 32px;
+    font-size: 0.65rem;
+}
+.h2h-venue {
+    min-width: 14px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 1px 3px;
+    border-radius: 3px;
+    text-align: center;
+}
+.h2h-venue.home { background: #1a3a6a; color: #7eb8ff; }
+.h2h-venue.away { background: #2a1a3a; color: #b87ef8; }
+.h2h-opp {
+    flex: 1;
+    color: #8aa0bb;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.h2h-score {
+    color: #c8d8f0;
+    font-weight: 600;
+    min-width: 36px;
+    text-align: center;
+    font-size: 0.72rem;
+}
+.h2h-result {
+    min-width: 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.72rem;
+}
+
+/* ── 하단 가로 경기 스트립 ─────────────────────────────── */
+.h2h-strip {
+    padding: 14px 16px 10px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+}
+.h2h-strip-label {
+    font-size: 0.68rem;
+    color: #5a7090;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+.h2h-strip-track {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: #2a3a5a transparent;
+}
+.h2h-strip-track::-webkit-scrollbar { height: 4px; }
+.h2h-strip-track::-webkit-scrollbar-thumb { background: #2a3a5a; border-radius: 2px; }
+
+/* 경기 카드 */
+.h2h-card {
+    flex: 0 0 160px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.h2h-card.result-W { border-left: 3px solid #4caf7a; }
+.h2h-card.result-D { border-left: 3px solid #e0a030; }
+.h2h-card.result-L { border-left: 3px solid #e05050; }
+
+.h2h-card-date {
+    font-size: 0.62rem;
+    color: #5a7090;
+}
+.h2h-card-score-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+.h2h-card-team {
+    font-size: 0.68rem;
+    color: #8aa0bb;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.h2h-card-team.away { text-align: right; }
+.h2h-card-score {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #c8d8f0;
+    white-space: nowrap;
+    padding: 0 4px;
+}
+.h2h-card-venue {
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-align: center;
+    padding: 1px 0;
+    border-radius: 3px;
+}
+.h2h-card-venue.home { color: #7eb8ff; }
+.h2h-card-venue.away { color: #b87ef8; }
+
+/* 득점 선수 */
+.h2h-card-scorers {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 4px;
+    margin-top: 2px;
+}
+.h2h-card-scorer-col { display: flex; flex-direction: column; gap: 1px; }
+.h2h-card-scorer-col.away .h2h-card-scorer { color: #b87ef8; }
+.h2h-card-scorer {
+    font-size: 0.65rem;
+    color: #7eb8ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── 가운데 패널 (H2H 요약 + 경기기록 flex row) ─────────── */
+.center-panel {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+}
+.match-record-col {
+    padding: 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+.match-record-row {
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.03);
+    border-left: 3px solid transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.match-record-row.result-W { border-left-color: #4caf7a; }
+.match-record-row.result-D { border-left-color: #e0a030; }
+.match-record-row.result-L { border-left-color: #e05050; }
+
+.mr-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.mr-date {
+    font-size: 0.62rem;
+    color: #5a7090;
+}
+.mr-venue {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+.mr-venue.home { background: #1a3a6a; color: #7eb8ff; }
+.mr-venue.away { background: #2a1a3a; color: #b87ef8; }
+.mr-venue-sm {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 3px;
+    border-radius: 3px;
+    margin-right: 2px;
+}
+.mr-venue-sm.home { background: #1a3a6a; color: #7eb8ff; }
+.mr-venue-sm.away { background: #2a1a3a; color: #b87ef8; }
+
+.mr-score {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+}
+.mr-team {
+    color: #c8d8f0;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.mr-team.opp { color: #8aa0bb; font-weight: 400; }
+.mr-num {
+    color: #c8d8f0;
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 0 3px;
+}
+
+.mr-scorers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 8px;
+    margin-top: 1px;
+}
+.mr-scorer {
+    font-size: 0.65rem;
+    white-space: nowrap;
+}
+.mr-scorer.home { color: #7eb8ff; }
+.mr-scorer.away { color: #b87ef8; }
+.mr-scorer-note {
+    font-size: 0.58rem;
+    color: #4a6080;
+    font-style: italic;
+}

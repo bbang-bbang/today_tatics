@@ -74,7 +74,9 @@
                     </div>
                 </div>
             </div>
-            <div class="team-banner-vs">VS</div>
+            <div class="team-banner-vs">
+                <span class="vs-text">VS</span>
+            </div>
             <div class="team-slot" id="slot-b">
                 <div class="team-slot-badge" id="badge-b">
                     <span class="badge-letter">B</span>
@@ -96,6 +98,14 @@
                             <option value="5-4-1">5-4-1</option>
                         </select>
                     </div>
+                </div>
+            </div>
+        </div>
+        <!-- 매치업 비교 패널 (배너 바로 아래, 팀 선택 시 노출) -->
+        <div id="banner-matchup" class="hidden">
+            <div id="matchup-area">
+                <div class="matchup-placeholder">
+                    <span>위에서 HOME · AWAY 팀을 선택하면 전적이 표시됩니다</span>
                 </div>
             </div>
         </div>
@@ -323,12 +333,7 @@
             </div>
             <div class="info-container matchup-right-panel">
                 <div class="info-divider">
-                    <span class="info-divider-label">최근 5경기 전적 비교</span>
-                </div>
-                <div id="matchup-area">
-                    <div class="matchup-placeholder">
-                        <span>위에서 HOME · AWAY 팀을 선택하면 전적이 표시됩니다</span>
-                    </div>
+                    <span class="info-divider-label">팀을 선택하면 위 배너 아래에 전적이 표시됩니다</span>
                 </div>
             </div>
         </div>
@@ -337,5 +342,6 @@
     <script src="/static/js/info.js?v=2"></script>
     <script src="/static/js/standings.js?v=2"></script>
     <script src="/static/js/k2heatmap.js?v=1"></script>
+    <script src="/static/js/banner_stats.js?v=1"></script>
 </body>
 </html>

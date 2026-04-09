@@ -64,7 +64,7 @@ TEAMS = [
     {"id": "jeonnam",  "sofascore_id": 7643,  "name": "전남 드래곤즈",      "short": "전남",   "league": "K2", "primary": "#fbea09", "secondary": "#f0f0f2", "accent": "#000000", "emblem": "emblem_K07.png", "border_home": "#000000", "border_away": "#000000"},
     {"id": "seongnam", "sofascore_id": 7651,  "name": "성남 FC",           "short": "성남",   "league": "K2", "primary": "#0e131b", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "emblem_K08.png", "border_home": "#ffffff", "border_away": "#1a222d"},
     {"id": "daegu",    "sofascore_id": 7644,  "name": "대구 FC",           "short": "대구",   "league": "K2", "primary": "#86c5e8", "secondary": "#e2e5ea", "accent": "#ffffff", "emblem": "emblem_K17.png", "border_home": "#e2e5ea", "border_away": "#86c5e8"},
-    {"id": "gyeongnam","sofascore_id": 7641,  "name": "경남 FC",           "short": "경남",   "league": "K2", "primary": "#ac101b", "secondary": "#d9d9d9", "accent": "#ffffff", "emblem": "emblem_K20.png", "border_home": "#121211", "border_away": "#121211"},
+    {"id": "gyeongnam","sofascore_id": 22020,  "name": "경남 FC",           "short": "경남",   "league": "K2", "primary": "#ac101b", "secondary": "#d9d9d9", "accent": "#ffffff", "emblem": "emblem_K20.png", "border_home": "#121211", "border_away": "#121211"},
     {"id": "suwon_fc", "sofascore_id": 41261, "name": "수원 FC",           "short": "수원FC", "league": "K2", "primary": "#07306a", "secondary": "#cac3c3", "accent": "#ffffff", "emblem": "emblem_K29.png", "border_home": "#c9232e", "border_away": "#0b3972"},
     {"id": "seouland", "sofascore_id": 189422, "name": "서울 이랜드 FC",     "short": "이랜드", "league": "K2", "primary": "#030a1b", "secondary": "#d7dddd", "accent": "#1e3a8a", "emblem": "emblem_K31.png", "border_home": "#051025", "border_away": "#051025"},
     {"id": "ansan",    "sofascore_id": 248375, "name": "안산 그리너스 FC",    "short": "안산",   "league": "K2", "primary": "#0087a7", "secondary": "#eaedf4", "accent": "#ffd700", "emblem": "emblem_K32.png", "border_home": "#272c3d", "border_away": "#00677f"},
@@ -355,6 +355,79 @@ def get_h2h():
     key = f"{team_a}|{team_b}"
     return jsonify(h2h.get(key, {"w": 0, "d": 0, "l": 0, "total": 0}))
 
+@app.route("/api/h2h-matches")
+def get_h2h_matches():
+    """두 팀 간 최근 맞대결 경기 목록 + 득점 선수 (events DB 기반)"""
+    team_a = request.args.get("teamA")
+    team_b = request.args.get("teamB")
+    if not team_a or not team_b:
+        return jsonify([])
+    info_a = next((t for t in TEAMS if t["id"] == team_a), None)
+    info_b = next((t for t in TEAMS if t["id"] == team_b), None)
+    if not info_a or not info_b:
+        return jsonify([])
+    ss_a, ss_b = info_a["sofascore_id"], info_b["sofascore_id"]
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    if not os.path.exists(db_path):
+        return jsonify([])
+
+    from datetime import datetime, timezone
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, date_ts, home_team_id, away_team_id, home_team_name, away_team_name,
+               home_score, away_score
+        FROM events
+        WHERE tournament_id = 777
+          AND home_score IS NOT NULL
+          AND ((home_team_id=? AND away_team_id=?) OR (home_team_id=? AND away_team_id=?))
+        ORDER BY date_ts DESC
+        LIMIT 10
+    """, (ss_a, ss_b, ss_b, ss_a))
+    rows = cur.fetchall()
+
+    result = []
+    for event_id, ts, home_id, away_id, home_name, away_name, hs, as_ in rows:
+        date_str = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        is_home_a = (home_id == ss_a)
+        result_a = "W" if (is_home_a and hs > as_) or (not is_home_a and as_ > hs) \
+                   else ("D" if hs == as_ else "L")
+
+        # 득점 선수 조회 (자책골 제외: 홈팀 득점자만 홈에, 원정팀 득점자만 원정에)
+        cur.execute("""
+            SELECT mps.team_id,
+                   COALESCE(p.name_ko, mps.player_name) as name,
+                   SUM(mps.goals) as g
+            FROM match_player_stats mps
+            LEFT JOIN players p ON mps.player_id = p.id
+            WHERE mps.event_id = ? AND mps.goals > 0
+            GROUP BY mps.player_id, mps.team_id
+            ORDER BY mps.team_id, g DESC
+        """, (event_id,))
+        scorer_rows = cur.fetchall()
+
+        # 홈팀 득점자는 home_id와 team_id가 일치하는 선수만
+        # 원정팀 득점자는 away_id(= not home_id)와 team_id가 일치하는 선수만
+        scorers_home = [{"name": r[1], "goals": r[2]} for r in scorer_rows if r[0] == home_id]
+        scorers_away = [{"name": r[1], "goals": r[2]} for r in scorer_rows if r[0] == away_id]
+
+        result.append({
+            "date": date_str,
+            "home": home_name,
+            "away": away_name,
+            "home_score": hs,
+            "away_score": as_,
+            "result_a": result_a,
+            "is_home_a": is_home_a,
+            "scorers_home": scorers_home,
+            "scorers_away": scorers_away,
+        })
+
+    conn.close()
+    return jsonify(result)
+
 @app.route("/api/team-stats")
 def get_team_stats():
     team_id = request.args.get("teamId")
@@ -365,6 +438,180 @@ def get_team_stats():
     if team_id:
         return jsonify(stats.get(team_id, {}))
     return jsonify(stats)
+
+
+@app.route("/api/team-stats-by-year")
+def get_team_stats_by_year():
+    """연도별 홈/원정 승무패 (match_player_stats DB 기반)"""
+    team_id = request.args.get("teamId")
+    if not team_id:
+        return jsonify({})
+
+    # slug → sofascore_id 변환
+    team_info = next((t for t in TEAMS if t["id"] == team_id), None)
+    if not team_info:
+        return jsonify({})
+    ss_id = team_info["sofascore_id"]
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    if not os.path.exists(db_path):
+        return jsonify({})
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT strftime('%Y', datetime(e.date_ts, 'unixepoch', 'localtime')) as year,
+               CASE WHEN e.home_team_id = ? THEN 1 ELSE 0 END as is_home,
+               COUNT(CASE WHEN (e.home_team_id=? AND e.home_score > e.away_score)
+                            OR (e.away_team_id=? AND e.away_score > e.home_score) THEN 1 END) as w,
+               COUNT(CASE WHEN e.home_score = e.away_score THEN 1 END) as d,
+               COUNT(CASE WHEN (e.home_team_id=? AND e.home_score < e.away_score)
+                            OR (e.away_team_id=? AND e.away_score < e.home_score) THEN 1 END) as l,
+               COUNT(*) as games
+        FROM events e
+        WHERE (e.home_team_id = ? OR e.away_team_id = ?)
+          AND e.home_score IS NOT NULL
+          AND e.tournament_id = 777
+        GROUP BY year, is_home
+        ORDER BY year, is_home
+    """, (ss_id, ss_id, ss_id, ss_id, ss_id, ss_id, ss_id))
+    rows = cur.fetchall()
+    conn.close()
+
+    result = {}
+    total = {"home": {"w": 0, "d": 0, "l": 0, "games": 0},
+             "away": {"w": 0, "d": 0, "l": 0, "games": 0}}
+    for year, is_home, w, d, l, games in rows:
+        if year not in result:
+            result[year] = {"home": {}, "away": {}}
+        key = "home" if is_home else "away"
+        result[year][key] = {"w": w, "d": d, "l": l, "games": games}
+        total[key]["w"] += w
+        total[key]["d"] += d
+        total[key]["l"] += l
+        total[key]["games"] += games
+
+    result["전체"] = total
+    return jsonify(result)
+
+
+@app.route("/api/team-ranking")
+def get_team_ranking():
+    """현재 시즌(최신 연도) 리그 순위 계산"""
+    team_id = request.args.get("teamId")
+    team_info = next((t for t in TEAMS if t["id"] == team_id), None)
+    if not team_info:
+        return jsonify({})
+    ss_id = team_info["sofascore_id"]
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    if not os.path.exists(db_path):
+        return jsonify({})
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    # 최신 연도 확인
+    cur.execute("""
+        SELECT MAX(strftime('%Y', datetime(date_ts,'unixepoch','localtime')))
+        FROM events WHERE tournament_id = 777
+    """)
+    latest_year = cur.fetchone()[0]
+
+    # 해당 연도 전체 경기
+    cur.execute("""
+        SELECT home_team_id, away_team_id, home_score, away_score
+        FROM events
+        WHERE tournament_id = 777
+          AND home_score IS NOT NULL
+          AND strftime('%Y', datetime(date_ts,'unixepoch','localtime')) = ?
+    """, (latest_year,))
+    rows = cur.fetchall()
+    conn.close()
+
+    # 팀별 집계
+    standings = {}
+    for home_id, away_id, hs, as_ in rows:
+        for tid, gf, ga, is_home in [(home_id, hs, as_, True), (away_id, as_, hs, False)]:
+            if tid not in standings:
+                standings[tid] = {"w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
+            s = standings[tid]
+            s["gf"] += gf
+            s["ga"] += ga
+            if gf > ga:
+                s["w"] += 1; s["pts"] += 3
+            elif gf == ga:
+                s["d"] += 1; s["pts"] += 1
+            else:
+                s["l"] += 1
+
+    # 정렬: 승점 → 득실차 → 득점
+    sorted_teams = sorted(standings.items(),
+                          key=lambda x: (x[1]["pts"], x[1]["gf"] - x[1]["ga"], x[1]["gf"]),
+                          reverse=True)
+    rank = next((i + 1 for i, (tid, _) in enumerate(sorted_teams) if tid == ss_id), None)
+    total_teams = len(sorted_teams)
+    my = standings.get(ss_id, {})
+
+    return jsonify({
+        "rank": rank,
+        "total": total_teams,
+        "year": latest_year,
+        "w": my.get("w", 0),
+        "d": my.get("d", 0),
+        "l": my.get("l", 0),
+        "gf": my.get("gf", 0),
+        "ga": my.get("ga", 0),
+        "pts": my.get("pts", 0),
+    })
+
+
+@app.route("/api/team-top-players")
+def get_team_top_players():
+    """현재 시즌 팀 득점/어시스트 TOP 3"""
+    team_id = request.args.get("teamId")
+    team_info = next((t for t in TEAMS if t["id"] == team_id), None)
+    if not team_info:
+        return jsonify({})
+    ss_id = team_info["sofascore_id"]
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    if not os.path.exists(db_path):
+        return jsonify({})
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    # 최신 연도
+    cur.execute("""
+        SELECT MAX(strftime('%Y', datetime(date_ts,'unixepoch','localtime')))
+        FROM events WHERE tournament_id = 777
+    """)
+    latest_year = cur.fetchone()[0]
+
+    def fetch_top(stat_col, limit=3):
+        cur.execute(f"""
+            SELECT mps.player_id, mps.player_name,
+                   COALESCE(p.name_ko, mps.player_name) as display_name,
+                   SUM(mps.{stat_col}) as total
+            FROM match_player_stats mps
+            JOIN events e ON mps.event_id = e.id
+            LEFT JOIN players p ON mps.player_id = p.id
+            WHERE mps.team_id = ?
+              AND e.tournament_id = 777
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) = ?
+              AND mps.{stat_col} > 0
+            GROUP BY mps.player_id
+            ORDER BY total DESC
+            LIMIT ?
+        """, (ss_id, latest_year, limit))
+        return [{"name": row[2], "val": row[3]} for row in cur.fetchall()]
+
+    scorers = fetch_top("goals")
+    assisters = fetch_top("assists")
+    conn.close()
+
+    return jsonify({"year": latest_year, "scorers": scorers, "assisters": assisters})
 
 
 KLEAGUE_CODE_MAP = {
