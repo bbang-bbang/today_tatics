@@ -18,7 +18,7 @@ os.makedirs(SQUADS_DIR, exist_ok=True)
 
 def _init_default_squads():
     """kleague_players_2026.json 을 읽어 팀별 기본 스쿼드 파일을 생성한다."""
-    players_file = os.path.join(BASE_DIR, "kleague_players_2026.json")
+    players_file = os.path.join(BASE_DIR, "data", "kleague_players_2026.json")
     if not os.path.exists(players_file):
         return
     with open(players_file, "r", encoding="utf-8") as f:
@@ -327,9 +327,9 @@ def delete_squad(squad_id):
 
 
 # ── 경기 결과 / H2H / 팀 스탯 API ──────────────────────
-RESULTS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kleague_results_2026.json")
-H2H_FILE      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kleague_h2h.json")
-STATS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kleague_team_stats.json")
+RESULTS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kleague_results_2026.json")
+H2H_FILE      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kleague_h2h.json")
+STATS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kleague_team_stats.json")
 
 @app.route("/api/results")
 def get_results():
