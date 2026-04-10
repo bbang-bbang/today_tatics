@@ -546,10 +546,11 @@ body {
 
 /* Main area: canvas + bench side-by-side */
 #main-area {
-    flex: none;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: row;
     height: 600px;
+    min-width: 0;
 }
 
 /* Canvas */
@@ -3086,10 +3087,26 @@ body {
 /* ══════════════════════════════════════════════════════════
    선수 개별 분석 보고서 (#player-report-section)
 ══════════════════════════════════════════════════════════ */
+#board-report-wrap {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
 #player-report-section {
+    flex: 0 0 clamp(300px, 28vw, 460px);
+    width: clamp(300px, 28vw, 460px);
+    height: 600px;
+    overflow-y: auto;
     background: linear-gradient(180deg, #0b1226 0%, #0d1530 100%);
-    border-top: 1px solid rgba(74,222,128,0.12);
-    padding: 24px clamp(12px,3vw,48px) 40px;
+    border: 1px solid #0f3460;
+    border-left: none;
+    border-radius: 0;
+    padding: 16px;
+    box-sizing: border-box;
 }
 .pr-header {
     display: flex; align-items: center; justify-content: space-between;
@@ -3271,3 +3288,50 @@ body {
 }
 .gt-gf .gt-half-num { color: #4ade80; }
 .gt-ga .gt-half-num { color: #f87171; }
+
+/* ── 포지션 인사이트 섹션 ───────────────────────────── */
+#insights-section {
+    background: rgba(10,15,30,0.85);
+    padding: 24px;
+}
+#insights-section .ld-header {
+    margin-bottom: 16px;
+}
+#insights-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+#ins-panel-top {
+    grid-column: 1 / -1;
+}
+.ins-block {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+}
+.ins-block-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #c8d8f0;
+    margin-bottom: 12px;
+}
+.ins-pos-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.ins-pos-tab { background: rgba(255,255,255,0.07); color: #aaa; border: none; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
+.ins-pos-tab.active { background: rgba(100,180,255,0.2); color: #7ecfff; }
+.ins-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.ins-table th { color: #7ecfff; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; }
+.ins-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #ccc; }
+.ins-table tr:hover td { background: rgba(255,255,255,0.04); }
+.ins-rank { color: #556; font-size: 0.75rem; width: 28px; }
+.ins-name { color: #fff; font-weight: 500; }
+.ins-team { color: #7ab0e0; font-size: 0.85em; white-space: nowrap; }
+.ins-pos { color: #4ade80; font-weight: 600; }
+.ins-neg { color: #f87171; font-weight: 600; }
+.ins-section-label { font-size: 0.8rem; color: #7ecfff; margin-bottom: 10px; }
+.ins-fwd-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
+.ins-fwd-select-wrap { display: flex; align-items: center; gap: 12px; }
+.ins-select { background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 5px 10px; font-size: 0.82rem; min-width: 200px; }
+.ins-empty { color: #556; font-size: 0.85rem; padding: 20px 0; }

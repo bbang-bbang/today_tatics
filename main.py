@@ -2177,5 +2177,234 @@ def get_kleague2_heatmap():
     return jsonify({"points": points, "matches": matches, "playerId": player_id})
 
 
+# ── 포지션 인사이트 API ──────────────────────────────────
+
+@app.route("/api/insights/top-performers")
+def insights_top_performers():
+    """포지션별 TOP 퍼포머 (최소 3경기 이상, 90분 환산)"""
+    year = request.args.get("year", "2026")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+
+    def pinfo(r):
+        return {
+            "player_id": r["player_id"],
+            "name": r["name_ko"] or r["player_name"] or "",
+            "team": _ko_team(r["team_id"], ""),
+            "games": r["games"], "mins": r["mins"],
+        }
+
+    result = {}
+
+    rows = conn.execute(f"""
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id,
+               COUNT(*) as games, SUM(m.minutes_played) as mins,
+               SUM(m.goals) as goals, SUM(COALESCE(m.expected_goals,0)) as xg,
+               AVG(m.rating) as avg_rating
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.position='F' AND m.minutes_played>0 {date_cond}
+        GROUP BY m.player_id HAVING games>=3 AND mins>=90
+        ORDER BY goals DESC LIMIT 15
+    """).fetchall()
+    result["F"] = [{**pinfo(r),
+        "goals": r["goals"] or 0,
+        "goals_p90": round((r["goals"] or 0) / r["mins"] * 90, 2),
+        "xg": round(r["xg"] or 0, 2),
+        "xg_eff": round((r["goals"] or 0) / r["xg"], 2) if (r["xg"] or 0) > 0 else None,
+        "rating": round(r["avg_rating"], 2) if r["avg_rating"] else None,
+    } for r in rows]
+
+    rows = conn.execute(f"""
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id,
+               COUNT(*) as games, SUM(m.minutes_played) as mins,
+               SUM(m.total_passes) as tp, SUM(m.accurate_passes) as ap,
+               SUM(m.tackles) as tkl, AVG(m.rating) as avg_rating
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.position='M' AND m.minutes_played>0 {date_cond}
+        GROUP BY m.player_id HAVING games>=3 AND mins>=90 AND tp>0
+        ORDER BY (CAST(ap AS REAL)/tp) DESC LIMIT 15
+    """).fetchall()
+    result["M"] = [{**pinfo(r),
+        "pass_acc": round((r["ap"] or 0) / r["tp"] * 100, 1) if r["tp"] else None,
+        "passes_p90": round((r["tp"] or 0) / r["mins"] * 90, 1),
+        "tackles_p90": round((r["tkl"] or 0) / r["mins"] * 90, 2),
+        "rating": round(r["avg_rating"], 2) if r["avg_rating"] else None,
+    } for r in rows]
+
+    rows = conn.execute(f"""
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id,
+               COUNT(*) as games, SUM(m.minutes_played) as mins,
+               SUM(m.tackles) as tkl, SUM(COALESCE(m.interceptions,0)) as intc,
+               SUM(m.clearances) as clr, SUM(m.aerial_won) as aer,
+               SUM(m.duel_won) as duel, AVG(m.rating) as avg_rating
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.position='D' AND m.minutes_played>0 {date_cond}
+        GROUP BY m.player_id HAVING games>=3 AND mins>=90
+        ORDER BY (tkl + intc*1.5 + clr + aer + duel) / mins DESC LIMIT 15
+    """).fetchall()
+    result["D"] = [{**pinfo(r),
+        "def_score_p90": round(
+            ((r["tkl"] or 0) + (r["intc"] or 0)*1.5 + (r["clr"] or 0)
+             + (r["aer"] or 0) + (r["duel"] or 0)) / r["mins"] * 90, 2),
+        "tackles_p90": round((r["tkl"] or 0) / r["mins"] * 90, 2),
+        "clearances_p90": round((r["clr"] or 0) / r["mins"] * 90, 2),
+        "rating": round(r["avg_rating"], 2) if r["avg_rating"] else None,
+    } for r in rows]
+
+    conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/insights/xg-efficiency")
+def insights_xg_efficiency():
+    year = request.args.get("year", "2026")
+    date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(f"""
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
+               COUNT(*) as games, SUM(m.goals) as goals,
+               SUM(COALESCE(m.expected_goals,0)) as xg, SUM(m.total_shots) as shots
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.position='F' AND m.minutes_played>0 {date_cond}
+        GROUP BY m.player_id HAVING games>=3 AND xg>0.5
+        ORDER BY goals DESC LIMIT 20
+    """).fetchall()
+    conn.close()
+    return jsonify([{
+        "player_id": r["player_id"],
+        "name": r["name_ko"] or "",
+        "team": _ko_team(r["team_id"], ""),
+        "games": r["games"],
+        "goals": r["goals"] or 0, "xg": round(r["xg"], 2),
+        "diff": round((r["goals"] or 0) - r["xg"], 2),
+        "shots": r["shots"] or 0,
+    } for r in rows])
+
+
+@app.route("/api/insights/forward-goals")
+def insights_forward_goals():
+    player_id = request.args.get("playerId", "").strip()
+    year = request.args.get("year", "all")
+
+    if not player_id:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+        rows = conn.execute(f"""
+            SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
+                   SUM(m.goals) as total_goals
+            FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+            WHERE m.position='F' AND m.minutes_played>0 AND m.goals>0 {date_cond}
+            GROUP BY m.player_id ORDER BY total_goals DESC LIMIT 30
+        """).fetchall()
+        conn.close()
+        return jsonify([{
+            "player_id": r["player_id"],
+            "name": r["name_ko"] or "",
+            "team": _ko_team(r["team_id"], ""),
+            "goals": r["total_goals"],
+        } for r in rows])
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    bands = [("1-15",1,15),("16-30",16,30),("31-45",31,45),
+             ("46-60",46,60),("61-75",61,75),("76-90",76,120)]
+    time_data = []
+    for label, lo, hi in bands:
+        row = conn.execute("""
+            SELECT COUNT(*) as cnt FROM goal_events
+            WHERE player_id=? AND minute>=? AND minute<=? AND is_own_goal=0
+        """, (player_id, lo, hi)).fetchone()
+        time_data.append({"band": label, "goals": row["cnt"]})
+
+    opp_rows = conn.execute("""
+        SELECT CASE WHEN g.is_home=1 THEN e.away_team_name ELSE e.home_team_name END as opponent,
+               COUNT(*) as goals
+        FROM goal_events g JOIN events e ON g.event_id = e.id
+        WHERE g.player_id=? AND g.is_own_goal=0
+        GROUP BY opponent ORDER BY goals DESC
+    """, (player_id,)).fetchall()
+
+    info = conn.execute("""
+        SELECT COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.player_id=? AND m.player_name IS NOT NULL LIMIT 1
+    """, (player_id,)).fetchone()
+    conn.close()
+
+    return jsonify({
+        "player_id": int(player_id),
+        "name": info["name_ko"] if info else "",
+        "team": _ko_team(info["team_id"], "") if info else "",
+        "time_bands": time_data,
+        "by_opponent": [{"opponent": r["opponent"], "goals": r["goals"]} for r in opp_rows],
+    })
+
+
+@app.route("/api/insights/midfielder-pass")
+def insights_midfielder_pass():
+    year = request.args.get("year", "2026")
+    date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(f"""
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
+               COUNT(*) as games, SUM(m.minutes_played) as mins,
+               SUM(m.total_passes) as tp, SUM(m.accurate_passes) as ap,
+               AVG(m.rating) as avg_rating
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.position='M' AND m.minutes_played>0 {date_cond}
+        GROUP BY m.player_id HAVING games>=3 AND tp>=50
+        ORDER BY (CAST(ap AS REAL)/tp) DESC LIMIT 25
+    """).fetchall()
+    conn.close()
+    return jsonify([{
+        "player_id": r["player_id"],
+        "name": r["name_ko"] or "",
+        "team": _ko_team(r["team_id"], ""),
+        "games": r["games"], "mins": r["mins"],
+        "total_passes": r["tp"] or 0, "accurate_passes": r["ap"] or 0,
+        "pass_acc": round((r["ap"] or 0) / r["tp"] * 100, 1) if r["tp"] else 0,
+        "passes_p90": round((r["tp"] or 0) / r["mins"] * 90, 1) if r["mins"] else 0,
+        "rating": round(r["avg_rating"], 2) if r["avg_rating"] else None,
+    } for r in rows])
+
+
+@app.route("/api/insights/defender-score")
+def insights_defender_score():
+    year = request.args.get("year", "2026")
+    date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(f"""
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
+               COUNT(*) as games, SUM(m.minutes_played) as mins,
+               SUM(m.tackles) as tkl, SUM(COALESCE(m.interceptions,0)) as intc,
+               SUM(m.clearances) as clr, SUM(m.aerial_won) as aer,
+               SUM(m.duel_won) as duel, AVG(m.rating) as avg_rating
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.position='D' AND m.minutes_played>0 {date_cond}
+        GROUP BY m.player_id HAVING games>=3 AND mins>=90
+        ORDER BY (tkl + intc*1.5 + clr + aer + duel) / mins DESC LIMIT 25
+    """).fetchall()
+    conn.close()
+    return jsonify([{
+        "player_id": r["player_id"],
+        "name": r["name_ko"] or "",
+        "team": _ko_team(r["team_id"], ""),
+        "games": r["games"], "mins": r["mins"],
+        "tackles": r["tkl"] or 0, "interceptions": r["intc"] or 0,
+        "clearances": r["clr"] or 0, "aerial_won": r["aer"] or 0,
+        "duel_won": r["duel"] or 0,
+        "def_score": round(
+            ((r["tkl"] or 0) + (r["intc"] or 0)*1.5 + (r["clr"] or 0)
+             + (r["aer"] or 0) + (r["duel"] or 0)) / r["mins"] * 90, 2),
+        "rating": round(r["avg_rating"], 2) if r["avg_rating"] else None,
+    } for r in rows])
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

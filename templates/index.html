@@ -78,6 +78,7 @@
                 </div>
             </section>
         </div>
+        <div id="board-report-wrap">
         <div id="main-area">
             <main id="canvas-container">
                 <!-- 왼쪽 세로 툴바 (필드 바로 왼쪽) -->
@@ -171,79 +172,79 @@
                 </aside>
             </main>
         </div>
+        <!-- 선수 개별 분석 (전술판 옆) -->
+        <section id="player-report-section">
+            <div class="pr-header">
+                <h2 class="pr-title">🔍 선수 개별 분석</h2>
+                <div id="pr-year-filter" class="pr-year-filter"></div>
+            </div>
+            <div id="pr-body">
+                <div class="pr-empty">전술판에서 선수를 더블클릭 후 <strong>📋 분석</strong> 버튼을 누르세요</div>
+            </div>
+        </section>
+        </div><!-- /board-report-wrap -->
     </div>
 
-    <!-- ── 리그 인사이트 대시보드 ─────────────────────────────── -->
-    <section id="league-dashboard">
+    <!-- ── 포지션별 인사이트 ─────────────────────────────── -->
+    <section id="insights-section">
         <div class="ld-header">
-            <h2 class="ld-title">⚽ K리그2 선수 인사이트</h2>
-            <div class="ld-year-filter" id="ld-year-filter"><!-- JS 렌더 --></div>
+            <h2 class="ld-title">🎯 포지션별 인사이트</h2>
+            <div class="ld-year-filter" id="insights-year-filter"></div>
         </div>
 
-        <!-- 탭 네비게이션 -->
-        <nav class="ld-tabs">
-            <button class="ld-tab active" data-tab="ranking">랭킹</button>
-            <button class="ld-tab" data-tab="position">포지션 분석</button>
-            <button class="ld-tab" data-tab="team">팀별 공격력</button>
-            <button class="ld-tab" data-tab="trend">월별 트렌드</button>
-        </nav>
-
-        <!-- 탭 패널: 랭킹 -->
-        <div class="ld-panel" id="ld-panel-ranking">
-            <div class="ld-rank-tabs">
-                <button class="ld-rank-tab active" data-rank="scorers">⚽ 득점</button>
-                <button class="ld-rank-tab" data-rank="assists">🎯 도움</button>
-                <button class="ld-rank-tab" data-rank="rated">⭐ 평점</button>
-                <button class="ld-rank-tab" data-rank="dribbles">💨 드리블</button>
-                <button class="ld-rank-tab" data-rank="defenders">🛡 수비</button>
+        <div id="insights-grid">
+        <!-- TOP 퍼포머 -->
+        <div class="ins-block" id="ins-panel-top">
+            <div class="ins-block-title">🏆 TOP 퍼포머</div>
+            <div class="ins-pos-tabs">
+                <button class="ins-pos-tab active" data-pos="F">⚽ 공격수</button>
+                <button class="ins-pos-tab" data-pos="M">🔄 미드필더</button>
+                <button class="ins-pos-tab" data-pos="D">🛡 수비수</button>
             </div>
-            <div id="ld-ranking-body"><!-- JS 렌더 --></div>
+            <div id="ins-top-body"></div>
         </div>
 
-        <!-- 탭 패널: 포지션 분석 -->
-        <div class="ld-panel hidden" id="ld-panel-position">
-            <div class="ld-pos-grid">
-                <div class="ld-pos-chart-wrap">
-                    <div class="ld-section-label">경기당 평균 공격 지표 (90분 환산)</div>
-                    <div style="position:relative;height:240px"><canvas id="ld-chart-pos-attack"></canvas></div>
+        <!-- xG 효율 -->
+        <div class="ins-block hidden" id="ins-panel-xg">
+            <div class="ins-block-title">📈 xG 효율 (공격수)</div>
+            <div class="ins-section-label">실제 득점 vs xG — 초과(초록) / 미달(빨강)</div>
+            <div style="position:relative;height:320px"><canvas id="ins-chart-xg"></canvas></div>
+        </div>
+
+        <!-- 골 분석 (공격수) -->
+        <div class="ins-block hidden" id="ins-panel-fwd-goals">
+            <div class="ins-block-title">⚽ 골 분석 (공격수)</div>
+            <div class="ins-fwd-select-wrap">
+                <label class="ins-section-label">선수 선택</label>
+                <select id="ins-fwd-select" class="ins-select"></select>
+            </div>
+            <div class="ins-fwd-charts">
+                <div class="ins-fwd-chart-wrap">
+                    <div class="ins-section-label">⏱ 시간대별 골</div>
+                    <div style="position:relative;height:220px"><canvas id="ins-chart-fwd-time"></canvas></div>
                 </div>
-                <div class="ld-pos-chart-wrap">
-                    <div class="ld-section-label">경기당 평균 수비 지표 (90분 환산)</div>
-                    <div style="position:relative;height:240px"><canvas id="ld-chart-pos-defense"></canvas></div>
-                </div>
-                <div class="ld-pos-chart-wrap">
-                    <div class="ld-section-label">포지션별 평균 평점</div>
-                    <div style="position:relative;height:240px"><canvas id="ld-chart-pos-rating"></canvas></div>
+                <div class="ins-fwd-chart-wrap">
+                    <div class="ins-section-label">🆚 상대팀별 골</div>
+                    <div style="position:relative;height:220px"><canvas id="ins-chart-fwd-opp"></canvas></div>
                 </div>
             </div>
         </div>
 
-        <!-- 탭 패널: 팀별 공격력 -->
-        <div class="ld-panel hidden" id="ld-panel-team">
-            <div class="ld-section-label">팀별 총 득점 / 도움</div>
-            <div style="position:relative;height:300px"><canvas id="ld-chart-team-attack"></canvas></div>
-            <div class="ld-section-label" style="margin-top:20px">팀별 평균 평점</div>
-            <div style="position:relative;height:260px"><canvas id="ld-chart-team-rating"></canvas></div>
+        <!-- 미드필더 패스 성공률 -->
+        <div class="ins-block hidden" id="ins-panel-mid-pass">
+            <div class="ins-block-title">🔄 패스 성공률 (미드필더)</div>
+            <div class="ins-section-label">TOP 25 — 최소 3경기·총 50패스 이상</div>
+            <div style="position:relative;height:480px"><canvas id="ins-chart-mid-pass"></canvas></div>
         </div>
 
-        <!-- 탭 패널: 월별 트렌드 -->
-        <div class="ld-panel hidden" id="ld-panel-trend">
-            <div class="ld-section-label">월별 리그 총 득점 / 도움</div>
-            <div style="position:relative;height:240px"><canvas id="ld-chart-trend-ga"></canvas></div>
-            <div class="ld-section-label" style="margin-top:20px">월별 평균 평점 추이</div>
-            <div style="position:relative;height:200px"><canvas id="ld-chart-trend-rating"></canvas></div>
+        <!-- 수비 기여도 -->
+        <div class="ins-block hidden" id="ins-panel-def-score">
+            <div class="ins-block-title">🛡 수비 기여도 (수비수)</div>
+            <div class="ins-section-label">종합점수/90 TOP 25 — 태클 + 인터셉션×1.5 + 클리어런스 + 공중볼 + 듀얼</div>
+            <div style="position:relative;height:480px"><canvas id="ins-chart-def-score"></canvas></div>
+            <div id="ins-def-table-wrap" style="margin-top:16px"></div>
         </div>
-    </section>
-
-    <!-- ── 선수 개별 분석 보고서 ─────────────────────────────── -->
-    <section id="player-report-section">
-        <div class="pr-header">
-            <h2 class="pr-title">🔍 선수 개별 분석</h2>
-            <div id="pr-year-filter" class="pr-year-filter"></div>
-        </div>
-        <div id="pr-body">
-            <div class="pr-empty">전술판에서 선수를 더블클릭 후 <strong>📋 분석</strong> 버튼을 누르세요</div>
-        </div>
+        </div><!-- /insights-grid -->
     </section>
 
     <!-- 선수 정보 툴팁 -->
@@ -490,7 +491,7 @@
     </div>
 
     <script src="/static/js/player_analytics.js?v=1"></script>
-    <script src="/static/js/dashboard.js?v=2"></script>
     <script src="/static/js/player_report.js?v=2"></script>
+    <script src="/static/js/insights.js?v=1"></script>
 </body>
 </html>
