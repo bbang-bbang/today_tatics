@@ -1975,6 +1975,104 @@ def get_league_dashboard():
     })
 
 
+@app.route("/api/team-goal-timing")
+def get_team_goal_timing():
+    """팀 득점/실점 시간대·전후반 분석"""
+    team_id_str = request.args.get("teamId")
+    year        = request.args.get("year")
+    team_info   = next((t for t in TEAMS if t["id"] == team_id_str), None)
+    if not team_info:
+        return jsonify({"error": "team not found"}), 404
+
+    ss_id   = team_info["sofascore_id"]
+    db_path = os.path.join(BASE_DIR, "players.db")
+    conn    = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cur     = conn.cursor()
+
+    # goal_events 테이블 없으면 빈 데이터 반환
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='goal_events'")
+    if not cur.fetchone():
+        conn.close()
+        return jsonify({"ready": False})
+
+    year_clause = ""
+    yp = ()
+    if year:
+        year_clause = "AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?"
+        yp = (year,)
+
+    # 시간대 구간
+    BANDS = [(1,15),(16,30),(31,45),(46,60),(61,75),(76,90),(91,120)]
+    BAND_LABELS = ["1-15'","16-30'","31-45'","46-60'","61-75'","76-90'","90+'"]
+
+    def count_goals(for_or_against):
+        """for_or_against: 'for' = 득점, 'against' = 실점"""
+        if for_or_against == "for":
+            team_cond = "g.team_id = ?"
+        else:
+            # 실점 = 상대팀이 우리 팀 경기에서 넣은 골 (team_id != ss_id)
+            team_cond = "g.team_id != ? AND (e.home_team_id=? OR e.away_team_id=?)"
+
+        results = []
+        for (s, e_min), label in zip(BANDS, BAND_LABELS):
+            if for_or_against == "for":
+                cur.execute(f"""
+                    SELECT COUNT(*) FROM goal_events g
+                    JOIN events e ON g.event_id = e.id
+                    WHERE {team_cond}
+                      AND (e.home_team_id=? OR e.away_team_id=?)
+                      AND (g.minute + COALESCE(g.added_time,0)) >= ?
+                      AND (g.minute + COALESCE(g.added_time,0)) <= ?
+                      {year_clause}
+                """, (ss_id, ss_id, ss_id, s, e_min) + yp)
+            else:
+                cur.execute(f"""
+                    SELECT COUNT(*) FROM goal_events g
+                    JOIN events e ON g.event_id = e.id
+                    WHERE {team_cond}
+                      AND (g.minute + COALESCE(g.added_time,0)) >= ?
+                      AND (g.minute + COALESCE(g.added_time,0)) <= ?
+                      {year_clause}
+                """, (ss_id, ss_id, ss_id, s, e_min) + yp)
+            results.append({"label": label, "count": cur.fetchone()[0]})
+        return results
+
+    gf_bands = count_goals("for")
+    ga_bands = count_goals("against")
+
+    # 전후반 집계
+    def half_sum(bands, half):
+        idxs = range(0, 3) if half == 1 else range(3, len(bands))
+        return sum(bands[i]["count"] for i in idxs)
+
+    gf_h1 = half_sum(gf_bands, 1)
+    gf_h2 = half_sum(gf_bands, 2)
+    ga_h1 = half_sum(ga_bands, 1)
+    ga_h2 = half_sum(ga_bands, 2)
+
+    # 전체 경기 수 (비율 계산용)
+    cur.execute(f"""
+        SELECT COUNT(*) FROM events e
+        WHERE tournament_id=777 AND (home_team_id=? OR away_team_id=?)
+        {year_clause}
+    """, (ss_id, ss_id) + yp)
+    total_games = cur.fetchone()[0] or 1
+
+    conn.close()
+    return jsonify({
+        "ready": True,
+        "team": team_info["name"],
+        "total_games": total_games,
+        "gf_bands":  gf_bands,
+        "ga_bands":  ga_bands,
+        "half": {
+            "gf_h1": gf_h1, "gf_h2": gf_h2,
+            "ga_h1": ga_h1, "ga_h2": ga_h2,
+        }
+    })
+
+
 @app.route("/api/kleague2/teams")
 def get_kleague2_teams():
     """히트맵 데이터가 있는 K리그2 팀 목록 (수원 삼성 제외)"""

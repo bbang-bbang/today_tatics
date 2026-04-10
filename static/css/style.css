@@ -3216,3 +3216,58 @@ body {
     white-space: nowrap;
 }
 .player-edit-report-btn:hover { background: #1a5a8e; }
+
+/* ══════════════════════════════════════════════════════════
+   득점/실점 시간대 분석 (.gt-*)
+══════════════════════════════════════════════════════════ */
+.gt-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+.gt-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #8ab0d0;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+}
+.gt-loading, .gt-empty {
+    font-size: 0.75rem;
+    color: #4a6080;
+    padding: 8px 0;
+    text-align: center;
+}
+.gt-half-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.gt-half-block {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border-radius: 7px;
+    padding: 7px 10px;
+    text-align: center;
+}
+.gt-half-label {
+    font-size: 0.68rem;
+    color: #556;
+    margin-bottom: 4px;
+}
+.gt-half-vals {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.gt-half-num {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+.gt-half-sep {
+    color: #4a6080;
+    font-size: 1rem;
+}
+.gt-gf .gt-half-num { color: #4ade80; }
+.gt-ga .gt-half-num { color: #f87171; }

@@ -320,7 +320,99 @@
 
         col.appendChild(extraEl);
 
+        // 득점/실점 시간대 섹션 (비동기 로드)
+        const timingSection = document.createElement("div");
+        timingSection.className = "gt-section";
+        col.appendChild(timingSection);
+        loadGoalTiming(team.id, timingSection);
+
         return col;
+    }
+
+    // ── 득점/실점 시간대 차트 ────────────────────────────────
+    const _gtCharts = {};
+    function loadGoalTiming(teamId, container) {
+        container.innerHTML = `<div class="gt-loading">시간대 분석 로딩 중...</div>`;
+        fetch(`/api/team-goal-timing?teamId=${teamId}`)
+            .then(r => r.json())
+            .then(d => {
+                if (!d.ready || !d.gf_bands) {
+                    container.innerHTML = `<div class="gt-empty">시간대 데이터 수집 중입니다.</div>`;
+                    return;
+                }
+                renderGoalTiming(container, d, teamId);
+            })
+            .catch(() => { container.innerHTML = ""; });
+    }
+
+    function renderGoalTiming(container, d, teamId) {
+        const labels  = d.gf_bands.map(b => b.label);
+        const gfData  = d.gf_bands.map(b => b.count);
+        const gaData  = d.ga_bands.map(b => b.count);
+        const h = d.half;
+
+        // 이전 차트 제거
+        if (_gtCharts[teamId]) { _gtCharts[teamId].destroy(); delete _gtCharts[teamId]; }
+
+        container.innerHTML = `
+            <div class="gt-title">⏱ 득점·실점 시간대 분석</div>
+            <div class="gt-half-row">
+                <div class="gt-half-block gt-gf">
+                    <div class="gt-half-label">득점 전반 / 후반</div>
+                    <div class="gt-half-vals">
+                        <span class="gt-half-num">${h.gf_h1}</span>
+                        <span class="gt-half-sep">/</span>
+                        <span class="gt-half-num">${h.gf_h2}</span>
+                    </div>
+                </div>
+                <div class="gt-half-block gt-ga">
+                    <div class="gt-half-label">실점 전반 / 후반</div>
+                    <div class="gt-half-vals">
+                        <span class="gt-half-num">${h.ga_h1}</span>
+                        <span class="gt-half-sep">/</span>
+                        <span class="gt-half-num">${h.ga_h2}</span>
+                    </div>
+                </div>
+            </div>
+            <div style="position:relative;height:140px;margin-top:8px">
+                <canvas id="gt-chart-${teamId}"></canvas>
+            </div>
+        `;
+
+        const ctx = document.getElementById(`gt-chart-${teamId}`);
+        if (!ctx) return;
+        _gtCharts[teamId] = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "득점",
+                        data: gfData,
+                        backgroundColor: "rgba(74,222,128,0.7)",
+                        borderRadius: 3,
+                    },
+                    {
+                        label: "실점",
+                        data: gaData,
+                        backgroundColor: "rgba(248,113,113,0.7)",
+                        borderRadius: 3,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: "#9ab", font: { size: 11 } } },
+                    tooltip: { mode: "index" }
+                },
+                scales: {
+                    x: { ticks: { color: "#667", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.05)" } },
+                    y: { ticks: { color: "#667", font: { size: 10 }, stepSize: 1 }, grid: { color: "rgba(255,255,255,0.05)" }, beginAtZero: true }
+                }
+            }
+        });
     }
 
     // ── 가운데 센터 패널 (H2H 요약 + 경기 기록 나란히) ────────
