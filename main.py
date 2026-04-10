@@ -621,7 +621,11 @@ def get_team_top_players():
 _ENG_TO_KO = {t["sofascore_id"]: t["name"] for t in TEAMS}
 
 def _ko_name_by_ss_id(ss_id):
-    return _ENG_TO_KO.get(ss_id)
+    """sofascore team id (int 또는 str) → 한국어 팀명"""
+    try:
+        return _ENG_TO_KO.get(int(ss_id)) or _ENG_TO_KO.get(ss_id)
+    except (ValueError, TypeError):
+        return _ENG_TO_KO.get(ss_id)
 
 
 @app.route("/api/team-analytics")
@@ -831,6 +835,40 @@ def get_match_prediction():
 
     import math, datetime
     now_month = datetime.datetime.now().month
+    now_year  = str(datetime.datetime.now().year)
+
+    def compute_standings(year):
+        """K2 현재 순위표 계산 (최신 시즌)"""
+        cur.execute("""
+            SELECT home_team_id, away_team_id, home_score, away_score
+            FROM events
+            WHERE tournament_id=777 AND home_score IS NOT NULL AND away_score IS NOT NULL
+              AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+        """, (year,))
+        standing = {}
+        for home_id, away_id, hs, as_ in cur.fetchall():
+            for tid, gf, ga, is_home in [(home_id, hs, as_, True), (away_id, as_, hs, False)]:
+                if tid not in standing:
+                    standing[tid] = {"played": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
+                s = standing[tid]
+                s["played"] += 1
+                s["gf"] += gf; s["ga"] += ga
+                if gf > ga:
+                    s["w"] += 1; s["pts"] += 3
+                elif gf == ga:
+                    s["d"] += 1; s["pts"] += 1
+                else:
+                    s["l"] += 1
+        # 정렬: pts → gd → gf
+        ranked = sorted(standing.items(),
+                        key=lambda x: (x[1]["pts"], x[1]["gf"] - x[1]["ga"], x[1]["gf"]),
+                        reverse=True)
+        result = {}
+        for rank, (tid, s) in enumerate(ranked, 1):
+            result[tid] = {**s, "rank": rank, "gd": s["gf"] - s["ga"]}
+        return result
+
+    standings = compute_standings(now_year)
 
     def team_stats(ss_id, side_home):
         """팀 전반 지표 계산"""
@@ -897,7 +935,7 @@ def get_match_prediction():
         """)
         latest_yr = cur.fetchone()[0]
         cur.execute("""
-            SELECT COALESCE(p.name_ko, mps.player_name), SUM(mps.goals) g
+            SELECT mps.player_id, COALESCE(p.name_ko, mps.player_name), SUM(mps.goals) g
             FROM match_player_stats mps
             JOIN events e ON mps.event_id=e.id
             LEFT JOIN players p ON mps.player_id=p.id
@@ -906,7 +944,7 @@ def get_match_prediction():
               AND mps.goals>0
             GROUP BY mps.player_id ORDER BY g DESC LIMIT 3
         """, (ss_id, latest_yr))
-        top_scorers = [{"name": r[0], "goals": r[1]} for r in cur.fetchall()]
+        top_scorers = [{"id": r[0], "name": r[1], "goals": r[2]} for r in cur.fetchall()]
 
         # 유의사항 도출
         notes = []
@@ -944,6 +982,7 @@ def get_match_prediction():
             "top_scorers": top_scorers,
             "avg_gf": avg_gf,
             "avg_ga": avg_ga,
+            "standing": standings.get(ss_id),
         }
 
     # H2H 직접 전적
@@ -1212,6 +1251,370 @@ def get_player_matches():
         })
     conn.close()
     return jsonify({"matches": matches, "found": True, "playerId": player_id})
+
+
+@app.route("/api/player-analytics")
+def get_player_analytics():
+    """선수 개인 분석 보고서"""
+    import datetime as _dt
+    player_id = request.args.get("playerId", type=int)
+    year      = request.args.get("year")
+    if not player_id:
+        return jsonify({}), 400
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    # 선수 기본 정보
+    cur.execute("""
+        SELECT COALESCE(p.name_ko, p.name) nm, p.position pos, p.team_id, p.height, p.preferred_foot
+        FROM players p WHERE p.id=?
+    """, (player_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({}), 404
+
+    name, position, team_id, height, preferred_foot = row["nm"], row["pos"], row["team_id"], row["height"], row["preferred_foot"]
+
+    # 팀 한국어명 조회
+    cur.execute("SELECT DISTINCT mps.team_id FROM match_player_stats mps WHERE mps.player_id=? LIMIT 1", (player_id,))
+    tid_row = cur.fetchone()
+    ss_team_id = tid_row[0] if tid_row else team_id
+    team_name = _ko_name_by_ss_id(ss_team_id) or str(ss_team_id)
+
+    year_clause = "AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?" if year else ""
+    yp = (year,) if year else ()
+
+    # 사용 가능 연도
+    cur.execute("""
+        SELECT DISTINCT strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) yr
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777 AND e.date_ts IS NOT NULL
+        ORDER BY yr
+    """, (player_id,))
+    available_years = [r[0] for r in cur.fetchall()]
+
+    # 시즌별 집계
+    cur.execute("""
+        SELECT strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) yr,
+               COUNT(*) games, SUM(mps.goals) goals, SUM(mps.assists) assists,
+               AVG(mps.rating) rating, SUM(mps.minutes_played) minutes
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777
+        GROUP BY yr ORDER BY yr
+    """, (player_id,))
+    season_summary = [
+        {"year": r[0], "games": r[1], "goals": r[2] or 0, "assists": r[3] or 0,
+         "rating": round(r[4], 2) if r[4] else None, "minutes": r[5] or 0}
+        for r in cur.fetchall()
+    ]
+
+    # 월별 분석
+    cur.execute(f"""
+        SELECT CAST(strftime('%m', datetime(e.date_ts,'unixepoch','localtime')) AS INTEGER) mn,
+               COUNT(*) games, SUM(mps.goals) goals, SUM(mps.assists) assists,
+               AVG(mps.rating) rating
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777 {year_clause}
+        GROUP BY mn ORDER BY mn
+    """, (player_id,) + yp)
+    monthly = [
+        {"month": r[0], "games": r[1], "goals": r[2] or 0, "assists": r[3] or 0,
+         "rating": round(r[4], 2) if r[4] else None}
+        for r in cur.fetchall()
+    ]
+
+    # 최근 10경기 폼
+    cur.execute("""
+        SELECT e.date_ts,
+               CASE WHEN mps.is_home=1 THEN e.away_team_id ELSE e.home_team_id END opp_id,
+               mps.goals, mps.assists, mps.rating, mps.result, mps.is_home,
+               e.home_score, e.away_score
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777 AND e.date_ts IS NOT NULL
+        ORDER BY e.date_ts DESC LIMIT 10
+    """, (player_id,))
+    result_map = {1: "W", 0: "D", -1: "L"}
+    recent_form = []
+    for r in cur.fetchall():
+        d = _dt.datetime.utcfromtimestamp(r[0])
+        opp_name = _ko_name_by_ss_id(str(r[1])) or str(r[1])
+        recent_form.append({
+            "date": f"{d.year}/{d.month}/{d.day}",
+            "opponent": opp_name,
+            "is_home": bool(r[6]),
+            "goals": r[2] or 0,
+            "assists": r[3] or 0,
+            "rating": round(r[4], 1) if r[4] else None,
+            "result": result_map.get(r[5], "?"),
+            "score": f"{r[7]}-{r[8]}" if r[7] is not None else "?"
+        })
+
+    # 레이더: 전체 선수 대비 백분위 (5경기 이상, 300분 이상)
+    cur.execute(f"""
+        SELECT mps.player_id,
+               SUM(mps.goals) + SUM(mps.assists)        AS ga,
+               SUM(mps.minutes_played)                   AS mins,
+               AVG(mps.accurate_passes_pct)              AS pass_pct,
+               SUM(mps.tackles) + SUM(mps.interceptions) + SUM(mps.clearances) AS def_acts,
+               SUM(mps.shots_on_target)                  AS sot,
+               SUM(mps.total_shots)                      AS ts,
+               SUM(mps.successful_dribbles)              AS sdr,
+               SUM(mps.attempted_dribbles)               AS adr,
+               COUNT(*)                                  AS games
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE e.tournament_id=777 {year_clause}
+        GROUP BY mps.player_id
+        HAVING games >= 5 AND mins >= 300
+    """, yp)
+
+    all_stats = {}
+    for r in cur.fetchall():
+        pid, ga, mins, pass_pct, def_acts, sot, ts, sdr, adr, games = r
+        if not mins: continue
+        all_stats[pid] = {
+            "attack":   (ga or 0) / mins * 90,
+            "passing":  pass_pct or 0,
+            "defense":  (def_acts or 0) / mins * 90,
+            "shooting": (sot / ts) * 100 if ts and ts >= 3 else 0,
+            "dribble":  (sdr / adr) * 100 if adr and adr >= 3 else 0,
+        }
+
+    radar = {}
+    if player_id in all_stats:
+        p_vals = all_stats[player_id]
+        n = len(all_stats)
+        for axis in ["attack", "passing", "defense", "shooting", "dribble"]:
+            vals = [v[axis] for v in all_stats.values()]
+            below = sum(1 for v in vals if v < p_vals[axis])
+            radar[axis] = round(below / n * 100)
+    else:
+        radar = {k: 0 for k in ["attack", "passing", "defense", "shooting", "dribble"]}
+
+    # 전체 집계 (헤더용)
+    cur.execute(f"""
+        SELECT COUNT(*), SUM(mps.goals), SUM(mps.assists), AVG(mps.rating), SUM(mps.minutes_played),
+               SUM(mps.yellow_cards), SUM(mps.red_cards)
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777 {year_clause}
+    """, (player_id,) + yp)
+    agg = cur.fetchone()
+    conn.close()
+
+    return jsonify({
+        "info": {
+            "name": name,
+            "position": position or "?",
+            "team": team_name,
+            "height": height,
+            "preferred_foot": preferred_foot,
+            "games":   agg[0] or 0,
+            "goals":   agg[1] or 0,
+            "assists": agg[2] or 0,
+            "rating":  round(agg[3], 2) if agg[3] else None,
+            "minutes": agg[4] or 0,
+            "yellow_cards": agg[5] or 0,
+            "red_cards":    agg[6] or 0,
+        },
+        "available_years": available_years,
+        "season_summary":  season_summary,
+        "monthly":         monthly,
+        "recent_form":     recent_form,
+        "radar":           radar,
+    })
+
+
+@app.route("/api/league-dashboard")
+def get_league_dashboard():
+    """K2 리그 전체 선수 인사이트 대시보드"""
+    year = request.args.get("year")   # None → 전체
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    year_clause = "AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?" if year else ""
+    yp = (year,) if year else ()
+
+    # 사용 가능 연도
+    cur.execute("""
+        SELECT DISTINCT strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) yr
+        FROM events e WHERE e.tournament_id=777 AND e.date_ts IS NOT NULL ORDER BY yr
+    """)
+    available_years = [r[0] for r in cur.fetchall()]
+
+    # ── 랭킹 공통 쿼리 ─────────────────────────────────────────
+    base_sql = f"""
+        SELECT mps.player_id,
+               COALESCE(p.name_ko, mps.player_name) name,
+               mps.position pos,
+               mps.team_id,
+               COUNT(*)                   games,
+               SUM(mps.goals)             goals,
+               SUM(mps.assists)           assists,
+               AVG(mps.rating)            rating,
+               SUM(mps.minutes_played)    minutes,
+               SUM(mps.total_shots)       shots,
+               SUM(mps.shots_on_target)   sot,
+               SUM(mps.key_passes)        key_passes,
+               SUM(mps.tackles)           tackles,
+               SUM(mps.interceptions)     interceptions,
+               SUM(mps.successful_dribbles) dribbles,
+               SUM(mps.yellow_cards)      yellows,
+               SUM(mps.red_cards)         reds,
+               SUM(mps.saves)             saves
+        FROM match_player_stats mps
+        JOIN events e ON mps.event_id=e.id
+        LEFT JOIN players p ON mps.player_id=p.id
+        WHERE e.tournament_id=777 {year_clause}
+        GROUP BY mps.player_id
+        HAVING games >= 3
+    """
+    cur.execute(base_sql, yp)
+    rows = cur.fetchall()
+
+    def row_to_dict(r):
+        tid = r["team_id"]
+        return {
+            "id":       r["player_id"],
+            "name":     r["name"] or "?",
+            "pos":      r["pos"] or "?",
+            "team":     _ko_name_by_ss_id(tid) or str(tid),
+            "games":    r["games"],
+            "goals":    r["goals"] or 0,
+            "assists":  r["assists"] or 0,
+            "rating":   round(r["rating"], 2) if r["rating"] else None,
+            "minutes":  r["minutes"] or 0,
+            "shots":    r["shots"] or 0,
+            "sot":      r["sot"] or 0,
+            "key_passes": r["key_passes"] or 0,
+            "tackles":  r["tackles"] or 0,
+            "interceptions": r["interceptions"] or 0,
+            "dribbles": r["dribbles"] or 0,
+            "yellows":  r["yellows"] or 0,
+            "reds":     r["reds"] or 0,
+            "saves":    r["saves"] or 0,
+        }
+
+    all_players = [row_to_dict(r) for r in rows]
+
+    # 랭킹 TOP20
+    top_scorers  = sorted(all_players, key=lambda x: (-x["goals"],  -(x["assists"]), x["name"]))[:20]
+    top_assists  = sorted(all_players, key=lambda x: (-x["assists"], -(x["goals"]),  x["name"]))[:20]
+    top_rated    = sorted(
+        [p for p in all_players if p["rating"] and p["minutes"] >= 270],
+        key=lambda x: -x["rating"]
+    )[:20]
+    top_dribbles = sorted(
+        [p for p in all_players if p["dribbles"] > 0],
+        key=lambda x: -x["dribbles"]
+    )[:20]
+    top_defenders = sorted(
+        [p for p in all_players if p["pos"] in ("D", "M")],
+        key=lambda x: -(x["tackles"] + x["interceptions"])
+    )[:20]
+
+    # ── 포지션별 평균 스탯 ─────────────────────────────────────
+    pos_map = {"G": "GK", "D": "DF", "M": "MF", "F": "FW"}
+    pos_stats = {}
+    for p in all_players:
+        pos = pos_map.get(p["pos"], "기타")
+        if pos == "기타": continue
+        if pos not in pos_stats:
+            pos_stats[pos] = {"goals":0,"assists":0,"rating_sum":0,"rating_cnt":0,
+                              "tackles":0,"dribbles":0,"key_passes":0,"shots":0,"cnt":0}
+        s = pos_stats[pos]
+        s["cnt"] += 1
+        mins = p["minutes"] or 1
+        s["goals"]    += p["goals"] / mins * 90
+        s["assists"]  += p["assists"] / mins * 90
+        s["tackles"]  += p["tackles"] / mins * 90
+        s["dribbles"] += p["dribbles"] / mins * 90
+        s["key_passes"] += p["key_passes"] / mins * 90
+        s["shots"]    += p["shots"] / mins * 90
+        if p["rating"]:
+            s["rating_sum"] += p["rating"]; s["rating_cnt"] += 1
+
+    position_avg = {}
+    for pos, s in pos_stats.items():
+        n = s["cnt"] or 1
+        position_avg[pos] = {
+            "goals":     round(s["goals"]/n, 3),
+            "assists":   round(s["assists"]/n, 3),
+            "tackles":   round(s["tackles"]/n, 3),
+            "dribbles":  round(s["dribbles"]/n, 3),
+            "key_passes":round(s["key_passes"]/n, 3),
+            "shots":     round(s["shots"]/n, 3),
+            "rating":    round(s["rating_sum"]/s["rating_cnt"], 2) if s["rating_cnt"] else None,
+            "count":     s["cnt"],
+        }
+
+    # ── 팀별 공격력 ────────────────────────────────────────────
+    team_stats = {}
+    for p in all_players:
+        t = p["team"]
+        if t not in team_stats:
+            team_stats[t] = {"goals":0,"assists":0,"rating_sum":0,"rating_cnt":0,
+                             "players":0,"minutes":0}
+        s = team_stats[t]
+        s["goals"]   += p["goals"]
+        s["assists"] += p["assists"]
+        s["players"] += 1
+        s["minutes"] += p["minutes"]
+        if p["rating"]: s["rating_sum"] += p["rating"]; s["rating_cnt"] += 1
+
+    team_attack = [
+        {"team": t, "goals": s["goals"], "assists": s["assists"],
+         "rating": round(s["rating_sum"]/s["rating_cnt"],2) if s["rating_cnt"] else None,
+         "players": s["players"]}
+        for t, s in team_stats.items()
+    ]
+    team_attack.sort(key=lambda x: -x["goals"])
+
+    # ── 월별 리그 트렌드 ───────────────────────────────────────
+    cur.execute(f"""
+        SELECT CAST(strftime('%m', datetime(e.date_ts,'unixepoch','localtime')) AS INTEGER) mn,
+               SUM(mps.goals) goals,
+               SUM(mps.assists) assists,
+               AVG(mps.rating) rating,
+               COUNT(DISTINCT e.id) games
+        FROM match_player_stats mps
+        JOIN events e ON mps.event_id=e.id
+        WHERE e.tournament_id=777 {year_clause}
+        GROUP BY mn ORDER BY mn
+    """, yp)
+    monthly_trend = [
+        {"month": r[0], "goals": r[1] or 0, "assists": r[2] or 0,
+         "rating": round(r[3],2) if r[3] else None, "games": r[4]}
+        for r in cur.fetchall()
+    ]
+
+    # ── 평점 분포 (히스토그램 버킷) ───────────────────────────
+    rating_buckets = {}
+    for p in all_players:
+        if not p["rating"]: continue
+        bucket = f"{int(p['rating']*10)//5 * 5 / 10:.1f}"
+        rating_buckets[bucket] = rating_buckets.get(bucket, 0) + 1
+    rating_dist = [{"bucket": k, "count": v}
+                   for k, v in sorted(rating_buckets.items(), key=lambda x: float(x[0]))]
+
+    conn.close()
+    return jsonify({
+        "available_years": available_years,
+        "top_scorers":     top_scorers,
+        "top_assists":     top_assists,
+        "top_rated":       top_rated,
+        "top_dribbles":    top_dribbles,
+        "top_defenders":   top_defenders,
+        "position_avg":    position_avg,
+        "team_attack":     team_attack,
+        "monthly_trend":   monthly_trend,
+        "rating_dist":     rating_dist,
+    })
 
 
 @app.route("/api/kleague2/teams")

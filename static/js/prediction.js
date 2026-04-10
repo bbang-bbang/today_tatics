@@ -22,6 +22,16 @@
             .catch(() => { report.innerHTML = ""; });
     }
 
+    function standingBadge(st) {
+        if (!st) return "";
+        return `<div class="pred-standing">
+            <span class="pst-rank">${st.rank}위</span>
+            <span class="pst-pts">${st.pts}pts</span>
+            <span class="pst-record">${st.w}승 ${st.d}무 ${st.l}패</span>
+            <span class="pst-gd" style="color:${st.gd>0?'#4ade80':st.gd<0?'#f87171':'#9ab'}">GD ${st.gd>0?"+":""}${st.gd}</span>
+        </div>`;
+    }
+
     function render(d) {
         const { home, away, h2h, prediction } = d;
         const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
@@ -33,6 +43,7 @@
             <!-- 홈팀 패널 -->
             <div class="pred-team-panel pred-home">
                 <div class="pred-team-name">${home.name}</div>
+                ${standingBadge(home.standing)}
                 <div class="pred-badges">
                     ${formBadges(home.form)}
                 </div>
@@ -48,7 +59,7 @@
                 ${home.top_scorers.length ? `
                 <div class="pred-scorers">
                     <div class="pred-scorers-title">이번 시즌 득점</div>
-                    ${home.top_scorers.map(s => `<div class="pred-scorer-row"><span class="scorer-name">${s.name}</span><span class="scorer-g">${s.goals}골</span></div>`).join("")}
+                    ${home.top_scorers.map(s => `<div class="pred-scorer-row"><span class="scorer-name scorer-link" data-player-id="${s.id}">${s.name}</span><span class="scorer-g">${s.goals}골</span></div>`).join("")}
                 </div>` : ""}
             </div>
 
@@ -81,6 +92,7 @@
             <!-- 원정팀 패널 -->
             <div class="pred-team-panel pred-away">
                 <div class="pred-team-name">${away.name}</div>
+                ${standingBadge(away.standing)}
                 <div class="pred-badges">
                     ${formBadges(away.form)}
                 </div>
@@ -96,7 +108,7 @@
                 ${away.top_scorers.length ? `
                 <div class="pred-scorers">
                     <div class="pred-scorers-title">이번 시즌 득점</div>
-                    ${away.top_scorers.map(s => `<div class="pred-scorer-row"><span class="scorer-name">${s.name}</span><span class="scorer-g">${s.goals}골</span></div>`).join("")}
+                    ${away.top_scorers.map(s => `<div class="pred-scorer-row"><span class="scorer-name scorer-link" data-player-id="${s.id}">${s.name}</span><span class="scorer-g">${s.goals}골</span></div>`).join("")}
                 </div>` : ""}
             </div>
 
@@ -116,4 +128,15 @@
         if (pct <= 30) return "#f87171";
         return "#c8d8f0";
     }
+
+    // 득점 선수 이름 클릭 → 선수 분석 모달
+    report.addEventListener("click", (e) => {
+        const el = e.target.closest(".scorer-link");
+        if (!el) return;
+        const pid = parseInt(el.dataset.playerId);
+        if (!pid) return;
+        document.dispatchEvent(new CustomEvent("playerSelected", {
+            detail: { playerId: pid, playerName: el.textContent.trim() }
+        }));
+    });
 })();

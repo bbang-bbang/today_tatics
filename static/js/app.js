@@ -974,8 +974,9 @@
     const editPopup = document.getElementById("player-edit-popup");
     const editNumber = document.getElementById("player-edit-number");
     const editName = document.getElementById("player-edit-name");
-    const editConfirm = document.getElementById("player-edit-confirm");
-    const editClose = document.getElementById("player-edit-close");
+    const editConfirm  = document.getElementById("player-edit-confirm");
+    const editHeatmap  = document.getElementById("player-edit-heatmap");
+    const editClose    = document.getElementById("player-edit-close");
     const editTeamLabel = document.getElementById("player-edit-team-label");
     let editingPlayer = null;
 
@@ -1019,6 +1020,13 @@
         closeEditPopup(); render(); renderBench();
     }
     editConfirm.addEventListener("click", confirmEdit);
+    editHeatmap.addEventListener("click", () => {
+        if (!editingPlayer) return;
+        const name = editingPlayer.name;
+        const side = editingPlayer.team;
+        closeEditPopup();
+        if (name && name !== "선수") loadHeatmap(name, side);
+    });
     editClose.addEventListener("click", closeEditPopup);
     editPopup.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); confirmEdit(); } if (e.key === "Escape") closeEditPopup(); });
     document.addEventListener("pointerdown", (e) => { if (editingPlayer && !editPopup.contains(e.target) && e.target !== canvas) closeEditPopup(); });
