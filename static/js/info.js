@@ -315,6 +315,9 @@
                         : data;
                     renderAvgGoals(extraEl._avgRow, yrData, yr);
                 }
+                // 연도 변경 시 시간대 차트도 갱신
+                const year = (yr === "전체") ? null : yr;
+                loadGoalTiming(team.id, timingSection, year);
             }));
         }
 
@@ -324,16 +327,17 @@
         const timingSection = document.createElement("div");
         timingSection.className = "gt-section";
         col.appendChild(timingSection);
-        loadGoalTiming(team.id, timingSection);
+        loadGoalTiming(team.id, timingSection, null);
 
         return col;
     }
 
     // ── 득점/실점 시간대 차트 ────────────────────────────────
     const _gtCharts = {};
-    function loadGoalTiming(teamId, container) {
+    function loadGoalTiming(teamId, container, year) {
         container.innerHTML = `<div class="gt-loading">시간대 분석 로딩 중...</div>`;
-        fetch(`/api/team-goal-timing?teamId=${teamId}`)
+        const url = `/api/team-goal-timing?teamId=${teamId}${year ? `&year=${year}` : ""}`;
+        fetch(url)
             .then(r => r.json())
             .then(d => {
                 if (!d.ready || !d.gf_bands) {
