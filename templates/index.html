@@ -70,17 +70,25 @@
                     <span>위에서 HOME · AWAY 팀을 선택하면 전적이 표시됩니다</span>
                 </div>
             </div>
+            <!-- 예측 보고서 섹션 -->
+            <section id="prediction-section" class="hidden">
+                <div id="prediction-report">
+                    <!-- JS로 렌더링 -->
+                </div>
+            </section>
         </div>
         <div id="main-area">
             <main id="canvas-container">
                 <!-- 왼쪽 세로 툴바 (필드 바로 왼쪽) -->
                 <nav id="left-toolbar">
-                    <div class="ltb-group">
+                    <!-- 모드 -->
+                    <div class="ltb-group ltb-grid2">
                         <button id="btn-select" class="mode-btn active" title="선수 이동 모드">이동</button>
                         <button id="btn-erase" class="mode-btn" title="선 하나씩 지우기">✕ 지우기</button>
                     </div>
                     <div class="ltb-divider"></div>
-                    <div class="ltb-group">
+                    <!-- 그리기 도구 -->
+                    <div class="ltb-group ltb-grid2">
                         <button class="mode-btn draw-mode-btn" data-draw="arrow" title="실선 화살표">→ 실선</button>
                         <button class="mode-btn draw-mode-btn" data-draw="dashedArrow" title="점선 화살표">⇢ 점선</button>
                         <button class="mode-btn draw-mode-btn" data-draw="curvedArrow" title="곡선 화살표">↷ 곡선</button>
@@ -89,6 +97,7 @@
                         <button class="mode-btn draw-mode-btn" data-draw="dashedLine" title="점선">┄ 점선</button>
                     </div>
                     <div class="ltb-divider"></div>
+                    <!-- 색상 -->
                     <div class="ltb-group color-swatches" title="선 색상">
                         <span class="color-swatch active" data-color="rgba(255,255,255,0.85)"></span>
                         <span class="color-swatch" data-color="rgba(255,68,68,0.9)"></span>
@@ -98,24 +107,29 @@
                         <span class="color-swatch" data-color="rgba(255,140,0,0.9)"></span>
                     </div>
                     <div class="ltb-divider"></div>
+                    <!-- 속도 -->
                     <div class="ltb-group ltb-speed">
                         <span class="ltb-label">속도</span>
-                        <input id="anim-speed" type="range" min="0.5" max="4" step="0.5" value="1">
-                        <span id="anim-speed-label" class="ltb-speed-val">1.0x</span>
+                        <div class="ltb-speed-row">
+                            <input id="anim-speed" type="range" min="0.5" max="4" step="0.5" value="1">
+                            <span id="anim-speed-label" class="ltb-speed-val">1.0x</span>
+                        </div>
                     </div>
                     <div class="ltb-divider"></div>
-                    <div class="ltb-group">
+                    <!-- 액션 -->
+                    <div class="ltb-group ltb-grid2">
                         <button id="btn-add-ball" class="action-btn" title="축구공 추가">⚽ 공 추가</button>
                         <button id="btn-play-all" class="action-btn play-btn" title="모든 선 애니메이션 재생">▶ 재생</button>
-                        <button id="btn-clear-lines" class="action-btn" title="그리기 지우기">그리기 지우기</button>
+                        <button id="btn-clear-lines" class="action-btn" title="그리기 지우기">그리기지우기</button>
                         <button id="btn-undo-line" class="action-btn" title="마지막 선 취소">실행취소</button>
-                        <button id="btn-reset" class="action-btn" title="전체 초기화">초기화</button>
+                        <button id="btn-reset" class="action-btn ltb-span2" title="전체 초기화">초기화</button>
                     </div>
                     <div class="ltb-divider"></div>
-                    <div class="ltb-group">
+                    <!-- 저장/로드 -->
+                    <div class="ltb-group ltb-grid2">
                         <button id="btn-save" class="action-btn save-btn" title="현재 전술 저장">저장</button>
                         <button id="btn-load" class="action-btn load-btn" title="저장된 전술 불러오기">불러오기</button>
-                        <button id="btn-k2-heatmap" class="action-btn" title="K리그2 선수 히트맵">🔥 히트맵</button>
+                        <button id="btn-k2-heatmap" class="action-btn ltb-span2" title="K리그2 선수 히트맵">🔥 히트맵</button>
                     </div>
                 </nav>
                 <canvas id="field"></canvas>
@@ -143,6 +157,15 @@
                             <button class="squad-btn squad-load-btn" data-side="B" title="저장된 스쿼드 불러오기">스쿼드 불러오기</button>
                             <button class="squad-btn team-reset-btn" data-side="B" title="AWAY 팀 초기화">초기화</button>
                         </div>
+                    </div>
+
+                    <!-- 분석 아이콘 위젯 -->
+                    <div id="analytics-widget-area">
+                        <button id="btn-analytics" class="analytics-widget-btn" title="팀 분석 보고서">
+                            <span class="aw-icon">📊</span>
+                            <span class="aw-label">팀 분석</span>
+                            <span class="aw-sub">승률 · 월별 · 날씨</span>
+                        </button>
                     </div>
                 </aside>
             </main>
@@ -319,36 +342,64 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=8"></script>
+    <!-- 팀 분석 모달 -->
+    <div id="analytics-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content analytics-modal-content">
+            <div class="analytics-header">
+                <h2 id="analytics-team-title">팀 분석</h2>
+                <select id="analytics-team-select" class="analytics-team-select"></select>
+                <button id="analytics-close" class="modal-btn cancel">닫기</button>
+            </div>
+            <div class="analytics-tabs-row">
+                <div class="analytics-tabs">
+                    <button class="analytics-tab-btn active" data-tab="vs">상대팀별 승률</button>
+                    <button class="analytics-tab-btn" data-tab="month">월별 승률</button>
+                    <button class="analytics-tab-btn" data-tab="ha">홈/어웨이</button>
+                    <button class="analytics-tab-btn" data-tab="weather">날씨</button>
+                </div>
+                <div id="year-filter-global" class="year-filter-wrap"></div>
+            </div>
 
-    <!-- ── 매치업 비교 섹션 ─────────────────────────────── -->
-    <section id="info-section">
-        <div class="info-main-layout">
-            <div class="info-container info-standings-sidebar">
-                <div class="sidebar-header">
-                    <select id="sidebar-league-select" class="sidebar-league-dropdown">
-                        <option value="k1">K리그 1</option>
-                        <option value="k2">K리그 2</option>
-                    </select>
-                </div>
-                <div id="sidebar-standings-k1" class="standings-table-wrap">
-                    <div class="matchup-placeholder"><span>불러오는 중...</span></div>
-                </div>
-                <div id="sidebar-standings-k2" class="standings-table-wrap" style="display:none;">
-                    <div class="matchup-placeholder"><span>불러오는 중...</span></div>
+            <!-- 상대팀별 -->
+            <div id="analytics-panel-vs" class="analytics-panel">
+                <div class="chart-wrap"><canvas id="chart-vs"></canvas></div>
+                <div class="analytics-table-wrap">
+                    <table id="table-vs" class="analytics-table"></table>
                 </div>
             </div>
-            <div class="info-container matchup-right-panel">
-                <div class="info-divider">
-                    <span class="info-divider-label">팀을 선택하면 위 배너 아래에 전적이 표시됩니다</span>
+
+            <!-- 월별 -->
+            <div id="analytics-panel-month" class="analytics-panel hidden">
+                <div class="chart-wrap" style="height:260px"><canvas id="chart-month"></canvas></div>
+            </div>
+
+            <!-- 홈/어웨이 -->
+            <div id="analytics-panel-ha" class="analytics-panel hidden">
+                <div class="chart-wrap" style="height:240px"><canvas id="chart-ha"></canvas></div>
+                <div class="analytics-table-wrap">
+                    <table id="table-ha" class="analytics-table"></table>
                 </div>
+            </div>
+
+            <!-- 날씨 -->
+            <div id="analytics-panel-weather" class="analytics-panel hidden">
+                <p class="analytics-section-label">🌡 기온별 승률</p>
+                <div class="chart-wrap chart-wrap-sm"><canvas id="chart-temp"></canvas></div>
+                <p class="analytics-section-label">💧 습도별 승률</p>
+                <div class="chart-wrap chart-wrap-sm"><canvas id="chart-hum"></canvas></div>
+                <p class="analytics-section-label">💨 풍속별 승률 (m/s)</p>
+                <div class="chart-wrap chart-wrap-sm"><canvas id="chart-wind"></canvas></div>
             </div>
         </div>
-    </section>
+    </div>
 
-    <script src="/static/js/info.js?v=2"></script>
-    <script src="/static/js/standings.js?v=2"></script>
+    <script src="/static/js/app.js?v=8"></script>
+
+    <script src="/static/js/info.js?v=3"></script>
     <script src="/static/js/k2heatmap.js?v=1"></script>
     <script src="/static/js/banner_stats.js?v=1"></script>
+    <script src="/static/js/analytics.js?v=1"></script>
+    <script src="/static/js/prediction.js?v=2"></script>
 </body>
 </html>

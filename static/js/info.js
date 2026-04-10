@@ -746,9 +746,11 @@
             const teamB = teamsData.find(t => t.name === textB);
 
             if (teamA && teamB) {
+                document.dispatchEvent(new CustomEvent("teamsSelected", { detail: { home: teamA, away: teamB } }));
                 if (teamA.id === teamB.id) { renderSameTeam(teamA); return; }
                 renderMatchup(teamA, teamB); return;
             }
+            document.dispatchEvent(new CustomEvent("teamsSelected", { detail: null }));
             if (teamA) { renderSingle(teamA, false); return; }
             if (teamB) { renderSingle(teamB, true); return; }
             clearMatchup();

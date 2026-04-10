@@ -618,6 +618,386 @@ def get_team_top_players():
     return jsonify({"year": latest_year, "scorers": scorers, "assisters": assisters})
 
 
+_ENG_TO_KO = {t["sofascore_id"]: t["name"] for t in TEAMS}
+
+def _ko_name_by_ss_id(ss_id):
+    return _ENG_TO_KO.get(ss_id)
+
+
+@app.route("/api/team-analytics")
+def get_team_analytics():
+    """팀별 상대팀 승률 / 월별 승률 / 홈어웨이 분석"""
+    team_id = request.args.get("teamId")
+    year    = request.args.get("year")          # optional filter
+    team_info = next((t for t in TEAMS if t["id"] == team_id), None)
+    if not team_info:
+        return jsonify({}), 404
+
+    ss_id = team_info["sofascore_id"]
+    db_path = os.path.join(BASE_DIR, "players.db")
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    # 사용 가능 연도 목록
+    cur.execute("""
+        SELECT DISTINCT strftime('%Y', datetime(date_ts,'unixepoch','localtime'))
+        FROM events WHERE tournament_id=777
+          AND (home_team_id=? OR away_team_id=?)
+        ORDER BY 1
+    """, (ss_id, ss_id))
+    available_years = [r[0] for r in cur.fetchall()]
+
+    year_clause = "AND strftime('%Y', datetime(date_ts,'unixepoch','localtime')) = ?" if year else ""
+    yp = (year,) if year else ()
+
+    # 1. 상대팀별 승률 (홈+원정 합산, 팀 ID 포함해 한글명 변환)
+    cur.execute("""
+        SELECT opp_id, opp_name, SUM(g) games,
+               SUM(w) w, SUM(d) d, SUM(l) l,
+               SUM(gf) gf, SUM(ga) ga
+        FROM (
+            SELECT away_team_id opp_id, away_team_name opp_name,
+                   COUNT(*) g,
+                   SUM(CASE WHEN home_score > away_score THEN 1 ELSE 0 END) w,
+                   SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) d,
+                   SUM(CASE WHEN home_score < away_score THEN 1 ELSE 0 END) l,
+                   SUM(home_score) gf, SUM(away_score) ga
+            FROM events WHERE tournament_id=777 AND home_team_id=? {yc}
+            GROUP BY away_team_id
+            UNION ALL
+            SELECT home_team_id opp_id, home_team_name opp_name,
+                   COUNT(*) g,
+                   SUM(CASE WHEN away_score > home_score THEN 1 ELSE 0 END) w,
+                   SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) d,
+                   SUM(CASE WHEN away_score < home_score THEN 1 ELSE 0 END) l,
+                   SUM(away_score) gf, SUM(home_score) ga
+            FROM events WHERE tournament_id=777 AND away_team_id=? {yc}
+            GROUP BY home_team_id
+        )
+        GROUP BY opp_id ORDER BY games DESC, w DESC
+    """.format(yc=year_clause), (ss_id, *yp, ss_id, *yp))
+    vs_rows = cur.fetchall()
+    vs_opponents = [
+        {"name": _ko_name_by_ss_id(r[0]) or r[1],
+         "games": r[2], "w": r[3], "d": r[4], "l": r[5],
+         "gf": r[6], "ga": r[7]}
+        for r in vs_rows
+    ]
+
+    # 2. 월별 승률
+    cur.execute("""
+        SELECT mon, SUM(g) games, SUM(w) w, SUM(d) d, SUM(l) l, SUM(gf) gf, SUM(ga) ga
+        FROM (
+            SELECT CAST(strftime('%m', datetime(date_ts,'unixepoch','localtime')) AS INT) mon,
+                   COUNT(*) g,
+                   SUM(CASE WHEN home_score > away_score THEN 1 ELSE 0 END) w,
+                   SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) d,
+                   SUM(CASE WHEN home_score < away_score THEN 1 ELSE 0 END) l,
+                   SUM(home_score) gf, SUM(away_score) ga
+            FROM events WHERE tournament_id=777 AND home_team_id=? {yc}
+            GROUP BY mon
+            UNION ALL
+            SELECT CAST(strftime('%m', datetime(date_ts,'unixepoch','localtime')) AS INT) mon,
+                   COUNT(*) g,
+                   SUM(CASE WHEN away_score > home_score THEN 1 ELSE 0 END) w,
+                   SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) d,
+                   SUM(CASE WHEN away_score < home_score THEN 1 ELSE 0 END) l,
+                   SUM(away_score) gf, SUM(home_score) ga
+            FROM events WHERE tournament_id=777 AND away_team_id=? {yc}
+            GROUP BY mon
+        )
+        GROUP BY mon ORDER BY mon
+    """.format(yc=year_clause), (ss_id, *yp, ss_id, *yp))
+    month_rows = cur.fetchall()
+    by_month = [
+        {"month": r[0], "games": r[1], "w": r[2], "d": r[3], "l": r[4],
+         "gf": r[5], "ga": r[6]}
+        for r in month_rows
+    ]
+
+    # 3. 홈/어웨이 연도별 승률
+    cur.execute("""
+        SELECT yr, side, SUM(g) games, SUM(w) w, SUM(d) d, SUM(l) l, SUM(gf) gf, SUM(ga) ga
+        FROM (
+            SELECT strftime('%Y', datetime(date_ts,'unixepoch','localtime')) yr,
+                   'home' side,
+                   COUNT(*) g,
+                   SUM(CASE WHEN home_score > away_score THEN 1 ELSE 0 END) w,
+                   SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) d,
+                   SUM(CASE WHEN home_score < away_score THEN 1 ELSE 0 END) l,
+                   SUM(home_score) gf, SUM(away_score) ga
+            FROM events WHERE tournament_id=777 AND home_team_id=? {yc}
+            GROUP BY yr
+            UNION ALL
+            SELECT strftime('%Y', datetime(date_ts,'unixepoch','localtime')) yr,
+                   'away' side,
+                   COUNT(*) g,
+                   SUM(CASE WHEN away_score > home_score THEN 1 ELSE 0 END) w,
+                   SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) d,
+                   SUM(CASE WHEN away_score < home_score THEN 1 ELSE 0 END) l,
+                   SUM(away_score) gf, SUM(home_score) ga
+            FROM events WHERE tournament_id=777 AND away_team_id=? {yc}
+            GROUP BY yr
+        )
+        GROUP BY yr, side ORDER BY yr, side
+    """.format(yc=year_clause), (ss_id, *yp, ss_id, *yp))
+    ha_rows = cur.fetchall()
+    by_year_ha = {}
+    for yr, side, g, w, d, l, gf, ga in ha_rows:
+        if yr not in by_year_ha:
+            by_year_ha[yr] = {}
+        by_year_ha[yr][side] = {"games": g, "w": w, "d": d, "l": l, "gf": gf, "ga": ga}
+
+    # 4. 날씨별 승률 (기온 / 습도 / 풍속)
+    weather_sql = """
+        SELECT
+            e.id,
+            CASE WHEN mps.team_id = ? THEN
+                CASE WHEN (mps.is_home=1 AND e.home_score > e.away_score)
+                          OR (mps.is_home=0 AND e.away_score > e.home_score) THEN 'w'
+                     WHEN e.home_score = e.away_score THEN 'd'
+                     ELSE 'l' END
+            END result,
+            CASE WHEN mps.is_home=1 THEN e.home_score ELSE e.away_score END gf,
+            CASE WHEN mps.is_home=1 THEN e.away_score ELSE e.home_score END ga,
+            mps.temperature, mps.humidity, mps.wind_speed
+        FROM events e
+        JOIN match_player_stats mps ON e.id = mps.event_id
+        WHERE e.tournament_id = 777
+          AND mps.team_id = ?
+          AND mps.temperature IS NOT NULL
+          {yc_e}
+        GROUP BY e.id
+    """.format(yc_e="AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) = ?" if year else "")
+    cur.execute(weather_sql, (ss_id, ss_id, *yp))
+    w_rows = cur.fetchall()
+
+    def bucket_weather(rows, key_fn, labels):
+        buckets = {lbl: {"games":0,"w":0,"d":0,"l":0,"gf":0,"ga":0} for lbl in labels}
+        for _, result, gf, ga, temp, hum, wind in rows:
+            lbl = key_fn(temp, hum, wind)
+            if lbl and result:
+                b = buckets[lbl]
+                b["games"] += 1
+                b[result] += 1
+                b["gf"] += gf or 0
+                b["ga"] += ga or 0
+        return [{"label": k, **v} for k, v in buckets.items() if v["games"] > 0]
+
+    temp_labels  = ["영하~5도","5~15도","15~25도","25도~"]
+    hum_labels   = ["건조(<40%)","보통(40~65%)","습함(65%+)"]
+    wind_labels  = ["약풍(<3)","중풍(3~7)","강풍(7+)"]
+
+    by_temp = bucket_weather(w_rows,
+        lambda t,h,w: "영하~5도" if t<5 else "5~15도" if t<15 else "15~25도" if t<25 else "25도~",
+        temp_labels)
+    by_hum  = bucket_weather(w_rows,
+        lambda t,h,w: "건조(<40%)" if h<40 else "보통(40~65%)" if h<65 else "습함(65%+)",
+        hum_labels)
+    by_wind = bucket_weather(w_rows,
+        lambda t,h,w: "약풍(<3)" if w<3 else "중풍(3~7)" if w<7 else "강풍(7+)",
+        wind_labels)
+
+    conn.close()
+    return jsonify({
+        "team": team_info["name"],
+        "available_years": available_years,
+        "vs_opponents": vs_opponents,
+        "by_month": by_month,
+        "by_year_ha": by_year_ha,
+        "weather": {
+            "by_temp": by_temp,
+            "by_hum": by_hum,
+            "by_wind": by_wind,
+        },
+    })
+
+
+@app.route("/api/match-prediction")
+def get_match_prediction():
+    """두 팀 간 예측 보고서: 승률·유의사항·주요 선수"""
+    home_id = request.args.get("homeTeam")
+    away_id = request.args.get("awayTeam")
+    home_info = next((t for t in TEAMS if t["id"] == home_id), None)
+    away_info = next((t for t in TEAMS if t["id"] == away_id), None)
+    if not home_info or not away_info:
+        return jsonify({}), 404
+
+    hid = home_info["sofascore_id"]
+    aid = away_info["sofascore_id"]
+    db_path = os.path.join(BASE_DIR, "players.db")
+    conn = sqlite3.connect(db_path)
+    cur  = conn.cursor()
+
+    import math, datetime
+    now_month = datetime.datetime.now().month
+
+    def team_stats(ss_id, side_home):
+        """팀 전반 지표 계산"""
+        # 전체 K2 경기 (홈+원정)
+        cur.execute("""
+            SELECT COUNT(*) g,
+                   SUM(CASE WHEN home_score>away_score THEN 1 ELSE 0 END) w,
+                   SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END) d,
+                   SUM(home_score) gf, SUM(away_score) ga
+            FROM events WHERE tournament_id=777 AND home_team_id=?
+        """, (ss_id,))
+        hrow = cur.fetchone()
+        cur.execute("""
+            SELECT COUNT(*) g,
+                   SUM(CASE WHEN away_score>home_score THEN 1 ELSE 0 END) w,
+                   SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END) d,
+                   SUM(away_score) gf, SUM(home_score) ga
+            FROM events WHERE tournament_id=777 AND away_team_id=?
+        """, (ss_id,))
+        arow = cur.fetchone()
+        hg,hw,hd,hgf,hga = hrow
+        ag,aw,ad,agf,aga = arow
+        total_g = (hg or 0)+(ag or 0)
+        total_w = (hw or 0)+(aw or 0)
+        home_wr = hw/(hg or 1)*100
+        away_wr = aw/(ag or 1)*100
+
+        # 최근 5경기 폼
+        cur.execute("""
+            SELECT home_score, away_score, home_team_id FROM events
+            WHERE tournament_id=777 AND (home_team_id=? OR away_team_id=?)
+            ORDER BY date_ts DESC LIMIT 5
+        """, (ss_id, ss_id))
+        recent = cur.fetchall()
+        form = []
+        for hs, as_, ht in recent:
+            is_home = ht == ss_id
+            gf = hs if is_home else as_
+            ga = as_ if is_home else hs
+            form.append("W" if gf>ga else "D" if gf==ga else "L")
+
+        # 월별 승률 — 현재 달 기준 과거 데이터
+        cur.execute("""
+            SELECT SUM(g), SUM(w) FROM (
+                SELECT COUNT(*) g, SUM(CASE WHEN home_score>away_score THEN 1 ELSE 0 END) w
+                FROM events WHERE tournament_id=777 AND home_team_id=?
+                  AND CAST(strftime('%m', datetime(date_ts,'unixepoch','localtime')) AS INT)=?
+                UNION ALL
+                SELECT COUNT(*) g, SUM(CASE WHEN away_score>home_score THEN 1 ELSE 0 END) w
+                FROM events WHERE tournament_id=777 AND away_team_id=?
+                  AND CAST(strftime('%m', datetime(date_ts,'unixepoch','localtime')) AS INT)=?
+            )
+        """, (ss_id, now_month, ss_id, now_month))
+        mr = cur.fetchone()
+        month_wr = (mr[1] or 0)/(mr[0] or 1)*100 if (mr and mr[0]) else None
+
+        # 홈/원정 격차
+        ha_gap = home_wr - away_wr
+
+        # 득점 top3 (현재 시즌)
+        cur.execute("""
+            SELECT MAX(strftime('%Y', datetime(date_ts,'unixepoch','localtime')))
+            FROM events WHERE tournament_id=777
+        """)
+        latest_yr = cur.fetchone()[0]
+        cur.execute("""
+            SELECT COALESCE(p.name_ko, mps.player_name), SUM(mps.goals) g
+            FROM match_player_stats mps
+            JOIN events e ON mps.event_id=e.id
+            LEFT JOIN players p ON mps.player_id=p.id
+            WHERE mps.team_id=? AND e.tournament_id=777
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+              AND mps.goals>0
+            GROUP BY mps.player_id ORDER BY g DESC LIMIT 3
+        """, (ss_id, latest_yr))
+        top_scorers = [{"name": r[0], "goals": r[1]} for r in cur.fetchall()]
+
+        # 유의사항 도출
+        notes = []
+        if ha_gap > 20:
+            notes.append(f"홈에서 특히 강함 (홈승률 {home_wr:.0f}% vs 원정 {away_wr:.0f}%)")
+        elif ha_gap < -10:
+            notes.append(f"원정이 오히려 강함 (원정승률 {away_wr:.0f}%)")
+        if month_wr is not None:
+            mn = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"][now_month-1]
+            if month_wr >= 55:
+                notes.append(f"{mn} 강세 (역대 {mn} 승률 {month_wr:.0f}%)")
+            elif month_wr <= 30:
+                notes.append(f"{mn} 약세 (역대 {mn} 승률 {month_wr:.0f}%)")
+        form_w = form.count("W")
+        form_l = form.count("L")
+        if form_w >= 4:
+            notes.append("최근 5경기 상승세")
+        elif form_l >= 3:
+            notes.append("최근 5경기 부진")
+        avg_gf = ((hgf or 0)+(agf or 0)) / (total_g or 1)
+        avg_ga = ((hga or 0)+(aga or 0)) / (total_g or 1)
+        if avg_gf >= 1.6:
+            notes.append(f"공격적 (경기당 평균 {avg_gf:.1f}골)")
+        if avg_ga >= 1.6:
+            notes.append(f"수비 취약 (경기당 평균 {avg_ga:.1f}실점)")
+
+        return {
+            "total_games": total_g,
+            "win_rate": total_w/(total_g or 1)*100,
+            "home_wr": home_wr,
+            "away_wr": away_wr,
+            "form": form,
+            "month_wr": month_wr,
+            "notes": notes,
+            "top_scorers": top_scorers,
+            "avg_gf": avg_gf,
+            "avg_ga": avg_ga,
+        }
+
+    # H2H 직접 전적
+    cur.execute("""
+        SELECT COUNT(*) g,
+               SUM(CASE WHEN home_team_id=? THEN
+                     CASE WHEN home_score>away_score THEN 1 ELSE 0 END
+                   ELSE
+                     CASE WHEN away_score>home_score THEN 1 ELSE 0 END
+                   END) w,
+               SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END) d
+        FROM events WHERE tournament_id=777
+          AND ((home_team_id=? AND away_team_id=?) OR (home_team_id=? AND away_team_id=?))
+    """, (hid, hid, aid, aid, hid))
+    h2h = cur.fetchone()
+    h2h_g, h2h_w, h2h_d = h2h
+    h2h_l = (h2h_g or 0) - (h2h_w or 0) - (h2h_d or 0)
+
+    home_stats = team_stats(hid, True)
+    away_stats = team_stats(aid, False)
+
+    # 승률 예측 (가중 평균)
+    # H2H 승률 40% + 홈팀 홈승률 30% + 원정팀 원정승률(역) 30%
+    h2h_win_rate = (h2h_w or 0) / (h2h_g or 1) * 100
+    home_factor  = home_stats["home_wr"]
+    away_factor  = 100 - away_stats["away_wr"]  # 홈팀 유리 관점
+
+    if h2h_g and h2h_g >= 3:
+        pred_home = h2h_win_rate * 0.4 + home_factor * 0.35 + away_factor * 0.25
+    else:
+        pred_home = home_factor * 0.55 + away_factor * 0.45
+
+    # 최근 폼 보정
+    home_form_bonus = (home_stats["form"].count("W") - home_stats["form"].count("L")) * 2
+    away_form_bonus = (away_stats["form"].count("W") - away_stats["form"].count("L")) * 2
+    pred_home = max(5, min(90, pred_home + home_form_bonus - away_form_bonus))
+    pred_away = max(5, min(90, 100 - pred_home - 15))
+    pred_draw = max(5, 100 - pred_home - pred_away)
+
+    # 정규화
+    total = pred_home + pred_draw + pred_away
+    pred_home = round(pred_home / total * 100)
+    pred_draw = round(pred_draw / total * 100)
+    pred_away = 100 - pred_home - pred_draw
+
+    conn.close()
+    return jsonify({
+        "home": {"id": home_id, "name": home_info["name"], **home_stats},
+        "away": {"id": away_id, "name": away_info["name"], **away_stats},
+        "h2h": {"games": h2h_g or 0, "home_w": h2h_w or 0, "draw": h2h_d or 0, "away_w": h2h_l},
+        "prediction": {"home": pred_home, "draw": pred_draw, "away": pred_away},
+    })
+
+
 KLEAGUE_CODE_MAP = {
     "K01": "ulsan",  "K02": "suwon",    "K03": "pohang",  "K04": "jeju",
     "K05": "jeonbuk","K06": "busan",    "K07": "jeonnam", "K08": "seongnam",
