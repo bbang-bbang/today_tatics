@@ -1,0 +1,205 @@
+// player_report.js — 선수 개별 분석 보고서 (전술판 아래 섹션)
+
+(function () {
+    const section  = document.getElementById("player-report-section");
+    const body     = document.getElementById("pr-body");
+    const yrFilter = document.getElementById("pr-year-filter");
+
+    let currentName = null;
+    let currentYear = null;
+    let radarChart  = null;
+
+    /* ── 이벤트 수신 ─────────────────────────────────────── */
+    document.addEventListener("openPlayerReport", (e) => {
+        currentName = e.detail.name;
+        currentYear = null;
+        load();
+    });
+
+    /* ── 데이터 로드 ─────────────────────────────────────── */
+    function load() {
+        if (!currentName) return;
+        body.innerHTML = `<div class="pr-loading">분석 중...</div>`;
+        const url = `/api/player-stat-report?name=${encodeURIComponent(currentName)}${currentYear ? `&year=${currentYear}` : ""}`;
+        fetch(url)
+            .then(r => r.json())
+            .then(d => {
+                if (!d.found) { body.innerHTML = `<div class="pr-empty">선수 데이터를 찾을 수 없습니다.</div>`; return; }
+                render(d);
+            })
+            .catch(() => { body.innerHTML = `<div class="pr-empty">오류가 발생했습니다.</div>`; });
+    }
+
+    /* ── 렌더링 ──────────────────────────────────────────── */
+    function render(d) {
+        const p = d.player;
+        if (radarChart) { radarChart.destroy(); radarChart = null; }
+
+        // 연도 필터
+        const years = ["전체", ...(d.available_years || [])];
+        yrFilter.innerHTML = years.map(y => {
+            const active = (y === "전체" && !currentYear) || y === currentYear;
+            return `<button class="pr-yr-btn${active ? " active":""}" data-y="${y}">${y}</button>`;
+        }).join("");
+        yrFilter.querySelectorAll(".pr-yr-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                currentYear = btn.dataset.y === "전체" ? null : btn.dataset.y;
+                load();
+            });
+        });
+
+        // 신체 정보 뱃지
+        const posLabel = p.pos_label || p.pos || "?";
+        const posColor = {GK:"#fbbf24",DF:"#4ade80",MF:"#4ea4f8",FW:"#f87171"}[posLabel] || "#9ab";
+        const heightBadge = p.height ? physBadge("키", `${p.height}cm`, p.height_rank) : "";
+        const weightBadge = p.weight ? physBadge("몸무게", `${p.weight}kg`, p.weight_rank) : "";
+
+        // 스탯 카드 (퍼센타일 바)
+        const statCards = d.stat_items.map(item => statCard(item, posLabel)).join("");
+
+        // 최근 5경기 폼 테이블
+        const formCols = getFormCols(p.pos);
+        const formHead = formCols.map(c => `<th>${c.label}</th>`).join("");
+        const formRows = d.recent_form.map(g => {
+            const resCls = g.result==="W"?"pr-res-w":g.result==="D"?"pr-res-d":"pr-res-l";
+            const ha = g.is_home ? "홈" : "원정";
+            const cells = formCols.map(c => `<td>${g[c.key] ?? "-"}</td>`).join("");
+            return `<tr>
+                <td>${g.date}</td>
+                <td>${g.opponent} <span class="pr-ha">${ha}</span></td>
+                <td>${g.score}</td>
+                <td class="${resCls}">${g.result}</td>
+                ${cells}
+                <td>${g.rating ?? "-"}</td>
+            </tr>`;
+        }).join("");
+
+        body.innerHTML = `
+        <div class="pr-card pr-info-card">
+            <div class="pr-player-header">
+                <div class="pr-pos-badge" style="background:${posColor}22;border-color:${posColor}55;color:${posColor}">${posLabel}</div>
+                <div class="pr-player-name">${p.name}</div>
+                <div class="pr-player-team">${p.team}</div>
+                <div class="pr-info-badges">
+                    <span class="pr-badge">${p.games}경기</span>
+                    <span class="pr-badge pr-badge-goal">${p.goals}골</span>
+                    <span class="pr-badge pr-badge-assist">${p.assists}도움</span>
+                    ${p.rating ? `<span class="pr-badge pr-badge-rating">★ ${p.rating}</span>` : ""}
+                    ${p.yellows ? `<span class="pr-badge">🟨${p.yellows}</span>` : ""}
+                    ${p.reds    ? `<span class="pr-badge">🟥${p.reds}</span>` : ""}
+                    ${heightBadge}${weightBadge}
+                </div>
+                <div class="pr-peer-note">동일 포지션 ${posLabel} 선수 ${d.peer_count}명 대비 퍼센타일</div>
+            </div>
+        </div>
+
+        <div class="pr-main-grid">
+            <!-- 레이더 차트 -->
+            <div class="pr-card pr-radar-card">
+                <div class="pr-section-title">종합 능력치 레이더</div>
+                <canvas id="pr-radar-canvas"></canvas>
+            </div>
+
+            <!-- 스탯 카드들 -->
+            <div class="pr-card pr-stats-card">
+                <div class="pr-section-title">주요 지표 퍼센타일 <span class="pr-pos-tag">${posLabel} 기준</span></div>
+                <div class="pr-stat-list">${statCards}</div>
+            </div>
+        </div>
+
+        <!-- 최근 폼 -->
+        <div class="pr-card">
+            <div class="pr-section-title">최근 5경기</div>
+            <div class="pr-table-wrap">
+                <table class="pr-table">
+                    <thead><tr><th>날짜</th><th>상대</th><th>스코어</th><th>결과</th>${formHead}<th>평점</th></tr></thead>
+                    <tbody>${formRows || `<tr><td colspan="10" style="text-align:center;color:#4a6080;padding:16px">데이터 없음</td></tr>`}</tbody>
+                </table>
+            </div>
+        </div>
+        `;
+
+        // 레이더 차트
+        renderRadar(d.radar, posLabel);
+    }
+
+    /* ── 신체 뱃지 ───────────────────────────────────────── */
+    function physBadge(label, val, rank) {
+        if (!rank) return `<span class="pr-badge">${label} ${val}</span>`;
+        const color = rank.pct >= 70 ? "#4ade80" : rank.pct >= 40 ? "#9ab" : "#f87171";
+        return `<span class="pr-badge pr-badge-phys" title="${rank.rank}위/${rank.total}명">
+            ${label} ${val} <span style="color:${color};font-size:0.7em">상위 ${100-rank.pct}%</span>
+        </span>`;
+    }
+
+    /* ── 스탯 카드 ───────────────────────────────────────── */
+    function statCard(item, posLabel) {
+        const pct = item.pctile;
+        const color = pct >= 75 ? "#4ade80" : pct >= 50 ? "#4ea4f8" : pct >= 25 ? "#fbbf24" : "#f87171";
+        const grade = pct >= 90 ? "탁월" : pct >= 75 ? "우수" : pct >= 50 ? "평균이상" : pct >= 25 ? "평균이하" : "하위";
+        return `<div class="pr-stat-item">
+            <div class="pr-stat-label">
+                <span class="pr-stat-icon">${item.icon}</span>
+                <span>${item.label}</span>
+                <span class="pr-stat-val">${item.val}</span>
+            </div>
+            <div class="pr-pct-bar-wrap">
+                <div class="pr-pct-bar" style="width:${pct}%;background:${color}"></div>
+            </div>
+            <div class="pr-pct-info">
+                <span style="color:${color}">${pct}%ile</span>
+                <span class="pr-grade" style="color:${color}">${grade}</span>
+            </div>
+        </div>`;
+    }
+
+    /* ── 포지션별 폼 컬럼 ────────────────────────────────── */
+    function getFormCols(pos) {
+        const map = {
+            G: [{key:"saves",label:"선방"},{key:"aer_w",label:"공중볼"}],
+            D: [{key:"tackles",label:"태클"},{key:"ints",label:"인터셉트"},{key:"clears",label:"클리어"},{key:"aer_w",label:"공중볼"}],
+            M: [{key:"key_passes",label:"키패스"},{key:"goals",label:"골"},{key:"assists",label:"도움"}],
+            F: [{key:"goals",label:"골"},{key:"assists",label:"도움"},{key:"sot",label:"유효슈팅"}],
+        };
+        return map[pos] || map["M"];
+    }
+
+    /* ── 레이더 차트 ─────────────────────────────────────── */
+    function renderRadar(radarData, posLabel) {
+        const ctx = document.getElementById("pr-radar-canvas");
+        if (!ctx || !radarData.length) return;
+        const color = {GK:"rgba(251,191,36,",DF:"rgba(74,222,128,",MF:"rgba(78,164,248,",FW:"rgba(248,113,113,"}[posLabel] || "rgba(78,164,248,";
+        radarChart = new Chart(ctx, {
+            type: "radar",
+            data: {
+                labels: radarData.map(r => r.label),
+                datasets: [{
+                    label: "퍼센타일",
+                    data:  radarData.map(r => r.pctile),
+                    backgroundColor: color+"0.15)",
+                    borderColor:     color+"0.9)",
+                    pointBackgroundColor: color+"1)",
+                    pointRadius: 4,
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    r: {
+                        min: 0, max: 100,
+                        ticks: { stepSize:25, color:"#556", font:{size:10}, backdropColor:"transparent" },
+                        grid: { color:"rgba(255,255,255,0.07)" },
+                        angleLines: { color:"rgba(255,255,255,0.07)" },
+                        pointLabels: { color:"#9ab", font:{size:12} }
+                    }
+                },
+                plugins: {
+                    legend: { display:false },
+                    tooltip: { callbacks: { label: c => ` ${c.parsed.r}%ile` } }
+                }
+            }
+        });
+    }
+})();

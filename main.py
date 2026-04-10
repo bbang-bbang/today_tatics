@@ -1253,6 +1253,353 @@ def get_player_matches():
     return jsonify({"matches": matches, "found": True, "playerId": player_id})
 
 
+@app.route("/api/player-stat-report")
+def get_player_stat_report():
+    """선수 상세 스탯 보고서 - 포지션 대비 퍼센타일 포함"""
+    import datetime as _dt
+    name      = request.args.get("name", "").strip()
+    player_id = request.args.get("playerId", type=int)
+    year      = request.args.get("year")
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    # 선수 찾기
+    if player_id:
+        cur.execute("SELECT id, team_id, name_ko, name FROM players WHERE id=?", (player_id,))
+        row = cur.fetchone()
+        if row:
+            pid, team_id_db = row["id"], row["team_id"]
+            matched = row["name_ko"] or row["name"]
+        else:
+            pid, team_id_db, matched = None, None, None
+    else:
+        pid, team_id_db, matched = _find_player(cur, name)
+
+    if not pid:
+        conn.close()
+        return jsonify({"found": False}), 404
+
+    year_clause = "AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?" if year else ""
+    yp = (year,) if year else ()
+
+    # 선수 기본 정보
+    cur.execute("SELECT * FROM players WHERE id=?", (pid,))
+    prow = cur.fetchone()
+    pos_raw = None
+    height  = prow["height"] if prow else None
+
+    # 출전 포지션 (mps에서 최빈값)
+    cur.execute(f"""
+        SELECT mps.position, COUNT(*) cnt
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777 {year_clause}
+        GROUP BY mps.position ORDER BY cnt DESC LIMIT 1
+    """, (pid,) + yp)
+    pr = cur.fetchone()
+    pos_raw = pr[0] if pr else (prow["position"] if prow else "?")
+
+    # 사용 가능 연도
+    cur.execute("""
+        SELECT DISTINCT strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) yr
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777 ORDER BY yr
+    """, (pid,))
+    available_years = [r[0] for r in cur.fetchall()]
+
+    # 대상 선수 집계 (90분 환산)
+    cur.execute(f"""
+        SELECT COUNT(*) games,
+               SUM(mps.minutes_played) mins,
+               SUM(mps.goals) goals, SUM(mps.assists) assists,
+               SUM(mps.total_shots) shots, SUM(mps.shots_on_target) sot,
+               AVG(mps.expected_goals) xg_avg,
+               AVG(mps.accurate_passes_pct) pass_pct,
+               SUM(mps.key_passes) key_passes,
+               SUM(mps.total_passes) total_passes,
+               SUM(mps.successful_dribbles) drib_s, SUM(mps.attempted_dribbles) drib_a,
+               SUM(mps.tackles) tackles, SUM(mps.interceptions) ints,
+               SUM(mps.clearances) clears, SUM(mps.blocked_shots) blocked,
+               SUM(mps.aerial_won) aer_w, SUM(mps.aerial_lost) aer_l,
+               SUM(mps.duel_won) duel_w, SUM(mps.duel_lost) duel_l,
+               SUM(mps.fouls) fouls, SUM(mps.was_fouled) fouled,
+               SUM(mps.yellow_cards) yellows, SUM(mps.red_cards) reds,
+               SUM(mps.saves) saves, SUM(mps.goals_conceded) conceded,
+               SUM(mps.touches) touches, SUM(mps.possession_lost) poss_lost,
+               AVG(mps.rating) rating,
+               SUM(mps.accurate_long_balls) long_b_s, SUM(mps.total_long_balls) long_b_a,
+               SUM(mps.accurate_crosses) cross_s, SUM(mps.total_crosses) cross_a,
+               SUM(mps.big_chances_missed) bcm
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777 {year_clause}
+    """, (pid,) + yp)
+    p = cur.fetchone()
+    mins = p["mins"] or 1
+    games = p["games"] or 0
+
+    def p90(v): return round((v or 0) / mins * 90, 3) if mins else 0
+    def pct(a, b): return round((a or 0) / (b or 1) * 100, 1) if b else None
+
+    # 팀명
+    cur.execute("SELECT DISTINCT mps.team_id FROM match_player_stats mps WHERE mps.player_id=? LIMIT 1", (pid,))
+    tid_row = cur.fetchone()
+    ss_team_id = tid_row[0] if tid_row else team_id_db
+    team_name = _ko_name_by_ss_id(ss_team_id) or str(ss_team_id)
+
+    # 키 순위 (데이터 있는 경우)
+    weight = prow["weight"] if prow and "weight" in prow.keys() else None
+
+    def physical_rank(col, val):
+        if not val: return None
+        cur.execute(f"""
+            SELECT COUNT(*) FROM players p2
+            WHERE p2.{col} > ? AND p2.{col} IS NOT NULL AND p2.{col} > 0
+              AND EXISTS (SELECT 1 FROM match_player_stats m2 JOIN events e2 ON m2.event_id=e2.id
+                          WHERE m2.player_id=p2.id AND e2.tournament_id=777)
+        """, (val,))
+        above = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT COUNT(*) FROM players p2
+            WHERE p2.{col} IS NOT NULL AND p2.{col} > 0
+              AND EXISTS (SELECT 1 FROM match_player_stats m2 JOIN events e2 ON m2.event_id=e2.id
+                          WHERE m2.player_id=p2.id AND e2.tournament_id=777)
+        """)
+        total = cur.fetchone()[0]
+        return {"rank": above+1, "total": total, "pct": round((1 - above/total)*100) if total else None}
+
+    height_rank = physical_rank("height", height)
+    weight_rank = physical_rank("weight", weight)
+
+    # ── 같은 포지션 선수 집계 (퍼센타일 기준) ──────────────────
+    cur.execute(f"""
+        SELECT mps.player_id,
+               SUM(mps.minutes_played)              mins,
+               SUM(mps.goals)                       goals,
+               SUM(mps.assists)                     assists,
+               SUM(mps.total_shots)                 shots,
+               SUM(mps.shots_on_target)             sot,
+               AVG(mps.accurate_passes_pct)         pass_pct,
+               SUM(mps.key_passes)                  key_passes,
+               SUM(mps.successful_dribbles)         drib_s,
+               SUM(mps.attempted_dribbles)          drib_a,
+               SUM(mps.tackles)                     tackles,
+               SUM(mps.interceptions)               ints,
+               SUM(mps.clearances)                  clears,
+               SUM(mps.blocked_shots)               blocked,
+               SUM(mps.aerial_won)                  aer_w,
+               SUM(mps.aerial_lost)                 aer_l,
+               SUM(mps.duel_won)                    duel_w,
+               SUM(mps.duel_lost)                   duel_l,
+               SUM(mps.saves)                       saves,
+               SUM(mps.goals_conceded)              conceded,
+               SUM(mps.fouls)                       fouls,
+               SUM(mps.was_fouled)                  fouled,
+               SUM(mps.touches)                     touches,
+               COUNT(*)                             games
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE e.tournament_id=777 AND mps.position=? {year_clause}
+        GROUP BY mps.player_id
+        HAVING mins >= 270 AND games >= 5
+    """, (pos_raw,) + yp)
+
+    peers = {}
+    for r in cur.fetchall():
+        m = r["mins"] or 1
+        def v90(col): return (r[col] or 0) / m * 90
+        peers[r["player_id"]] = {
+            "goals":    v90("goals"),
+            "assists":  v90("assists"),
+            "shots":    v90("shots"),
+            "sot":      v90("sot"),
+            "pass_pct": r["pass_pct"] or 0,
+            "key_passes": v90("key_passes"),
+            "drib_s":   v90("drib_s"),
+            "drib_pct": pct(r["drib_s"], r["drib_a"]) or 0,
+            "tackles":  v90("tackles"),
+            "ints":     v90("ints"),
+            "clears":   v90("clears"),
+            "blocked":  v90("blocked"),
+            "aer_w":    v90("aer_w"),
+            "aer_pct":  pct(r["aer_w"], (r["aer_w"] or 0)+(r["aer_l"] or 0)) or 0,
+            "duel_w":   v90("duel_w"),
+            "duel_pct": pct(r["duel_w"], (r["duel_w"] or 0)+(r["duel_l"] or 0)) or 0,
+            "saves":    v90("saves"),
+            "touches":  v90("touches"),
+            "fouls":    v90("fouls"),
+        }
+
+    def percentile(key, val, higher_is_better=True):
+        vals = [v[key] for v in peers.values() if v[key] is not None]
+        if not vals: return 50
+        if higher_is_better:
+            below = sum(1 for v in vals if v < val)
+        else:
+            below = sum(1 for v in vals if v > val)
+        return round(below / len(vals) * 100)
+
+    # 대상 선수 90분 환산값
+    my = {
+        "goals":    p90(p["goals"]),
+        "assists":  p90(p["assists"]),
+        "shots":    p90(p["shots"]),
+        "sot":      p90(p["sot"]),
+        "pass_pct": p["pass_pct"] or 0,
+        "key_passes": p90(p["key_passes"]),
+        "drib_s":   p90(p["drib_s"]),
+        "drib_pct": pct(p["drib_s"], p["drib_a"]) or 0,
+        "tackles":  p90(p["tackles"]),
+        "ints":     p90(p["ints"]),
+        "clears":   p90(p["clears"]),
+        "blocked":  p90(p["blocked"]),
+        "aer_w":    p90(p["aer_w"]),
+        "aer_pct":  pct(p["aer_w"], (p["aer_w"] or 0)+(p["aer_l"] or 0)) or 0,
+        "duel_w":   p90(p["duel_w"]),
+        "duel_pct": pct(p["duel_w"], (p["duel_w"] or 0)+(p["duel_l"] or 0)) or 0,
+        "saves":    p90(p["saves"]),
+        "touches":  p90(p["touches"]),
+        "fouls":    p90(p["fouls"]),
+    }
+
+    # 퍼센타일 계산
+    pctile = {k: percentile(k, my[k]) for k in my}
+    pctile["fouls"] = percentile("fouls", my["fouls"], higher_is_better=False)
+
+    # 포지션별 주요 지표 그룹
+    POS_GROUPS = {
+        "G": [
+            {"key":"saves",    "label":"선방(90분)",         "icon":"🧤"},
+            {"key":"aer_pct",  "label":"공중볼 장악률(%)",    "icon":"✈"},
+            {"key":"pass_pct", "label":"패스 성공률(%)",      "icon":"🎯"},
+            {"key":"touches",  "label":"볼터치(90분)",        "icon":"👟"},
+        ],
+        "D": [
+            {"key":"tackles",  "label":"태클(90분)",          "icon":"🛡"},
+            {"key":"ints",     "label":"인터셉트(90분)",       "icon":"✂"},
+            {"key":"clears",   "label":"클리어링(90분)",       "icon":"🥊"},
+            {"key":"aer_w",    "label":"공중볼 성공(90분)",    "icon":"✈"},
+            {"key":"aer_pct",  "label":"공중볼 장악률(%)",     "icon":"📊"},
+            {"key":"blocked",  "label":"슈팅 차단(90분)",      "icon":"🚫"},
+            {"key":"duel_pct", "label":"지상 듀얼 승률(%)",    "icon":"⚔"},
+            {"key":"pass_pct", "label":"패스 성공률(%)",       "icon":"🎯"},
+        ],
+        "M": [
+            {"key":"key_passes","label":"키패스(90분)",        "icon":"🔑"},
+            {"key":"pass_pct", "label":"패스 성공률(%)",       "icon":"🎯"},
+            {"key":"assists",  "label":"도움(90분)",           "icon":"🎨"},
+            {"key":"drib_s",   "label":"드리블 성공(90분)",    "icon":"💨"},
+            {"key":"tackles",  "label":"태클(90분)",           "icon":"🛡"},
+            {"key":"ints",     "label":"인터셉트(90분)",       "icon":"✂"},
+            {"key":"goals",    "label":"득점(90분)",           "icon":"⚽"},
+            {"key":"touches",  "label":"볼터치(90분)",         "icon":"👟"},
+        ],
+        "F": [
+            {"key":"goals",    "label":"득점(90분)",           "icon":"⚽"},
+            {"key":"assists",  "label":"도움(90분)",           "icon":"🎨"},
+            {"key":"shots",    "label":"슈팅(90분)",           "icon":"🎯"},
+            {"key":"sot",      "label":"유효슈팅(90분)",       "icon":"🎯"},
+            {"key":"drib_s",   "label":"드리블 성공(90분)",    "icon":"💨"},
+            {"key":"drib_pct", "label":"드리블 성공률(%)",     "icon":"📊"},
+            {"key":"aer_w",    "label":"공중볼 성공(90분)",    "icon":"✈"},
+            {"key":"fouls",    "label":"파울 유도(90분)",      "icon":"🤸"},
+        ],
+    }
+
+    stat_groups = POS_GROUPS.get(pos_raw, POS_GROUPS["M"])
+    stat_items = []
+    for sg in stat_groups:
+        k = sg["key"]
+        raw_val = my.get(k, 0)
+        stat_items.append({
+            "key":     k,
+            "label":   sg["label"],
+            "icon":    sg["icon"],
+            "val":     round(raw_val, 2),
+            "pctile":  pctile.get(k, 50),
+            "peer_cnt": len(peers),
+        })
+
+    # 레이더용 5개 지표 (포지션별)
+    RADAR_KEYS = {
+        "G": ["saves","aer_pct","pass_pct","touches","duel_pct"],
+        "D": ["tackles","ints","aer_pct","blocked","pass_pct"],
+        "M": ["key_passes","pass_pct","drib_s","tackles","goals"],
+        "F": ["goals","shots","drib_s","aer_w","assists"],
+    }
+    radar_keys = RADAR_KEYS.get(pos_raw, RADAR_KEYS["M"])
+    RADAR_LABELS = {
+        "goals":"득점","assists":"도움","shots":"슈팅","sot":"유효슈팅",
+        "pass_pct":"패스%","key_passes":"키패스","drib_s":"드리블",
+        "tackles":"태클","ints":"인터셉트","aer_pct":"공중볼%",
+        "blocked":"슈팅차단","saves":"선방","touches":"터치","duel_pct":"듀얼승률%",
+    }
+    radar = [{"label": RADAR_LABELS.get(k, k), "pctile": pctile.get(k, 50)} for k in radar_keys]
+
+    # 최근 5경기 폼
+    cur.execute("""
+        SELECT e.date_ts,
+               CASE WHEN mps.is_home=1 THEN e.away_team_id ELSE e.home_team_id END opp_id,
+               mps.goals, mps.assists, mps.rating, mps.result, mps.is_home,
+               e.home_score, e.away_score,
+               mps.tackles, mps.interceptions, mps.clearances, mps.aerial_won,
+               mps.saves, mps.shots_on_target, mps.key_passes
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE mps.player_id=? AND e.tournament_id=777 AND e.date_ts IS NOT NULL
+        ORDER BY e.date_ts DESC LIMIT 5
+    """, (pid,))
+    rm = {1:"W", 0:"D", -1:"L"}
+    recent_form = []
+    for r in cur.fetchall():
+        d = _dt.datetime.utcfromtimestamp(r[0])
+        recent_form.append({
+            "date":       f"{d.year}/{d.month}/{d.day}",
+            "opponent":   _ko_name_by_ss_id(str(r[1])) or str(r[1]),
+            "is_home":    bool(r[6]),
+            "goals":      r[2] or 0,
+            "assists":    r[3] or 0,
+            "rating":     round(r[4], 1) if r[4] else None,
+            "result":     rm.get(r[5], "?"),
+            "score":      f"{r[7]}-{r[8]}",
+            "tackles":    r[9] or 0,
+            "ints":       r[10] or 0,
+            "clears":     r[11] or 0,
+            "aer_w":      r[12] or 0,
+            "saves":      r[13] or 0,
+            "sot":        r[14] or 0,
+            "key_passes": r[15] or 0,
+        })
+
+    conn.close()
+    pos_label = {"G":"GK","D":"DF","M":"MF","F":"FW"}.get(pos_raw, pos_raw or "?")
+    return jsonify({
+        "found":      True,
+        "player": {
+            "id":       pid,
+            "name":     matched,
+            "team":     team_name,
+            "pos":      pos_raw,
+            "pos_label": pos_label,
+            "height":   height,
+            "weight":   weight,
+            "height_rank": height_rank,
+            "weight_rank": weight_rank,
+            "games":    games,
+            "mins":     int(mins),
+            "goals":    p["goals"] or 0,
+            "assists":  p["assists"] or 0,
+            "rating":   round(p["rating"], 2) if p["rating"] else None,
+            "yellows":  p["yellows"] or 0,
+            "reds":     p["reds"] or 0,
+        },
+        "available_years": available_years,
+        "stat_items":  stat_items,
+        "radar":       radar,
+        "recent_form": recent_form,
+        "peer_count":  len(peers),
+    })
+
+
 @app.route("/api/player-analytics")
 def get_player_analytics():
     """선수 개인 분석 보고서"""

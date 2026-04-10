@@ -234,6 +234,17 @@
         </div>
     </section>
 
+    <!-- ── 선수 개별 분석 보고서 ─────────────────────────────── -->
+    <section id="player-report-section">
+        <div class="pr-header">
+            <h2 class="pr-title">🔍 선수 개별 분석</h2>
+            <div id="pr-year-filter" class="pr-year-filter"></div>
+        </div>
+        <div id="pr-body">
+            <div class="pr-empty">전술판에서 선수를 더블클릭 후 <strong>📋 분석</strong> 버튼을 누르세요</div>
+        </div>
+    </section>
+
     <!-- 선수 정보 툴팁 -->
     <div id="player-tooltip" style="
         display:none; position:fixed; z-index:9999;
@@ -293,6 +304,7 @@
         <div class="player-edit-actions">
             <button id="player-edit-confirm" class="player-edit-confirm-btn">확인</button>
             <button id="player-edit-heatmap" class="player-edit-heatmap-btn" title="이 선수의 히트맵 보기">🔥 히트맵</button>
+            <button id="player-edit-report" class="player-edit-report-btn" title="이 선수의 스탯 분석 보고서">📋 분석</button>
         </div>
     </div>
 
@@ -478,5 +490,6 @@
 
     <script src="/static/js/player_analytics.js?v=1"></script>
     <script src="/static/js/dashboard.js?v=1"></script>
+    <script src="/static/js/player_report.js?v=1"></script>
 </body>
 </html>

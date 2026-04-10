@@ -3082,3 +3082,137 @@ body {
     gap: 20px;
 }
 .ld-pos-chart-wrap { }
+
+/* ══════════════════════════════════════════════════════════
+   선수 개별 분석 보고서 (#player-report-section)
+══════════════════════════════════════════════════════════ */
+#player-report-section {
+    background: linear-gradient(180deg, #0b1226 0%, #0d1530 100%);
+    border-top: 1px solid rgba(74,222,128,0.12);
+    padding: 24px clamp(12px,3vw,48px) 40px;
+}
+.pr-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+}
+.pr-title { font-size:1.1rem; font-weight:700; color:#c8d8f0; margin:0; }
+.pr-year-filter { display:flex; flex-wrap:wrap; gap:5px; }
+.pr-yr-btn {
+    background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+    color:#667; border-radius:5px; font-size:0.72rem; padding:3px 10px; cursor:pointer;
+}
+.pr-yr-btn:hover { color:#aac; }
+.pr-yr-btn.active { background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.4); color:#4ade80; }
+
+.pr-loading, .pr-empty {
+    text-align:center; color:#4a6080; padding:32px; font-size:0.9rem;
+}
+.pr-empty strong { color:#4ea4f8; }
+
+/* 카드 */
+.pr-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+}
+.pr-section-title {
+    font-size:0.72rem; color:#4a6a8a;
+    text-transform:uppercase; letter-spacing:0.06em;
+    margin-bottom: 12px;
+}
+.pr-pos-tag {
+    font-size:0.68rem; text-transform:none;
+    background:rgba(78,164,248,0.12); border:1px solid rgba(78,164,248,0.25);
+    color:#4ea4f8; border-radius:4px; padding:1px 6px; margin-left:6px;
+}
+
+/* 선수 헤더 */
+.pr-info-card { margin-bottom:14px; }
+.pr-player-header { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.pr-pos-badge {
+    border-radius:6px; border:1px solid; font-size:0.78rem; font-weight:700;
+    padding:3px 10px; white-space:nowrap;
+}
+.pr-player-name { font-size:1.3rem; font-weight:700; color:#e8f0fc; }
+.pr-player-team { font-size:0.82rem; color:#5a7a9a; }
+.pr-info-badges { display:flex; flex-wrap:wrap; gap:5px; width:100%; margin-top:4px; }
+.pr-badge {
+    background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+    color:#9ab; border-radius:20px; font-size:0.75rem; padding:3px 10px;
+}
+.pr-badge-goal    { background:rgba(248,113,113,0.1); border-color:rgba(248,113,113,0.3); color:#f87171; }
+.pr-badge-assist  { background:rgba(78,164,248,0.1);  border-color:rgba(78,164,248,0.3);  color:#4ea4f8; }
+.pr-badge-rating  { background:rgba(251,191,36,0.1);  border-color:rgba(251,191,36,0.3);  color:#fbbf24; }
+.pr-badge-phys    { background:rgba(255,255,255,0.05); }
+.pr-peer-note { width:100%; font-size:0.7rem; color:#3a5060; margin-top:4px; }
+
+/* 2컬럼 메인 그리드 */
+.pr-main-grid {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+@media (max-width: 700px) {
+    .pr-main-grid { grid-template-columns: 1fr; }
+}
+
+/* 레이더 */
+.pr-radar-card { display:flex; flex-direction:column; align-items:center; }
+#pr-radar-canvas { max-width:220px; max-height:220px; }
+
+/* 스탯 리스트 */
+.pr-stat-list { display:flex; flex-direction:column; gap:10px; }
+.pr-stat-item { }
+.pr-stat-label {
+    display:flex; align-items:center; gap:6px;
+    font-size:0.78rem; color:#9ab; margin-bottom:4px;
+}
+.pr-stat-icon { font-size:0.9rem; }
+.pr-stat-val  { margin-left:auto; color:#c8d8f0; font-weight:600; font-size:0.82rem; }
+.pr-pct-bar-wrap {
+    background:rgba(255,255,255,0.06); border-radius:4px; height:8px; overflow:hidden;
+}
+.pr-pct-bar {
+    height:100%; border-radius:4px;
+    transition: width 0.6s cubic-bezier(.4,0,.2,1);
+}
+.pr-pct-info {
+    display:flex; justify-content:space-between;
+    font-size:0.7rem; margin-top:2px;
+}
+.pr-grade { font-weight:600; }
+
+/* 최근 폼 테이블 */
+.pr-table-wrap { overflow-x:auto; }
+.pr-table {
+    width:100%; border-collapse:collapse; font-size:0.78rem; color:#9ab;
+}
+.pr-table th {
+    color:#4a6a8a; font-weight:600; text-align:left;
+    padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.07);
+    white-space:nowrap;
+}
+.pr-table td { padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.04); white-space:nowrap; }
+.pr-table tr:hover td { background:rgba(74,222,128,0.04); }
+.pr-ha   { font-size:0.65rem; color:#4a6080; }
+.pr-res-w { color:#4ade80; font-weight:700; }
+.pr-res-d { color:#9ab; }
+.pr-res-l { color:#f87171; font-weight:700; }
+
+/* 편집 팝업 분석 버튼 */
+.player-edit-report-btn {
+    flex: 1;
+    padding: 6px;
+    border-radius: 5px;
+    border: 1px solid #2a5a8a;
+    background: #0d3a5e;
+    color: #4ea4f8;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+.player-edit-report-btn:hover { background: #1a5a8e; }

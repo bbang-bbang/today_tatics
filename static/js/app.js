@@ -976,6 +976,7 @@
     const editName = document.getElementById("player-edit-name");
     const editConfirm  = document.getElementById("player-edit-confirm");
     const editHeatmap  = document.getElementById("player-edit-heatmap");
+    const editReport   = document.getElementById("player-edit-report");
     const editClose    = document.getElementById("player-edit-close");
     const editTeamLabel = document.getElementById("player-edit-team-label");
     let editingPlayer = null;
@@ -1026,6 +1027,15 @@
         const side = editingPlayer.team;
         closeEditPopup();
         if (name && name !== "선수") loadHeatmap(name, side);
+    });
+    editReport.addEventListener("click", () => {
+        if (!editingPlayer) return;
+        const name = editingPlayer.name;
+        closeEditPopup();
+        if (name && name !== "선수") {
+            document.dispatchEvent(new CustomEvent("openPlayerReport", { detail: { name } }));
+            document.getElementById("player-report-section")?.scrollIntoView({ behavior: "smooth" });
+        }
     });
     editClose.addEventListener("click", closeEditPopup);
     editPopup.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); confirmEdit(); } if (e.key === "Escape") closeEditPopup(); });
