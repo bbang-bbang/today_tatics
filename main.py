@@ -879,7 +879,8 @@ def get_match_prediction():
                    SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END) d,
                    SUM(home_score) gf, SUM(away_score) ga
             FROM events WHERE tournament_id=777 AND home_team_id=?
-        """, (ss_id,))
+              AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+        """, (ss_id, now_year))
         hrow = cur.fetchone()
         cur.execute("""
             SELECT COUNT(*) g,
@@ -887,7 +888,8 @@ def get_match_prediction():
                    SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END) d,
                    SUM(away_score) gf, SUM(home_score) ga
             FROM events WHERE tournament_id=777 AND away_team_id=?
-        """, (ss_id,))
+              AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+        """, (ss_id, now_year))
         arow = cur.fetchone()
         hg,hw,hd,hgf,hga = hrow
         ag,aw,ad,agf,aga = arow
@@ -1811,6 +1813,9 @@ def get_league_dashboard():
                SUM(mps.tackles)           tackles,
                SUM(mps.interceptions)     interceptions,
                SUM(mps.successful_dribbles) dribbles,
+               SUM(mps.attempted_dribbles) dribbles_att,
+               SUM(mps.duel_won)          duel_won,
+               SUM(mps.duel_lost)         duel_lost,
                SUM(mps.yellow_cards)      yellows,
                SUM(mps.red_cards)         reds,
                SUM(mps.saves)             saves
@@ -1842,6 +1847,12 @@ def get_league_dashboard():
             "tackles":  r["tackles"] or 0,
             "interceptions": r["interceptions"] or 0,
             "dribbles": r["dribbles"] or 0,
+            "dribbles_att": r["dribbles_att"] or 0,
+            "duel_won":  r["duel_won"] or 0,
+            "duel_lost": r["duel_lost"] or 0,
+            "duel_pct":  round((r["duel_won"] or 0) / max((r["duel_won"] or 0) + (r["duel_lost"] or 0), 1) * 100, 1),
+            "tackles_p90": round((r["tackles"] or 0) / max(r["minutes"] or 1, 1) * 90, 2),
+            "ints_p90":    round((r["interceptions"] or 0) / max(r["minutes"] or 1, 1) * 90, 2),
             "yellows":  r["yellows"] or 0,
             "reds":     r["reds"] or 0,
             "saves":    r["saves"] or 0,
@@ -1861,8 +1872,8 @@ def get_league_dashboard():
         key=lambda x: -x["dribbles"]
     )[:20]
     top_defenders = sorted(
-        [p for p in all_players if p["pos"] in ("D", "M")],
-        key=lambda x: -(x["tackles"] + x["interceptions"])
+        [p for p in all_players if p["pos"] in ("D", "M") and (p["duel_won"] + p["duel_lost"]) >= 10],
+        key=lambda x: (-x["duel_pct"], -(x["tackles_p90"] + x["ints_p90"]))
     )[:20]
 
     # ── 포지션별 평균 스탯 ─────────────────────────────────────

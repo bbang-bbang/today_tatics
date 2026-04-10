@@ -172,7 +172,7 @@
         el.innerHTML =
             yrSpan +
             `<span class="extra-val goal-against">${avgGa}</span>` +
-            `<span class="extra-label">실점</span>` +
+            `<span class="extra-label">평균 실점</span>` +
             `<span class="extra-sep">/</span>` +
             `<span class="extra-val goal-for">${avgGf}</span>` +
             `<span class="extra-label">평균 득점</span>`;

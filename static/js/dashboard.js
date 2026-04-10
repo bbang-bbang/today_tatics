@@ -75,11 +75,12 @@
         assists:   { key: "assists", label: "도움",  cols: ["games","assists","goals","rating","minutes"] },
         rated:     { key: "rating",  label: "평점",  cols: ["games","rating","goals","assists","minutes"] },
         dribbles:  { key: "dribbles",label: "드리블", cols: ["games","dribbles","goals","assists","minutes"] },
-        defenders: { key: "tacint",  label: "태클+인터셉트", cols: ["games","tackles","interceptions","yellows","minutes"] },
+        defenders: { key: "duel_pct", label: "듀얼 성공률", cols: ["games","duel_pct","tackles_p90","ints_p90","minutes"] },
     };
     const COL_LABEL = {
         games:"경기", goals:"골", assists:"도움", rating:"평점",
-        minutes:"출전분", dribbles:"드리블", tackles:"태클", interceptions:"인터셉트", yellows:"경고"
+        minutes:"출전분", dribbles:"드리블", tackles:"태클", interceptions:"인터셉트", yellows:"경고",
+        duel_pct:"듀얼 성공률", tackles_p90:"태클/90", ints_p90:"인터셉트/90"
     };
 
     function renderRanking() {
@@ -89,7 +90,7 @@
 
         const rows = list.map((p, i) => {
             const mainVal = currentRank === "defenders"
-                ? (p.tackles + p.interceptions)
+                ? (p.duel_pct != null ? p.duel_pct + "%" : "-")
                 : currentRank === "rated"
                     ? (p.rating ? p.rating.toFixed(2) : "-")
                     : p[conf.key];
@@ -101,7 +102,9 @@
                 let v;
                 if (c === "rating")   v = p.rating ? p.rating.toFixed(2) : "-";
                 else if (c === "minutes") v = p.minutes ? Math.round(p.minutes) + "'" : "-";
-                else if (c === "tacint") v = (p.tackles||0)+(p.interceptions||0);
+                else if (c === "duel_pct") v = p.duel_pct != null ? p.duel_pct + "%" : "-";
+                else if (c === "tackles_p90") v = p.tackles_p90 != null ? p.tackles_p90 : "-";
+                else if (c === "ints_p90")    v = p.ints_p90 != null ? p.ints_p90 : "-";
                 else v = p[c] ?? "-";
                 return `<td>${v}</td>`;
             }).join("");
