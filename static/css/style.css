@@ -2657,11 +2657,26 @@ body {
 
 /* ── 예측 보고서 섹션 ──────────────────────────────────────── */
 #prediction-section {
-    padding: 0 12px 20px;
-    max-width: 1100px;
-    margin: 0 auto;
+    position: relative;
+    padding: 12px clamp(16px, 4vw, 48px) 20px;
+    box-sizing: border-box;
 }
 #prediction-section.hidden { display: none; }
+#prediction-close {
+    position: absolute;
+    top: 6px;
+    right: 12px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #667;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    padding: 3px 9px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    z-index: 1;
+}
+#prediction-close:hover { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.4); color: #f87171; }
 
 .pred-loading {
     text-align: center;
@@ -2845,7 +2860,11 @@ body {
 .pmk-item  { font-size: 0.72rem; color: #9ab; padding: 2px 0; }
 
 /* K2 일정 배너 래퍼 */
-#k2-schedule-banner-wrap { width: 100%; }
+#k2-schedule-banner-wrap {
+    width: 100%;
+    padding: 0 clamp(16px, 4vw, 48px);
+    box-sizing: border-box;
+}
 
 /* K2 일정 배너 */
 #k2-schedule-banner {

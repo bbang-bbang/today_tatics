@@ -1,8 +1,12 @@
 // prediction.js — 경기 예측 보고서 + 다음 경기 일정
 
 (function () {
-    const section = document.getElementById("prediction-section");
-    const report  = document.getElementById("prediction-report");
+    const section   = document.getElementById("prediction-section");
+    const report    = document.getElementById("prediction-report");
+    const closeBtn  = document.getElementById("prediction-close");
+    if (closeBtn) {
+        closeBtn.addEventListener("click", () => section.classList.add("hidden"));
+    }
 
     // ── 라운드 일정 (페이지 로드 시 자동) ──────────────────
     let scheduleCache = null;
