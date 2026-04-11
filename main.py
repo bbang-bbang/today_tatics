@@ -76,6 +76,16 @@ TEAMS = [
     {"id": "paju",     "sofascore_id": 314294, "name": "파주 시민축구단",     "short": "파주",   "league": "K2", "primary": "#042ba0", "secondary": "#f8f8f8", "accent": "#c8102e", "emblem": "emblem_K40.png", "border_home": "#d381a2", "border_away": "#d381a2"},
     {"id": "gimhae",   "sofascore_id": 41260,  "name": "김해 FC",           "short": "김해",   "league": "K2", "primary": "#ac0d0e", "secondary": "#f3f3f3", "accent": "#ffd700", "emblem": "emblem_K41.png", "border_home": "#2c2c2c", "border_away": "#bba473"},
     {"id": "yongin",   "sofascore_id": 41266,  "name": "용인 시민축구단",     "short": "용인",   "league": "K2", "primary": "#910c26", "secondary": "#dddddd", "accent": "#ffd700", "emblem": "emblem_K42.png", "border_home": "#54bfe1", "border_away": "#8c0e29"},
+    # K3 리그 및 기타 (팀명 표시 전용)
+    {"id": "siheung",  "sofascore_id": 346812, "name": "시흥 시티",           "short": "시흥",   "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "gyeongju", "sofascore_id": 41257,  "name": "경주 KHNP",          "short": "경주",   "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "gangneung","sofascore_id": 41258,  "name": "강릉 시티 FC",        "short": "강릉",   "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "mokpo",    "sofascore_id": 41259,  "name": "FC 목포",            "short": "목포",   "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "changwon", "sofascore_id": 41262,  "name": "창원 시티 FC",        "short": "창원",   "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "dj_korail","sofascore_id": 41264,  "name": "대전 코레일",         "short": "코레일", "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "jinju",    "sofascore_id": 376197, "name": "진주 시민 FC",        "short": "진주",   "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "seosan",   "sofascore_id": 1169779,"name": "서산 시민 FC",        "short": "서산",   "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
+    {"id": "jincheon", "sofascore_id": 1169782,"name": "진천 HR FC",         "short": "진천",   "league": "K3", "primary": "#000000", "secondary": "#ffffff", "accent": "#ffffff", "emblem": "", "border_home": "#000000", "border_away": "#000000"},
 ]
 
 
@@ -893,10 +903,12 @@ def get_match_prediction():
         arow = cur.fetchone()
         hg,hw,hd,hgf,hga = hrow
         ag,aw,ad,agf,aga = arow
-        total_g = (hg or 0)+(ag or 0)
-        total_w = (hw or 0)+(aw or 0)
-        home_wr = hw/(hg or 1)*100
-        away_wr = aw/(ag or 1)*100
+        hg  = hg  or 0; hw  = hw  or 0; hd  = hd  or 0; hgf = hgf or 0; hga = hga or 0
+        ag  = ag  or 0; aw  = aw  or 0; ad  = ad  or 0; agf = agf or 0; aga = aga or 0
+        total_g = hg + ag
+        total_w = hw + aw
+        home_wr = hw / (hg or 1) * 100
+        away_wr = aw / (ag or 1) * 100
 
         # 최근 5경기 폼
         cur.execute("""
@@ -1522,6 +1534,56 @@ def get_player_stat_report():
             "peer_cnt": len(peers),
         })
 
+    # 활동량 지표 (전체 선수 대비)
+    cur.execute(f"""
+        SELECT mps.player_id,
+               SUM(mps.touches)                              AS touches,
+               SUM(mps.duel_won) + SUM(mps.duel_lost)       AS duels,
+               SUM(mps.total_passes)                         AS passes,
+               SUM(mps.tackles) + SUM(mps.interceptions)    AS def_acts,
+               SUM(mps.attempted_dribbles)                   AS dribbles,
+               SUM(mps.minutes_played)                       AS mins2,
+               COUNT(*)                                      AS games2
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE e.tournament_id=777 {year_clause}
+        GROUP BY mps.player_id
+        HAVING games2 >= 3 AND mins2 >= 150
+    """, yp)
+
+    all_activity = {}
+    for r in cur.fetchall():
+        m2 = r["mins2"] or 1
+        all_activity[r["player_id"]] = {
+            "touches_p90":  (r["touches"]  or 0) / m2 * 90,
+            "duels_p90":    (r["duels"]    or 0) / m2 * 90,
+            "passes_p90":   (r["passes"]   or 0) / m2 * 90,
+            "def_p90":      (r["def_acts"] or 0) / m2 * 90,
+            "dribbles_p90": (r["dribbles"] or 0) / m2 * 90,
+        }
+
+    def _act_pct(axis, val):
+        vals = [v[axis] for v in all_activity.values()]
+        if not vals: return 0
+        return round(sum(1 for v in vals if v < val) / len(vals) * 100)
+
+    p_act = all_activity.get(pid, {})
+    activity_score = 0
+    activity_percentiles = {}
+    if p_act:
+        weights = {"touches_p90": 0.35, "duels_p90": 0.25,
+                   "passes_p90": 0.20, "def_p90": 0.10, "dribbles_p90": 0.10}
+        for axis, w in weights.items():
+            pct2 = _act_pct(axis, p_act.get(axis, 0))
+            activity_percentiles[axis] = pct2
+            activity_score += pct2 * w
+        activity_score = round(activity_score)
+
+    league_avg_act = {}
+    if all_activity:
+        for axis in ["touches_p90", "duels_p90", "passes_p90", "def_p90", "dribbles_p90"]:
+            vals = [v[axis] for v in all_activity.values()]
+            league_avg_act[axis] = round(sum(vals) / len(vals), 1) if vals else 0
+
     # 레이더용 5개 지표 (포지션별)
     RADAR_KEYS = {
         "G": ["saves","aer_pct","pass_pct","touches","duel_pct"],
@@ -1550,10 +1612,15 @@ def get_player_stat_report():
         WHERE mps.player_id=? AND e.tournament_id=777 AND e.date_ts IS NOT NULL
         ORDER BY e.date_ts DESC LIMIT 5
     """, (pid,))
-    rm = {1:"W", 0:"D", -1:"L"}
     recent_form = []
     for r in cur.fetchall():
         d = _dt.datetime.utcfromtimestamp(r[0])
+        hs, aws, is_home = r[7], r[8], r[6]
+        if hs is not None and aws is not None:
+            my_score, opp_score = (hs, aws) if is_home else (aws, hs)
+            calc_result = "W" if my_score > opp_score else ("D" if my_score == opp_score else "L")
+        else:
+            calc_result = "?"
         recent_form.append({
             "date":       f"{d.year}/{d.month}/{d.day}",
             "opponent":   _ko_name_by_ss_id(str(r[1])) or str(r[1]),
@@ -1561,7 +1628,7 @@ def get_player_stat_report():
             "goals":      r[2] or 0,
             "assists":    r[3] or 0,
             "rating":     round(r[4], 1) if r[4] else None,
-            "result":     rm.get(r[5], "?"),
+            "result":     calc_result,
             "score":      f"{r[7]}-{r[8]}",
             "tackles":    r[9] or 0,
             "ints":       r[10] or 0,
@@ -1599,6 +1666,12 @@ def get_player_stat_report():
         "radar":       radar,
         "recent_form": recent_form,
         "peer_count":  len(peers),
+        "activity": {
+            "score":       activity_score,
+            "values":      {k: round(v, 1) for k, v in p_act.items()} if p_act else {},
+            "percentiles": activity_percentiles,
+            "league_avg":  league_avg_act,
+        },
     })
 
 
@@ -1686,11 +1759,16 @@ def get_player_analytics():
         WHERE mps.player_id=? AND e.tournament_id=777 AND e.date_ts IS NOT NULL
         ORDER BY e.date_ts DESC LIMIT 10
     """, (player_id,))
-    result_map = {1: "W", 0: "D", -1: "L"}
     recent_form = []
     for r in cur.fetchall():
         d = _dt.datetime.utcfromtimestamp(r[0])
         opp_name = _ko_name_by_ss_id(str(r[1])) or str(r[1])
+        hs2, aws2, is_home2 = r[7], r[8], r[6]
+        if hs2 is not None and aws2 is not None:
+            my2, opp2 = (hs2, aws2) if is_home2 else (aws2, hs2)
+            calc_result2 = "W" if my2 > opp2 else ("D" if my2 == opp2 else "L")
+        else:
+            calc_result2 = "?"
         recent_form.append({
             "date": f"{d.year}/{d.month}/{d.day}",
             "opponent": opp_name,
@@ -1698,7 +1776,7 @@ def get_player_analytics():
             "goals": r[2] or 0,
             "assists": r[3] or 0,
             "rating": round(r[4], 1) if r[4] else None,
-            "result": result_map.get(r[5], "?"),
+            "result": calc_result2,
             "score": f"{r[7]}-{r[8]}" if r[7] is not None else "?"
         })
 
@@ -1743,6 +1821,59 @@ def get_player_analytics():
     else:
         radar = {k: 0 for k in ["attack", "passing", "defense", "shooting", "dribble"]}
 
+    # 활동량 지표 (proxy metrics)
+    cur.execute(f"""
+        SELECT mps.player_id,
+               SUM(mps.touches)                                        AS touches,
+               SUM(mps.duel_won) + SUM(mps.duel_lost)                 AS duels,
+               SUM(mps.total_passes)                                   AS passes,
+               SUM(mps.tackles) + SUM(mps.interceptions)              AS def_acts,
+               SUM(mps.attempted_dribbles)                             AS dribbles,
+               SUM(mps.minutes_played)                                 AS mins,
+               COUNT(*)                                                AS games
+        FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+        WHERE e.tournament_id=777 {year_clause}
+        GROUP BY mps.player_id
+        HAVING games >= 3 AND mins >= 150
+    """, yp)
+
+    all_activity = {}
+    for r in cur.fetchall():
+        pid2, touches, duels, passes, def_acts2, dribbles, mins2, games2 = r
+        if not mins2: continue
+        all_activity[pid2] = {
+            "touches_p90":  round((touches or 0) / mins2 * 90, 1),
+            "duels_p90":    round((duels or 0)   / mins2 * 90, 1),
+            "passes_p90":   round((passes or 0)  / mins2 * 90, 1),
+            "def_p90":      round((def_acts2 or 0) / mins2 * 90, 1),
+            "dribbles_p90": round((dribbles or 0) / mins2 * 90, 1),
+        }
+
+    def _activity_pct(axis, val):
+        vals = [v[axis] for v in all_activity.values()]
+        if not vals: return 0
+        below = sum(1 for v in vals if v < val)
+        return round(below / len(vals) * 100)
+
+    p_act = all_activity.get(player_id, {})
+    activity_score = 0
+    activity_percentiles = {}
+    if p_act:
+        weights = {"touches_p90": 0.35, "duels_p90": 0.25,
+                   "passes_p90": 0.20, "def_p90": 0.10, "dribbles_p90": 0.10}
+        for axis, w in weights.items():
+            pct = _activity_pct(axis, p_act.get(axis, 0))
+            activity_percentiles[axis] = pct
+            activity_score += pct * w
+        activity_score = round(activity_score)
+
+    # 리그 평균 (기준값)
+    league_avg_act = {}
+    if all_activity:
+        for axis in ["touches_p90", "duels_p90", "passes_p90", "def_p90", "dribbles_p90"]:
+            vals = [v[axis] for v in all_activity.values()]
+            league_avg_act[axis] = round(sum(vals) / len(vals), 1) if vals else 0
+
     # 전체 집계 (헤더용)
     cur.execute(f"""
         SELECT COUNT(*), SUM(mps.goals), SUM(mps.assists), AVG(mps.rating), SUM(mps.minutes_played),
@@ -1773,6 +1904,12 @@ def get_player_analytics():
         "monthly":         monthly,
         "recent_form":     recent_form,
         "radar":           radar,
+        "activity": {
+            "score":        activity_score,
+            "values":       p_act,
+            "percentiles":  activity_percentiles,
+            "league_avg":   league_avg_act,
+        },
     })
 
 
@@ -2201,15 +2338,23 @@ def insights_top_performers():
         SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id,
                COUNT(*) as games, SUM(m.minutes_played) as mins,
                SUM(m.goals) as goals, SUM(COALESCE(m.expected_goals,0)) as xg,
-               AVG(m.rating) as avg_rating
+               AVG(m.rating) as avg_rating,
+               (SELECT COUNT(*) FROM goal_events g
+                WHERE g.player_id=m.player_id AND g.is_penalty=1 AND g.is_own_goal=0
+                AND g.event_id IN (
+                    SELECT event_id FROM match_player_stats
+                    WHERE player_id=m.player_id {date_cond})) as pk_goals
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
         WHERE m.position='F' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90
-        ORDER BY goals DESC LIMIT 15
+        ORDER BY goals DESC LIMIT 30
     """).fetchall()
     result["F"] = [{**pinfo(r),
         "goals": r["goals"] or 0,
+        "pk_goals": r["pk_goals"] or 0,
+        "np_goals": (r["goals"] or 0) - (r["pk_goals"] or 0),
         "goals_p90": round((r["goals"] or 0) / r["mins"] * 90, 2),
+        "np_goals_p90": round(((r["goals"] or 0) - (r["pk_goals"] or 0)) / r["mins"] * 90, 2),
         "xg": round(r["xg"] or 0, 2),
         "xg_eff": round((r["goals"] or 0) / r["xg"], 2) if (r["xg"] or 0) > 0 else None,
         "rating": round(r["avg_rating"], 2) if r["avg_rating"] else None,
@@ -2223,7 +2368,7 @@ def insights_top_performers():
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
         WHERE m.position='M' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90 AND tp>0
-        ORDER BY (CAST(ap AS REAL)/tp) DESC LIMIT 15
+        ORDER BY (CAST(ap AS REAL)/tp) DESC LIMIT 30
     """).fetchall()
     result["M"] = [{**pinfo(r),
         "pass_acc": round((r["ap"] or 0) / r["tp"] * 100, 1) if r["tp"] else None,
@@ -2241,7 +2386,7 @@ def insights_top_performers():
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
         WHERE m.position='D' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90
-        ORDER BY (tkl + intc*1.5 + clr + aer + duel) / mins DESC LIMIT 15
+        ORDER BY (tkl + intc*1.5 + clr + aer + duel) / mins DESC LIMIT 30
     """).fetchall()
     result["D"] = [{**pinfo(r),
         "def_score_p90": round(
@@ -2265,7 +2410,12 @@ def insights_xg_efficiency():
     rows = conn.execute(f"""
         SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
                COUNT(*) as games, SUM(m.goals) as goals,
-               SUM(COALESCE(m.expected_goals,0)) as xg, SUM(m.total_shots) as shots
+               SUM(COALESCE(m.expected_goals,0)) as xg, SUM(m.total_shots) as shots,
+               (SELECT COUNT(*) FROM goal_events g
+                WHERE g.player_id=m.player_id AND g.is_penalty=1 AND g.is_own_goal=0
+                AND g.event_id IN (
+                    SELECT event_id FROM match_player_stats
+                    WHERE player_id=m.player_id {date_cond})) as pk_goals
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
         WHERE m.position='F' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND xg>0.5
@@ -2277,7 +2427,10 @@ def insights_xg_efficiency():
         "name": r["name_ko"] or "",
         "team": _ko_team(r["team_id"], ""),
         "games": r["games"],
-        "goals": r["goals"] or 0, "xg": round(r["xg"], 2),
+        "goals": r["goals"] or 0,
+        "pk_goals": r["pk_goals"] or 0,
+        "np_goals": (r["goals"] or 0) - (r["pk_goals"] or 0),
+        "xg": round(r["xg"], 2),
         "diff": round((r["goals"] or 0) - r["xg"], 2),
         "shots": r["shots"] or 0,
     } for r in rows])
@@ -2294,7 +2447,12 @@ def insights_forward_goals():
         date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
         rows = conn.execute(f"""
             SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
-                   SUM(m.goals) as total_goals
+                   SUM(m.goals) as total_goals,
+                   (SELECT COUNT(*) FROM goal_events g
+                    WHERE g.player_id=m.player_id AND g.is_penalty=1 AND g.is_own_goal=0
+                    AND g.event_id IN (
+                        SELECT event_id FROM match_player_stats
+                        WHERE player_id=m.player_id {date_cond})) as pk_goals
             FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
             WHERE m.position='F' AND m.minutes_played>0 AND m.goals>0 {date_cond}
             GROUP BY m.player_id ORDER BY total_goals DESC LIMIT 30
@@ -2305,6 +2463,8 @@ def insights_forward_goals():
             "name": r["name_ko"] or "",
             "team": _ko_team(r["team_id"], ""),
             "goals": r["total_goals"],
+            "pk_goals": r["pk_goals"] or 0,
+            "np_goals": (r["total_goals"] or 0) - (r["pk_goals"] or 0),
         } for r in rows])
 
     conn = sqlite3.connect(DB_PATH)
@@ -2321,11 +2481,12 @@ def insights_forward_goals():
         time_data.append({"band": label, "goals": row["cnt"]})
 
     opp_rows = conn.execute("""
-        SELECT CASE WHEN g.is_home=1 THEN e.away_team_name ELSE e.home_team_name END as opponent,
+        SELECT CASE WHEN g.is_home=1 THEN e.away_team_id ELSE e.home_team_id END as opp_id,
+               CASE WHEN g.is_home=1 THEN e.away_team_name ELSE e.home_team_name END as opp_name,
                COUNT(*) as goals
         FROM goal_events g JOIN events e ON g.event_id = e.id
         WHERE g.player_id=? AND g.is_own_goal=0
-        GROUP BY opponent ORDER BY goals DESC
+        GROUP BY opp_id ORDER BY goals DESC
     """, (player_id,)).fetchall()
 
     info = conn.execute("""
@@ -2340,7 +2501,10 @@ def insights_forward_goals():
         "name": info["name_ko"] if info else "",
         "team": _ko_team(info["team_id"], "") if info else "",
         "time_bands": time_data,
-        "by_opponent": [{"opponent": r["opponent"], "goals": r["goals"]} for r in opp_rows],
+        "by_opponent": [
+            {"opponent": _ko_team(r["opp_id"], r["opp_name"]), "goals": r["goals"]}
+            for r in opp_rows
+        ],
     })
 
 
@@ -2404,6 +2568,272 @@ def insights_defender_score():
              + (r["aer"] or 0) + (r["duel"] or 0)) / r["mins"] * 90, 2),
         "rating": round(r["avg_rating"], 2) if r["avg_rating"] else None,
     } for r in rows])
+
+
+@app.route("/api/insights/player-detail")
+def insights_player_detail():
+    player_id = request.args.get("playerId", "").strip()
+    pos       = request.args.get("pos", "F")
+    if not player_id:
+        return jsonify({"error": "playerId required"}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    # 기본 정보
+    info = conn.execute("""
+        SELECT COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id, m.position
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id = p.id
+        WHERE m.player_id = ? LIMIT 1
+    """, (player_id,)).fetchone()
+
+    if not info:
+        conn.close()
+        return jsonify({"error": "not found"}), 404
+
+    # 경기별 스탯 (최신순, 최대 30경기)
+    rows = conn.execute("""
+        SELECT m.match_date,
+               e.home_team_id, e.away_team_id, e.home_team_name, e.away_team_name,
+               e.home_score, e.away_score, m.is_home,
+               m.minutes_played, m.rating,
+               m.goals, COALESCE(m.expected_goals, 0) as xg,
+               m.total_passes, m.accurate_passes, m.accurate_passes_pct,
+               m.key_passes, m.assists,
+               m.tackles, COALESCE(m.interceptions, 0) as interceptions,
+               m.clearances, m.aerial_won, m.duel_won,
+               m.total_shots, m.shots_on_target
+        FROM match_player_stats m
+        JOIN events e ON m.event_id = e.id
+        WHERE m.player_id = ? AND m.minutes_played > 0
+        ORDER BY m.match_date DESC LIMIT 30
+    """, (player_id,)).fetchall()
+
+    matches = []
+    for r in rows:
+        opp_id   = r["away_team_id"] if r["is_home"] else r["home_team_id"]
+        opp_name = r["away_team_name"] if r["is_home"] else r["home_team_name"]
+        score    = f"{r['home_score']}-{r['away_score']}"
+        def_score = round(
+            ((r["tackles"] or 0) + (r["interceptions"] or 0)*1.5
+             + (r["clearances"] or 0) + (r["aerial_won"] or 0) + (r["duel_won"] or 0))
+            / r["minutes_played"] * 90, 2
+        ) if r["minutes_played"] else 0
+        matches.append({
+            "date":       r["match_date"],
+            "opponent":   _ko_team(opp_id, opp_name),
+            "score":      score,
+            "is_home":    bool(r["is_home"]),
+            "mins":       r["minutes_played"],
+            "rating":     round(r["rating"], 2) if r["rating"] else None,
+            "goals":      r["goals"] or 0,
+            "xg":         round(r["xg"], 2),
+            "assists":    r["assists"] or 0,
+            "pass_acc":   round(r["accurate_passes_pct"], 1) if r["accurate_passes_pct"] else None,
+            "key_passes": r["key_passes"] or 0,
+            "tackles":    r["tackles"] or 0,
+            "def_score":  def_score,
+            "shots":      r["total_shots"] or 0,
+        })
+
+    # 포지션 평균 (비교용)
+    avg = conn.execute("""
+        SELECT ROUND(AVG(rating), 2) as avg_rating,
+               ROUND(AVG(goals), 2) as avg_goals,
+               ROUND(AVG(COALESCE(expected_goals,0)), 2) as avg_xg,
+               ROUND(AVG(CAST(accurate_passes AS REAL)/NULLIF(total_passes,0)*100), 1) as avg_pass_acc,
+               ROUND(AVG(tackles), 2) as avg_tackles
+        FROM match_player_stats
+        WHERE position = ? AND minutes_played >= 45
+    """, (pos,)).fetchone()
+
+    conn.close()
+    return jsonify({
+        "player_id": int(player_id),
+        "name":  info["name_ko"] or info["player_name"] or "",
+        "team":  _ko_team(info["team_id"], ""),
+        "pos":   pos,
+        "matches": matches,
+        "pos_avg": {
+            "rating":   avg["avg_rating"],
+            "goals":    avg["avg_goals"],
+            "xg":       avg["avg_xg"],
+            "pass_acc": avg["avg_pass_acc"],
+            "tackles":  avg["avg_tackles"],
+        },
+    })
+
+
+# ── K리그2 다음 경기 일정 ─────────────────────────────────
+KLEAGUE_TEAM_CODE = {
+    "K02": "suwon",   "K06": "busan",   "K07": "jeonnam", "K08": "seongnam",
+    "K17": "daegu",   "K20": "gyeongnam","K29": "suwon_fc","K31": "seouland",
+    "K32": "ansan",   "K34": "asan",    "K36": "gimpo",   "K37": "cheongju",
+    "K38": "cheonan", "K39": "hwaseong","K40": "paju",    "K41": "gimhae",
+    "K42": "yongin",
+}
+
+def _fetch_k2_all_games(year=None):
+    """K리그 공식 API에서 K2 전체 경기(완료+예정) 수집 — 1~12월"""
+    import urllib.request, datetime
+    url = "https://www.kleague.com/getScheduleList.do"
+    if year is None:
+        year = datetime.datetime.now().year
+    games = []
+    now_month = datetime.datetime.now().month if year == datetime.datetime.now().year else 12
+    for m in range(1, now_month + 2):
+        if m > 12:
+            break
+        payload = json.dumps({"leagueId": "2", "year": str(year), "month": str(m).zfill(2)}).encode("utf-8")
+        req = urllib.request.Request(url, data=payload,
+            headers={"Content-Type": "application/json; charset=UTF-8", "Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                games += data.get("data", {}).get("scheduleList", [])
+        except Exception:
+            pass
+    return games
+
+def _parse_k2_game(g):
+    """K리그 API 경기 dict → 통일 포맷"""
+    home_code = g.get("homeTeam", "")
+    away_code = g.get("awayTeam", "")
+    home_id   = KLEAGUE_TEAM_CODE.get(home_code)
+    away_id   = KLEAGUE_TEAM_CODE.get(away_code)
+    home_info = next((t for t in TEAMS if t["id"] == home_id), None)
+    away_info = next((t for t in TEAMS if t["id"] == away_id), None)
+    finished  = g.get("endYn") == "Y" or g.get("gameStatus") == "FE"
+    return {
+        "date":       g.get("gameDate", ""),
+        "time":       g.get("gameTime", ""),
+        "round":      g.get("roundId"),
+        "home_code":  home_code,
+        "away_code":  away_code,
+        "home_id":    home_id,
+        "away_id":    away_id,
+        "home_name":  home_info["name"]  if home_info else g.get("homeTeamName", home_code),
+        "away_name":  away_info["name"]  if away_info else g.get("awayTeamName", away_code),
+        "home_short": home_info["short"] if home_info else g.get("homeTeamName", home_code),
+        "away_short": away_info["short"] if away_info else g.get("awayTeamName", away_code),
+        "venue":      g.get("fieldName", ""),
+        "finished":   finished,
+        "home_score": g.get("homeGoal") if finished else None,
+        "away_score": g.get("awayGoal") if finished else None,
+    }
+
+@app.route("/api/k2/schedule")
+def get_k2_schedule():
+    """K2 예정 경기 + 팀별 다음 경기"""
+    import datetime
+    now_str = datetime.datetime.now().strftime("%Y.%m.%d")
+    try:
+        raw = _fetch_k2_all_games()
+    except Exception:
+        return jsonify({"upcoming": [], "next_by_team": {}}), 200
+
+    upcoming = []
+    for g in raw:
+        if g.get("endYn") == "Y" or g.get("gameStatus") == "FE":
+            continue
+        if g.get("gameDate", "") < now_str:
+            continue
+        upcoming.append(_parse_k2_game(g))
+    upcoming.sort(key=lambda x: (x["date"], x["time"]))
+
+    next_by_team = {}
+    for g in upcoming:
+        for side in ("home_id", "away_id"):
+            tid = g.get(side)
+            if tid and tid not in next_by_team:
+                next_by_team[tid] = {**g, "is_home": side == "home_id"}
+
+    return jsonify({"upcoming": upcoming, "next_by_team": next_by_team})
+
+
+@app.route("/api/k2/rounds")
+def get_k2_rounds():
+    """K2 라운드 목록 + 각 라운드 경기 결과/예정"""
+    import datetime
+    try:
+        raw = _fetch_k2_all_games()
+    except Exception:
+        return jsonify({"rounds": [], "current_round": None}), 200
+
+    games_by_round = {}
+    for g in raw:
+        r = g.get("roundId")
+        if not r:
+            continue
+        if r not in games_by_round:
+            games_by_round[r] = []
+        games_by_round[r].append(_parse_k2_game(g))
+
+    rounds = []
+    now_str = datetime.datetime.now().strftime("%Y.%m.%d")
+    current_round = None
+    for rnd in sorted(games_by_round.keys()):
+        items = sorted(games_by_round[rnd], key=lambda x: (x["date"], x["time"]))
+        finished_count = sum(1 for g in items if g["finished"])
+        rounds.append({
+            "round":    rnd,
+            "games":    items,
+            "finished": finished_count,
+            "total":    len(items),
+        })
+        # 가장 최근 완료 라운드 or 진행 중 라운드를 current로
+        if finished_count > 0:
+            current_round = rnd
+
+    return jsonify({"rounds": rounds, "current_round": current_round})
+
+
+@app.route("/api/player-vs-teams")
+def get_player_vs_teams():
+    """선수가 상대팀별로 기록한 성적 (평점·G+A·출전수)"""
+    player_id = request.args.get("playerId", type=int)
+    if not player_id:
+        return jsonify([]), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT
+            CASE WHEN mps.is_home=1 THEN e.away_team_id ELSE e.home_team_id END AS opp_ss_id,
+            COUNT(*)                    AS games,
+            SUM(mps.goals)              AS goals,
+            SUM(mps.assists)            AS assists,
+            SUM(mps.goals+mps.assists)  AS ga,
+            AVG(mps.rating)             AS avg_rating,
+            AVG(mps.minutes_played)     AS avg_mins,
+            SUM(mps.shots_on_target)    AS sot,
+            SUM(mps.key_passes)         AS key_passes
+        FROM match_player_stats mps
+        JOIN events e ON mps.event_id = e.id
+        WHERE mps.player_id = ? AND e.tournament_id = 777
+        GROUP BY opp_ss_id
+        HAVING games >= 1
+        ORDER BY avg_rating DESC NULLS LAST
+    """, (player_id,)).fetchall()
+    conn.close()
+
+    result = []
+    for r in rows:
+        opp_info = next((t for t in TEAMS if t["sofascore_id"] == r["opp_ss_id"]), None)
+        opp_name = opp_info["short"] if opp_info else str(r["opp_ss_id"])
+        result.append({
+            "opp_id":    r["opp_ss_id"],
+            "opp_name":  opp_name,
+            "games":     r["games"],
+            "goals":     r["goals"] or 0,
+            "assists":   r["assists"] or 0,
+            "ga":        r["ga"] or 0,
+            "avg_rating": round(r["avg_rating"], 2) if r["avg_rating"] else None,
+            "avg_mins":  round(r["avg_mins"] or 0),
+            "sot":       r["sot"] or 0,
+            "key_passes": r["key_passes"] or 0,
+        })
+    return jsonify(result)
 
 
 if __name__ == "__main__":

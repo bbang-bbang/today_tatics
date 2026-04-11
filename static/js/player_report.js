@@ -7,7 +7,9 @@
 
     let currentName = null;
     let currentYear = null;
-    let radarChart  = null;
+    let radarChart    = null;
+    let activityChart = null;
+    let vsTeamsChart  = null;
 
     /* ── 이벤트 수신 ─────────────────────────────────────── */
     document.addEventListener("openPlayerReport", (e) => {
@@ -33,7 +35,10 @@
     /* ── 렌더링 ──────────────────────────────────────────── */
     function render(d) {
         const p = d.player;
-        if (radarChart) { radarChart.destroy(); radarChart = null; }
+        const activity = d.activity || {};
+        if (radarChart)    { radarChart.destroy();    radarChart    = null; }
+        if (activityChart) { activityChart.destroy(); activityChart = null; }
+        if (vsTeamsChart)  { vsTeamsChart.destroy();  vsTeamsChart  = null; }
 
         // 연도 필터
         const years = ["전체", ...(d.available_years || [])];
@@ -94,17 +99,34 @@
         </div>
 
         <div class="pr-main-grid">
-            <!-- 레이더 차트 -->
+            <!-- 레이더 + 스탯 가로 배치 -->
             <div class="pr-card pr-radar-card">
-                <div class="pr-section-title">종합 능력치 레이더</div>
-                <canvas id="pr-radar-canvas"></canvas>
+                <div class="pr-radar-canvas-wrap">
+                    <div class="pr-section-title">종합 능력치 레이더</div>
+                    <canvas id="pr-radar-canvas"></canvas>
+                </div>
+                <div class="pr-stats-card">
+                    <div class="pr-section-title">주요 지표 퍼센타일 <span class="pr-pos-tag">${posLabel} 기준</span></div>
+                    <div class="pr-stat-list">${statCards}</div>
+                </div>
             </div>
+        </div>
 
-            <!-- 스탯 카드들 -->
-            <div class="pr-card pr-stats-card">
-                <div class="pr-section-title">주요 지표 퍼센타일 <span class="pr-pos-tag">${posLabel} 기준</span></div>
-                <div class="pr-stat-list">${statCards}</div>
+        <!-- 상대팀별 성적 (나중에 JS로 채움) -->
+        <div class="pr-card pr-vs-card" id="pr-vs-teams-card">
+            <div class="pr-section-title">상대팀별 성적 <span class="pr-pos-tag">평점 기준 · 높을수록 좋은 상대</span></div>
+            <div class="pr-loading" style="padding:12px">불러오는 중...</div>
+        </div>
+
+        <!-- 활동량 지수 -->
+        <div class="pr-card pr-activity-card">
+            <div class="pr-section-title">
+                활동량 지수 <span class="pr-pos-tag">90분 환산 · 리그 전체 대비</span>
+                ${activity.score != null ? `<span class="pr-activity-score">${activity.score}<small>/100</small></span>` : ""}
             </div>
+            ${activity.values && Object.keys(activity.values).length
+                ? `<div style="position:relative;height:150px"><canvas id="pr-activity-canvas"></canvas></div>`
+                : `<div class="pr-loading" style="padding:12px">경기 수 부족</div>`}
         </div>
 
         <!-- 최근 폼 -->
@@ -121,6 +143,8 @@
 
         // 레이더 차트
         renderRadar(d.radar, posLabel);
+        renderActivity(activity);
+        loadVsTeams(p.id);
     }
 
     /* ── 신체 뱃지 ───────────────────────────────────────── */
@@ -162,6 +186,168 @@
             F: [{key:"goals",label:"골"},{key:"assists",label:"도움"},{key:"sot",label:"유효슈팅"}],
         };
         return map[pos] || map["M"];
+    }
+
+    /* ── 상대팀별 성적 ───────────────────────────────────── */
+    function loadVsTeams(playerId) {
+        fetch(`/api/player-vs-teams?playerId=${playerId}`)
+            .then(r => r.json())
+            .then(data => renderVsTeams(data))
+            .catch(() => {
+                const card = document.getElementById("pr-vs-teams-card");
+                if (card) card.querySelector(".pr-loading").textContent = "데이터 없음";
+            });
+    }
+
+    function renderVsTeams(data) {
+        const card = document.getElementById("pr-vs-teams-card");
+        if (!card) return;
+        if (!data || !data.length) {
+            card.querySelector(".pr-loading").textContent = "상대팀 데이터 없음";
+            return;
+        }
+
+        // 평점 기준 정렬 (없으면 GA), 최대 8팀
+        const sorted = [...data]
+            .filter(d => d.games >= 1)
+            .sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0))
+            .slice(0, 8);
+
+        const labels   = sorted.map(d => d.opp_name);
+        const ratings  = sorted.map(d => d.avg_rating || 0);
+        const gaData   = sorted.map(d => d.ga);
+        const colors   = ratings.map(r => r >= 7.5 ? "rgba(74,222,128,0.8)" : r >= 7.0 ? "rgba(78,164,248,0.8)" : r >= 6.5 ? "rgba(251,191,36,0.8)" : "rgba(248,113,113,0.7)");
+
+        // 테이블 + 차트
+        const rows = sorted.map((d, i) => {
+            const ratingColor = d.avg_rating >= 7.5 ? "#4ade80" : d.avg_rating >= 7.0 ? "#4ea4f8" : d.avg_rating >= 6.5 ? "#fbbf24" : "#f87171";
+            return `<tr>
+                <td style="color:#9ab">${d.opp_name}</td>
+                <td style="text-align:center;color:#778">${d.games}</td>
+                <td style="text-align:center;color:#4ade80">${d.goals}</td>
+                <td style="text-align:center;color:#4ea4f8">${d.assists}</td>
+                <td style="text-align:center;font-weight:700;color:${ratingColor}">${d.avg_rating ? d.avg_rating.toFixed(1) : "-"}</td>
+            </tr>`;
+        }).join("");
+
+        card.innerHTML = `
+        <div class="pr-section-title">상대팀별 성적 <span class="pr-pos-tag">평점 기준 · 높을수록 좋은 상대</span></div>
+        <div style="position:relative;height:160px;margin-bottom:12px"><canvas id="pr-vs-chart"></canvas></div>
+        <div class="pr-table-wrap">
+            <table class="pr-table">
+                <thead><tr><th>상대</th><th style="text-align:center">경기</th><th style="text-align:center">골</th><th style="text-align:center">도움</th><th style="text-align:center">평점</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+
+        const ctx = document.getElementById("pr-vs-chart");
+        if (!ctx) return;
+        vsTeamsChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "평균 평점",
+                    data: ratings,
+                    backgroundColor: colors,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: "rgba(10,15,30,0.92)",
+                        titleColor: "#c8d8f0",
+                        bodyColor: "#c8d8f0",
+                        callbacks: {
+                            afterLabel: (item) => {
+                                const d = sorted[item.dataIndex];
+                                return `G+A: ${d.ga} (${d.games}경기)`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: "#778", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+                    y: {
+                        min: 5.5, max: 10,
+                        ticks: { color: "#778", font: { size: 10 } },
+                        grid: { color: "rgba(255,255,255,0.04)" },
+                        title: { display: true, text: "평균 평점", color: "#556", font: { size: 9 } }
+                    }
+                }
+            }
+        });
+    }
+
+    /* ── 활동량 차트 ─────────────────────────────────────── */
+    function renderActivity(activity) {
+        const ctx = document.getElementById("pr-activity-canvas");
+        if (!ctx || !activity.values || !Object.keys(activity.values).length) return;
+
+        const LABELS = {
+            touches_p90:  "터치",
+            duels_p90:    "듀얼",
+            passes_p90:   "패스",
+            def_p90:      "수비액션",
+            dribbles_p90: "드리블",
+        };
+        const keys    = Object.keys(LABELS);
+        const vals    = keys.map(k => activity.values[k] || 0);
+        const avgVals = keys.map(k => activity.league_avg ? (activity.league_avg[k] || 0) : 0);
+
+        activityChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: keys.map(k => LABELS[k]),
+                datasets: [
+                    {
+                        label: "선수",
+                        data: vals,
+                        backgroundColor: "rgba(78,164,248,0.75)",
+                        borderRadius: 3,
+                    },
+                    {
+                        label: "리그평균",
+                        data: avgVals,
+                        backgroundColor: "rgba(255,255,255,0.1)",
+                        borderColor: "rgba(255,255,255,0.3)",
+                        borderWidth: 1,
+                        borderRadius: 3,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: "#9ab", font: { size: 10 }, boxWidth: 10 } },
+                    tooltip: {
+                        backgroundColor: "rgba(10,15,30,0.92)",
+                        titleColor: "#c8d8f0",
+                        bodyColor: "#c8d8f0",
+                        callbacks: {
+                            afterLabel: (item) => {
+                                if (item.datasetIndex !== 0) return "";
+                                const pct = activity.percentiles ? (activity.percentiles[keys[item.dataIndex]] || 0) : 0;
+                                return `상위 ${100 - pct}%ile`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: "#778", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+                    y: {
+                        ticks: { color: "#778", font: { size: 10 } },
+                        grid: { color: "rgba(255,255,255,0.04)" },
+                        title: { display: true, text: "90분당", color: "#556", font: { size: 9 } }
+                    }
+                }
+            }
+        });
     }
 
     /* ── 레이더 차트 ─────────────────────────────────────── */

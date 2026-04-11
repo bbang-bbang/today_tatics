@@ -4,8 +4,49 @@
 
   let currentYear = "2026";
   let currentPos = "F";
-  let xgChart = null, fwdTimeChart = null, fwdOppChart = null;
-  let midPassChart = null, defScoreChart = null;
+
+  // 포지션별 다중 정렬 상태: [{ key, dir }, ...] 우선순위 순
+  const sortState = {
+    F: [{ key: "goals", dir: -1 }],
+    M: [{ key: "pass_acc", dir: -1 }],
+    D: [{ key: "def_score_p90", dir: -1 }],
+  };
+
+  // 정렬 컬럼 정의
+  const SORT_COLS = {
+    F: [
+      { label: "#",        key: null },
+      { label: "선수",      key: "name" },
+      { label: "구단",      key: "team" },
+      { label: "경기",      key: "games" },
+      { label: "총 골",     key: "goals" },
+      { label: "PK",       key: "pk_goals" },
+      { label: "PK제외",   key: "np_goals" },
+      { label: "PK제외/90",key: "np_goals_p90" },
+      { label: "xG효율",   key: "xg_eff" },
+      { label: "평점",      key: "rating" },
+    ],
+    M: [
+      { label: "#",        key: null },
+      { label: "선수",      key: "name" },
+      { label: "구단",      key: "team" },
+      { label: "경기",      key: "games" },
+      { label: "패스성공률", key: "pass_acc" },
+      { label: "패스/90",  key: "passes_p90" },
+      { label: "태클/90",  key: "tackles_p90" },
+      { label: "평점",      key: "rating" },
+    ],
+    D: [
+      { label: "#",        key: null },
+      { label: "선수",      key: "name" },
+      { label: "구단",      key: "team" },
+      { label: "경기",      key: "games" },
+      { label: "수비점수/90", key: "def_score_p90" },
+      { label: "태클/90",  key: "tackles_p90" },
+      { label: "클리어/90", key: "clearances_p90" },
+      { label: "평점",      key: "rating" },
+    ],
+  };
 
   function shortName(name) {
     if (!name) return "";
@@ -74,32 +115,65 @@
       });
   }
 
+  // 다중 정렬: keys 배열 순서대로 비교
+  function sortRows(rows, keys) {
+    if (!keys.length) return rows;
+    return [...rows].sort((a, b) => {
+      for (const { key, dir } of keys) {
+        const av = a[key] ?? (typeof a[key] === "string" ? "" : -Infinity);
+        const bv = b[key] ?? (typeof b[key] === "string" ? "" : -Infinity);
+        let cmp = 0;
+        if (typeof av === "string") cmp = av.localeCompare(bv);
+        else cmp = bv - av;         // 기본 내림차순 기준
+        if (cmp !== 0) return dir * cmp;
+      }
+      return 0;
+    });
+  }
+
+  function buildThead(pos) {
+    const cols  = SORT_COLS[pos];
+    const sorts = sortState[pos];  // [{ key, dir }, ...]
+    const ths = cols.map(col => {
+      if (!col.key) return `<th>#</th>`;
+      const idx = sorts.findIndex(s => s.key === col.key);
+      const active = idx !== -1;
+      const priority = active && sorts.length > 1 ? `<span class="ins-sort-badge">${idx + 1}</span>` : "";
+      const arrow = active ? (sorts[idx].dir === -1 ? "▼" : "▲") : "";
+      const hint = !active ? `<span class="ins-sort-hint">↕</span>` : "";
+      return `<th class="ins-th-sort${active ? " ins-th-active" : ""}" data-key="${col.key}">
+        ${col.label}${priority}${active ? ` <span class="ins-sort-arrow">${arrow}</span>` : hint}
+      </th>`;
+    });
+    return `<thead><tr>${ths.join("")}</tr></thead>`;
+  }
+
   function renderTopTable(data) {
     const body = document.getElementById("ins-top-body");
     if (!body || !data) return;
-    const rows = data[currentPos] || [];
-    if (!rows.length) { body.innerHTML = '<p class="ins-empty">데이터 없음</p>'; return; }
+    const raw = data[currentPos] || [];
+    if (!raw.length) { body.innerHTML = '<p class="ins-empty">데이터 없음</p>'; return; }
 
-    let html = "";
+    const rows = sortRows(raw, sortState[currentPos]);
+
+    let tbody = "";
     if (currentPos === "F") {
-      html = `<table class="ins-table">
-        <thead><tr><th>#</th><th>선수</th><th>구단</th><th>경기</th><th>골</th><th>골/90</th><th>xG</th><th>xG효율</th><th>평점</th></tr></thead><tbody>`;
       rows.forEach((r, i) => {
         const eff = r.xg_eff != null ? `${r.xg_eff > 1 ? "+" : ""}${(r.xg_eff - 1).toFixed(2)}` : "-";
         const effClass = r.xg_eff > 1 ? "ins-pos" : r.xg_eff < 1 ? "ins-neg" : "";
-        html += `<tr>
+        tbody += `<tr>
           <td class="ins-rank">${i + 1}</td><td class="ins-name">${r.name}</td>
           <td class="ins-team">${r.team || "-"}</td>
-          <td>${r.games}</td><td><strong>${r.goals}</strong></td>
-          <td>${r.goals_p90}</td><td>${r.xg}</td>
+          <td>${r.games}</td><td>${r.goals}</td>
+          <td class="ins-team">${r.pk_goals > 0 ? r.pk_goals : "-"}</td>
+          <td><strong>${r.np_goals}</strong></td>
+          <td>${r.np_goals_p90}</td>
           <td class="${effClass}">${eff}</td><td>${r.rating ?? "-"}</td>
         </tr>`;
       });
     } else if (currentPos === "M") {
-      html = `<table class="ins-table">
-        <thead><tr><th>#</th><th>선수</th><th>구단</th><th>경기</th><th>패스성공률</th><th>패스/90</th><th>태클/90</th><th>평점</th></tr></thead><tbody>`;
       rows.forEach((r, i) => {
-        html += `<tr>
+        tbody += `<tr>
           <td class="ins-rank">${i + 1}</td><td class="ins-name">${r.name}</td>
           <td class="ins-team">${r.team || "-"}</td>
           <td>${r.games}</td><td><strong>${r.pass_acc ?? "-"}%</strong></td>
@@ -107,10 +181,8 @@
         </tr>`;
       });
     } else if (currentPos === "D") {
-      html = `<table class="ins-table">
-        <thead><tr><th>#</th><th>선수</th><th>구단</th><th>경기</th><th>수비점수/90</th><th>태클/90</th><th>클리어/90</th><th>평점</th></tr></thead><tbody>`;
       rows.forEach((r, i) => {
-        html += `<tr>
+        tbody += `<tr>
           <td class="ins-rank">${i + 1}</td><td class="ins-name">${r.name}</td>
           <td class="ins-team">${r.team || "-"}</td>
           <td>${r.games}</td><td><strong>${r.def_score_p90}</strong></td>
@@ -118,233 +190,216 @@
         </tr>`;
       });
     }
-    html += "</tbody></table>";
-    body.innerHTML = html;
-  }
 
-  /* ══════════════════════════════════════════════════
-     2. xG 효율
-  ══════════════════════════════════════════════════ */
-  function loadXgEfficiency() {
-    return fetch(`/api/insights/xg-efficiency?year=${currentYear}`)
-      .then(r => r.json())
-      .then(data => {
-        showBlock("ins-panel-xg", data.length > 0);
-        if (data.length) renderXgChart(data);
-        else destroyChart(xgChart);
+    body.innerHTML = `<table class="ins-table">${buildThead(currentPos)}<tbody>${tbody}</tbody></table>`;
+
+    // 헤더 클릭 → 다중 정렬
+    // 첫 클릭: 추가(내림차순), 재클릭: 오름차순, 한번 더: 제거
+    body.querySelectorAll(".ins-th-sort").forEach(th => {
+      th.addEventListener("click", () => {
+        const key  = th.dataset.key;
+        const sorts = sortState[currentPos];
+        const idx  = sorts.findIndex(s => s.key === key);
+        if (idx === -1) {
+          // 새로 추가 (내림차순)
+          sorts.push({ key, dir: -1 });
+        } else if (sorts[idx].dir === -1) {
+          // 오름차순으로 변경
+          sorts[idx].dir = 1;
+        } else {
+          // 제거
+          sorts.splice(idx, 1);
+          // 제거 후 뒤 항목들 재번호는 자동
+        }
+        renderTopTable(window._insTopData);
       });
-  }
+    });
 
-  function renderXgChart(data) {
-    destroyChart(xgChart);
-    const ctx = document.getElementById("ins-chart-xg");
-    if (!ctx) return;
-    const labels = data.map(d => shortName(d.name));
-    const diffs = data.map(d => d.diff);
-    xgChart = new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [
-          { label: "실제 득점", data: data.map(d => d.goals), backgroundColor: "rgba(100,200,100,0.75)", order: 2 },
-          { label: "xG", data: data.map(d => d.xg), backgroundColor: "rgba(255,180,50,0.55)", order: 3 },
-          {
-            label: "득점-xG", data: diffs, type: "line",
-            borderColor: "rgba(100,180,255,0.9)", backgroundColor: "transparent",
-            pointBackgroundColor: diffs.map(v => v >= 0 ? "rgba(100,220,100,0.9)" : "rgba(255,100,100,0.9)"),
-            borderWidth: 2, pointRadius: 5, order: 1,
-          },
-        ],
-      },
-      options: {
-        ...CHART_DEFAULTS,
-        plugins: {
-          ...CHART_DEFAULTS.plugins,
-          tooltip: { callbacks: { afterBody: (items) => {
-            const d = data[items[0].dataIndex];
-            return [
-              `구단: ${d.team || "-"}`,
-              `xG 효율: ${d.xg > 0 ? (d.goals / d.xg).toFixed(2) : "-"}`,
-              `슈팅: ${d.shots}회`, `경기: ${d.games}`,
-            ];
-          }}},
-        },
-      },
+    // 행 클릭 → 드로어 열기
+    body.querySelectorAll("tbody tr").forEach((tr, i) => {
+      const r = rows[i];
+      tr.classList.add("ins-row-clickable");
+      tr.addEventListener("click", () => openDrawer(r.player_id, currentPos));
     });
   }
 
+
   /* ══════════════════════════════════════════════════
-     3. 공격수 골 분석
+     선수 상세 드로어
   ══════════════════════════════════════════════════ */
-  function loadFwdGoalsList() {
-    return fetch(`/api/insights/forward-goals?year=${currentYear}`)
+  let drawerRatingChart = null, drawerStatChart = null;
+
+  function openDrawer(playerId, pos) {
+    fetch(`/api/insights/player-detail?playerId=${playerId}&pos=${pos}`)
       .then(r => r.json())
-      .then(list => {
-        showBlock("ins-panel-fwd-goals", list.length > 0);
-        if (!list.length) { destroyChart(fwdTimeChart); destroyChart(fwdOppChart); return; }
-        const sel = document.getElementById("ins-fwd-select");
-        if (!sel) return;
-        sel.innerHTML = list.map(p => `<option value="${p.player_id}">${p.name}${p.team ? " · " + p.team : ""} (${p.goals}골)</option>`).join("");
-        loadFwdGoalsDetail(list[0].player_id);
+      .then(data => {
+        if (data.error) return;
+        renderDrawer(data);
+        document.getElementById("player-drawer").classList.add("open");
+        document.getElementById("player-drawer-overlay").classList.add("open");
       });
   }
 
-  function loadFwdGoalsDetail(playerId) {
-    fetch(`/api/insights/forward-goals?playerId=${playerId}`)
-      .then(r => r.json())
-      .then(data => {
-        destroyChart(fwdTimeChart);
-        const ctxTime = document.getElementById("ins-chart-fwd-time");
-        if (ctxTime) {
-          fwdTimeChart = new Chart(ctxTime, {
-            type: "bar",
-            data: {
-              labels: data.time_bands.map(b => b.band),
-              datasets: [{ label: "골", data: data.time_bands.map(b => b.goals),
-                backgroundColor: data.time_bands.map(b =>
-                  b.goals === Math.max(...data.time_bands.map(x => x.goals))
-                    ? "rgba(255,200,50,0.85)" : "rgba(100,180,255,0.6)") }],
+  function closeDrawer() {
+    document.getElementById("player-drawer").classList.remove("open");
+    document.getElementById("player-drawer-overlay").classList.remove("open");
+    destroyChart(drawerRatingChart); drawerRatingChart = null;
+    destroyChart(drawerStatChart);   drawerStatChart = null;
+  }
+
+  function renderDrawer(data) {
+    document.getElementById("drawer-name").textContent = data.name;
+    document.getElementById("drawer-sub").textContent =
+      `${data.team || "-"}  ·  ${{ F:"공격수", M:"미드필더", D:"수비수", G:"골키퍼" }[data.pos] || data.pos}  ·  ${data.matches.length}경기`;
+
+    const matches = [...data.matches].reverse(); // 날짜 오름차순
+    const labels  = matches.map(m => m.date ? m.date.slice(5) : "");
+    const posAvg  = data.pos_avg;
+
+    // ── 평점 차트
+    destroyChart(drawerRatingChart);
+    const ctxR = document.getElementById("drawer-chart-rating");
+    if (ctxR) {
+      const ratings = matches.map(m => m.rating);
+      drawerRatingChart = new Chart(ctxR, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "경기 평점", data: ratings,
+              borderColor: "rgba(100,200,255,0.9)", backgroundColor: "rgba(100,200,255,0.1)",
+              borderWidth: 2, pointRadius: 4,
+              pointBackgroundColor: ratings.map(v =>
+                v == null ? "transparent" : v >= 7.5 ? "#4ade80" : v >= 6.5 ? "#facc15" : "#f87171"),
+              spanGaps: true, tension: 0.3,
             },
-            options: { ...CHART_DEFAULTS, plugins: { legend: { display: false } } },
-          });
-        }
-        destroyChart(fwdOppChart);
-        const ctxOpp = document.getElementById("ins-chart-fwd-opp");
-        const oppData = data.by_opponent.slice(0, 10);
-        if (ctxOpp && oppData.length) {
-          fwdOppChart = new Chart(ctxOpp, {
-            type: "bar",
-            data: { labels: oppData.map(o => o.opponent),
-              datasets: [{ label: "골", data: oppData.map(o => o.goals), backgroundColor: "rgba(255,120,80,0.75)" }] },
-            options: { ...CHART_DEFAULTS, indexAxis: "y", plugins: { legend: { display: false } } },
-          });
-        }
-      });
-  }
-
-  /* ══════════════════════════════════════════════════
-     4. 미드필더 패스 성공률
-  ══════════════════════════════════════════════════ */
-  function loadMidPass() {
-    return fetch(`/api/insights/midfielder-pass?year=${currentYear}`)
-      .then(r => r.json())
-      .then(data => {
-        showBlock("ins-panel-mid-pass", data.length > 0);
-        if (data.length) renderMidPassChart(data);
-        else destroyChart(midPassChart);
-      });
-  }
-
-  function renderMidPassChart(data) {
-    destroyChart(midPassChart);
-    const ctx = document.getElementById("ins-chart-mid-pass");
-    if (!ctx) return;
-    midPassChart = new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels: data.map(d => shortName(d.name)),
-        datasets: [
-          { label: "패스 성공률(%)", data: data.map(d => d.pass_acc),
-            backgroundColor: data.map(d => d.pass_acc >= 85 ? "rgba(80,220,120,0.8)" : d.pass_acc >= 75 ? "rgba(100,180,255,0.7)" : "rgba(255,160,60,0.7)"),
-            yAxisID: "yAcc" },
-          { label: "패스/90", data: data.map(d => d.passes_p90), type: "line",
-            borderColor: "rgba(255,220,80,0.8)", backgroundColor: "transparent",
-            pointRadius: 3, borderWidth: 1.5, yAxisID: "yP90" },
-        ],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: { legend: { labels: { color: "#ccc", font: { size: 11 } } },
-          tooltip: { callbacks: { afterBody: (items) => {
-            const d = data[items[0].dataIndex];
-            return [`구단: ${d.team || "-"}`, `총 패스: ${d.total_passes}`, `성공: ${d.accurate_passes}`, `경기: ${d.games}`, `평점: ${d.rating ?? "-"}`];
-          }}}},
-        scales: {
-          x: { display: false },
-          y: { ticks: { color: "#aaa", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.07)" } },
-          yAcc: { position: "bottom", display: false, min: 0, max: 100 },
-          yP90: { position: "right", display: false },
+            posAvg.rating ? {
+              label: `포지션 평균 (${posAvg.rating})`,
+              data: matches.map(() => posAvg.rating),
+              borderColor: "rgba(255,180,60,0.5)", borderWidth: 1.5,
+              borderDash: [5, 4], pointRadius: 0,
+            } : null,
+          ].filter(Boolean),
         },
-      },
-    });
-  }
-
-  /* ══════════════════════════════════════════════════
-     5. 수비수 종합 기여도
-  ══════════════════════════════════════════════════ */
-  function loadDefScore() {
-    return fetch(`/api/insights/defender-score?year=${currentYear}`)
-      .then(r => r.json())
-      .then(data => {
-        showBlock("ins-panel-def-score", data.length > 0);
-        if (data.length) renderDefScoreChart(data);
-        else destroyChart(defScoreChart);
-      });
-  }
-
-  function renderDefScoreChart(data) {
-    destroyChart(defScoreChart);
-    const ctx = document.getElementById("ins-chart-def-score");
-    if (!ctx) return;
-    defScoreChart = new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels: data.map(d => shortName(d.name)),
-        datasets: [
-          { label: "태클", data: data.map(d => +(d.tackles / d.mins * 90).toFixed(2)), backgroundColor: "rgba(100,160,255,0.75)", stack: "s" },
-          { label: "인터셉션×1.5", data: data.map(d => +(d.interceptions * 1.5 / d.mins * 90).toFixed(2)), backgroundColor: "rgba(80,220,160,0.75)", stack: "s" },
-          { label: "클리어런스", data: data.map(d => +(d.clearances / d.mins * 90).toFixed(2)), backgroundColor: "rgba(255,200,60,0.75)", stack: "s" },
-          { label: "공중볼승리", data: data.map(d => +(d.aerial_won / d.mins * 90).toFixed(2)), backgroundColor: "rgba(255,120,80,0.75)", stack: "s" },
-          { label: "듀얼승리", data: data.map(d => +(d.duel_won / d.mins * 90).toFixed(2)), backgroundColor: "rgba(200,100,255,0.7)", stack: "s" },
-        ],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: { legend: { labels: { color: "#ccc", font: { size: 11 } } },
-          tooltip: { callbacks: { afterBody: (items) => {
-            const d = data[items[0].dataIndex];
-            return [`구단: ${d.team || "-"}`, `종합점수/90: ${d.def_score}`, `경기: ${d.games} | 평점: ${d.rating ?? "-"}`];
-          }}}},
-        scales: {
-          x: { stacked: true, ticks: { color: "#aaa" }, grid: { color: "rgba(255,255,255,0.07)" } },
-          y: { stacked: true, ticks: { color: "#aaa", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.07)" } },
+        options: {
+          ...CHART_DEFAULTS,
+          scales: {
+            x: { ticks: { color: "#888", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.05)" } },
+            y: { min: 5, max: 10, ticks: { color: "#aaa" }, grid: { color: "rgba(255,255,255,0.07)" } },
+          },
         },
-      },
-    });
+      });
+    }
 
-    const tableWrap = document.getElementById("ins-def-table-wrap");
-    if (tableWrap) {
-      let html = `<table class="ins-table">
-        <thead><tr><th>#</th><th>선수</th><th>구단</th><th>경기</th><th>점수/90</th><th>태클</th><th>인터셉션</th><th>클리어</th><th>공중볼</th><th>듀얼</th><th>평점</th></tr></thead><tbody>`;
-      data.forEach((d, i) => {
+    // ── 포지션별 핵심 스탯 차트
+    destroyChart(drawerStatChart);
+    const ctxS = document.getElementById("drawer-chart-stat");
+    const statTitle = document.getElementById("drawer-stat-title");
+    if (ctxS) {
+      let statDatasets = [];
+      let statLabel = "";
+
+      if (data.pos === "F") {
+        statLabel = "⚽ 경기별 득점 / xG";
+        statTitle.textContent = statLabel;
+        statDatasets = [
+          { label: "득점", data: matches.map(m => m.goals), backgroundColor: "rgba(74,222,128,0.75)", type: "bar" },
+          { label: "xG",  data: matches.map(m => m.xg),    backgroundColor: "rgba(255,200,60,0.4)", type: "bar" },
+        ];
+      } else if (data.pos === "M") {
+        statLabel = "🎯 경기별 패스 성공률 / 키패스";
+        statTitle.textContent = statLabel;
+        statDatasets = [
+          {
+            label: "패스성공률(%)", data: matches.map(m => m.pass_acc),
+            borderColor: "rgba(100,180,255,0.9)", backgroundColor: "rgba(100,180,255,0.1)",
+            borderWidth: 2, pointRadius: 3, type: "line", yAxisID: "yAcc", spanGaps: true, tension: 0.3,
+          },
+          {
+            label: "키패스", data: matches.map(m => m.key_passes),
+            backgroundColor: "rgba(255,160,60,0.65)", type: "bar", yAxisID: "yKP",
+          },
+        ];
+      } else if (data.pos === "D") {
+        statLabel = "🛡 경기별 수비 점수";
+        statTitle.textContent = statLabel;
+        statDatasets = [
+          {
+            label: "수비점수/90", data: matches.map(m => m.def_score),
+            borderColor: "rgba(160,120,255,0.9)", backgroundColor: "rgba(160,120,255,0.15)",
+            borderWidth: 2, pointRadius: 3, type: "line", tension: 0.3,
+          },
+          {
+            label: "태클", data: matches.map(m => m.tackles),
+            backgroundColor: "rgba(100,160,255,0.6)", type: "bar",
+          },
+        ];
+      }
+
+      const extraScales = data.pos === "M" ? {
+        yAcc: { position: "left",  min: 0, max: 100, ticks: { color: "#aaa" }, grid: { color: "rgba(255,255,255,0.07)" } },
+        yKP:  { position: "right", min: 0, ticks: { color: "#aaa" }, grid: { display: false } },
+      } : {};
+
+      drawerStatChart = new Chart(ctxS, {
+        data: { labels, datasets: statDatasets },
+        options: {
+          ...CHART_DEFAULTS,
+          scales: data.pos === "M" ? {
+            x: { ticks: { color: "#888", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.05)" } },
+            ...extraScales,
+          } : {
+            x: { ticks: { color: "#888", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.05)" } },
+            y: { min: 0, ticks: { color: "#aaa" }, grid: { color: "rgba(255,255,255,0.07)" } },
+          },
+        },
+      });
+    }
+
+    // ── 최근 경기 테이블
+    const wrap = document.getElementById("drawer-match-table");
+    if (wrap) {
+      const recent = data.matches.slice(0, 15);
+      let html = `<table class="ins-table" style="font-size:0.8rem">
+        <thead><tr><th>날짜</th><th>상대</th><th>결과</th><th>출전</th><th>평점</th>`;
+      if (data.pos === "F") html += `<th>골</th><th>xG</th><th>도움</th>`;
+      if (data.pos === "M") html += `<th>패스%</th><th>키패스</th><th>태클</th>`;
+      if (data.pos === "D") html += `<th>태클</th><th>수비점수</th>`;
+      html += `</tr></thead><tbody>`;
+      recent.forEach(m => {
+        const rCls = m.rating >= 7.5 ? "ins-pos" : m.rating && m.rating < 6.5 ? "ins-neg" : "";
         html += `<tr>
-          <td class="ins-rank">${i + 1}</td><td class="ins-name">${d.name}</td>
-          <td class="ins-team">${d.team || "-"}</td>
-          <td>${d.games}</td><td><strong>${d.def_score}</strong></td>
-          <td>${d.tackles}</td><td>${d.interceptions}</td><td>${d.clearances}</td>
-          <td>${d.aerial_won}</td><td>${d.duel_won}</td><td>${d.rating ?? "-"}</td>
-        </tr>`;
+          <td>${m.date ? m.date.slice(5) : "-"}</td>
+          <td class="ins-team">${m.opponent}</td>
+          <td>${m.score}</td>
+          <td>${m.mins}'</td>
+          <td class="${rCls}">${m.rating ?? "-"}</td>`;
+        if (data.pos === "F") html += `<td>${m.goals}</td><td>${m.xg}</td><td>${m.assists}</td>`;
+        if (data.pos === "M") html += `<td>${m.pass_acc != null ? m.pass_acc + "%" : "-"}</td><td>${m.key_passes}</td><td>${m.tackles}</td>`;
+        if (data.pos === "D") html += `<td>${m.tackles}</td><td>${m.def_score}</td>`;
+        html += `</tr>`;
       });
       html += "</tbody></table>";
-      tableWrap.innerHTML = html;
+      wrap.innerHTML = html;
     }
   }
 
   /* ── 전체 로드 ── */
   function loadAll() {
     loadTopPerformers();
-    loadXgEfficiency();
-    loadFwdGoalsList();
-    loadMidPass();
-    loadDefScore();
   }
 
   function init() {
     initYearFilter();
     initPosTab();
-    document.getElementById("ins-fwd-select")?.addEventListener("change", e => loadFwdGoalsDetail(e.target.value));
+    document.getElementById("drawer-close")?.addEventListener("click", closeDrawer);
+    document.getElementById("player-drawer-overlay")?.addEventListener("click", closeDrawer);
     loadAll();
   }
+
+  // 드로어 열기 (외부에서 호출)
+  window.openPlayerDrawer = openDrawer;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

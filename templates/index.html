@@ -64,6 +64,9 @@
                 </div>
             </div>
         </div>
+        <!-- K2 다음 경기 일정 배너 (JS로 렌더링) -->
+        <div id="k2-schedule-banner-wrap"></div>
+
         <!-- 매치업 비교 패널 (배너 바로 아래, 팀 선택 시 노출) -->
         <div id="banner-matchup" class="hidden">
             <div id="matchup-area">
@@ -71,13 +74,14 @@
                     <span>위에서 HOME · AWAY 팀을 선택하면 전적이 표시됩니다</span>
                 </div>
             </div>
-            <!-- 예측 보고서 섹션 -->
-            <section id="prediction-section" class="hidden">
-                <div id="prediction-report">
-                    <!-- JS로 렌더링 -->
-                </div>
-            </section>
         </div>
+
+        <!-- 예측 보고서 섹션 (항상 DOM에 존재, 필요 시 노출) -->
+        <section id="prediction-section" class="hidden">
+            <div id="prediction-report">
+                <!-- JS로 렌더링 -->
+            </div>
+        </section>
         <div id="board-report-wrap">
         <div id="main-area">
             <main id="canvas-container">
@@ -204,46 +208,6 @@
             <div id="ins-top-body"></div>
         </div>
 
-        <!-- xG 효율 -->
-        <div class="ins-block hidden" id="ins-panel-xg">
-            <div class="ins-block-title">📈 xG 효율 (공격수)</div>
-            <div class="ins-section-label">실제 득점 vs xG — 초과(초록) / 미달(빨강)</div>
-            <div style="position:relative;height:320px"><canvas id="ins-chart-xg"></canvas></div>
-        </div>
-
-        <!-- 골 분석 (공격수) -->
-        <div class="ins-block hidden" id="ins-panel-fwd-goals">
-            <div class="ins-block-title">⚽ 골 분석 (공격수)</div>
-            <div class="ins-fwd-select-wrap">
-                <label class="ins-section-label">선수 선택</label>
-                <select id="ins-fwd-select" class="ins-select"></select>
-            </div>
-            <div class="ins-fwd-charts">
-                <div class="ins-fwd-chart-wrap">
-                    <div class="ins-section-label">⏱ 시간대별 골</div>
-                    <div style="position:relative;height:220px"><canvas id="ins-chart-fwd-time"></canvas></div>
-                </div>
-                <div class="ins-fwd-chart-wrap">
-                    <div class="ins-section-label">🆚 상대팀별 골</div>
-                    <div style="position:relative;height:220px"><canvas id="ins-chart-fwd-opp"></canvas></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 미드필더 패스 성공률 -->
-        <div class="ins-block hidden" id="ins-panel-mid-pass">
-            <div class="ins-block-title">🔄 패스 성공률 (미드필더)</div>
-            <div class="ins-section-label">TOP 25 — 최소 3경기·총 50패스 이상</div>
-            <div style="position:relative;height:480px"><canvas id="ins-chart-mid-pass"></canvas></div>
-        </div>
-
-        <!-- 수비 기여도 -->
-        <div class="ins-block hidden" id="ins-panel-def-score">
-            <div class="ins-block-title">🛡 수비 기여도 (수비수)</div>
-            <div class="ins-section-label">종합점수/90 TOP 25 — 태클 + 인터셉션×1.5 + 클리어런스 + 공중볼 + 듀얼</div>
-            <div style="position:relative;height:480px"><canvas id="ins-chart-def-score"></canvas></div>
-            <div id="ins-def-table-wrap" style="margin-top:16px"></div>
-        </div>
         </div><!-- /insights-grid -->
     </section>
 
@@ -490,8 +454,32 @@
         </div>
     </div>
 
+    <!-- 선수 상세 드로어 -->
+    <div id="player-drawer-overlay" class="drawer-overlay"></div>
+    <div id="player-drawer" class="player-drawer">
+        <div class="drawer-header">
+            <div>
+                <div id="drawer-name" class="drawer-name"></div>
+                <div id="drawer-sub" class="drawer-sub"></div>
+            </div>
+            <button id="drawer-close" class="drawer-close">✕</button>
+        </div>
+        <div class="drawer-body">
+            <div class="drawer-section-title">📈 경기별 평점 추이</div>
+            <div style="position:relative;height:180px"><canvas id="drawer-chart-rating"></canvas></div>
+
+            <div id="drawer-stat-section" style="margin-top:20px">
+                <div class="drawer-section-title" id="drawer-stat-title"></div>
+                <div style="position:relative;height:180px"><canvas id="drawer-chart-stat"></canvas></div>
+            </div>
+
+            <div class="drawer-section-title" style="margin-top:20px">📋 최근 경기</div>
+            <div id="drawer-match-table"></div>
+        </div>
+    </div>
+
     <script src="/static/js/player_analytics.js?v=1"></script>
     <script src="/static/js/player_report.js?v=2"></script>
-    <script src="/static/js/insights.js?v=1"></script>
+    <script src="/static/js/insights.js?v=2"></script>
 </body>
 </html>

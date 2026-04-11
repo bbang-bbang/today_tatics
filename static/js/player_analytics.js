@@ -41,7 +41,7 @@
     // ── 렌더링 ───────────────────────────────────────────────────
     function render(d, playerId, activeYear) {
         destroyCharts();
-        const { info, available_years, season_summary, monthly, recent_form, radar } = d;
+        const { info, available_years, season_summary, monthly, recent_form, radar, activity } = d;
 
         const posLabel = { "G": "GK", "D": "DF", "M": "MF", "F": "FW" }[info.position] || info.position;
         const ratingHtml = info.rating ? `<span class="pa-pill pa-pill-rating">${info.rating.toFixed(2)} ★</span>` : "";
@@ -127,6 +127,18 @@
             </table>
         </div>
 
+        <!-- 활동량 지수 -->
+        <div class="pa-activity-wrap">
+            <div class="pa-section-title">활동량 지수 <span class="pa-sub">(90분 환산 · 리그 내 백분위)</span></div>
+            ${activity && activity.values && Object.keys(activity.values).length ? `
+            <div class="pa-activity-score-row">
+                <span class="pa-activity-score-label">종합 활동량 점수</span>
+                <span class="pa-activity-score-val">${activity.score}<span class="pa-activity-score-unit">/100</span></span>
+            </div>
+            <div style="position:relative;height:180px"><canvas id="chart-pa-activity"></canvas></div>
+            ` : `<div class="pa-empty">활동량 데이터 없음 (경기 수 부족)</div>`}
+        </div>
+
         <!-- 월별 차트 -->
         <div class="pa-monthly-wrap">
             <div class="pa-section-title">월별 공격 포인트 & 평점</div>
@@ -144,6 +156,7 @@
 
         // 차트 렌더
         renderRadar(radar);
+        renderActivity(activity);
         renderMonthly(monthly);
     }
 
@@ -263,8 +276,79 @@
         });
     }
 
+    // ── 활동량 차트 ─────────────────────────────────────────────
+    let activityChart = null;
+
+    function renderActivity(activity) {
+        const ctx = document.getElementById("chart-pa-activity");
+        if (!ctx || !activity || !activity.values || !Object.keys(activity.values).length) return;
+
+        const LABELS = {
+            touches_p90:  "터치 수",
+            duels_p90:    "듀얼 참여",
+            passes_p90:   "패스 시도",
+            def_p90:      "수비 액션",
+            dribbles_p90: "드리블 시도",
+        };
+        const keys   = Object.keys(LABELS);
+        const vals   = keys.map(k => activity.values[k] || 0);
+        const avgVals = keys.map(k => activity.league_avg ? (activity.league_avg[k] || 0) : 0);
+
+        activityChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: keys.map(k => LABELS[k]),
+                datasets: [
+                    {
+                        label: "선수",
+                        data: vals,
+                        backgroundColor: "rgba(78,164,248,0.75)",
+                        borderRadius: 4,
+                    },
+                    {
+                        label: "리그 평균",
+                        data: avgVals,
+                        backgroundColor: "rgba(255,255,255,0.12)",
+                        borderColor: "rgba(255,255,255,0.35)",
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: "#aac", font: { size: 11 } } },
+                    tooltip: {
+                        backgroundColor: "rgba(10,15,30,0.92)",
+                        titleColor: "#c8d8f0",
+                        bodyColor: "#c8d8f0",
+                        callbacks: {
+                            afterLabel: (item) => {
+                                if (item.datasetIndex !== 0) return "";
+                                const key = keys[item.dataIndex];
+                                const pct = activity.percentiles ? (activity.percentiles[key] || 0) : 0;
+                                return `상위 ${100 - pct}%ile`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: "#778", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.05)" } },
+                    y: {
+                        ticks: { color: "#aac", font: { size: 11 } },
+                        grid: { color: "rgba(255,255,255,0.05)" },
+                        title: { display: true, text: "90분당", color: "#667", font: { size: 10 } }
+                    }
+                }
+            }
+        });
+    }
+
     function destroyCharts() {
-        if (radarChart) { radarChart.destroy(); radarChart = null; }
-        if (monthChart)  { monthChart.destroy();  monthChart  = null; }
+        if (radarChart)    { radarChart.destroy();    radarChart    = null; }
+        if (activityChart) { activityChart.destroy(); activityChart = null; }
+        if (monthChart)    { monthChart.destroy();    monthChart    = null; }
     }
 })();
