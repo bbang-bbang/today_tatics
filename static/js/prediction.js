@@ -8,10 +8,27 @@
         closeBtn.addEventListener("click", () => section.classList.add("hidden"));
     }
 
+    // ── 리그 탭 전환 ─────────────────────────────────────
+    document.querySelectorAll(".league-tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".league-tab-btn").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".league-tab-panel").forEach(p => p.classList.remove("active"));
+            btn.classList.add("active");
+            const league = btn.dataset.league;
+            document.getElementById(`${league}-schedule-banner-wrap`).classList.add("active");
+            if (league === "k1" && !k1Loaded) loadScheduleK1();
+        });
+    });
+
     // ── 라운드 일정 (페이지 로드 시 자동) ──────────────────
     let scheduleCache = null;
     let roundsCache   = null;
     let activeRound   = null;
+
+    let k1ScheduleCache = null;
+    let k1RoundsCache   = null;
+    let k1ActiveRound   = null;
+    let k1Loaded        = false;
 
     function loadSchedule() {
         Promise.all([
@@ -21,47 +38,66 @@
             scheduleCache = sched;
             roundsCache   = rounds;
             activeRound   = rounds.current_round;
-            renderRoundsBanner(rounds, sched);
+            renderRoundsBanner(rounds, sched, "k2");
         }).catch(() => {});
     }
 
-    function renderRoundsBanner(roundsData, schedData) {
-        const wrap = document.getElementById("k2-schedule-banner-wrap");
+    function loadScheduleK1() {
+        k1Loaded = true;
+        Promise.all([
+            fetch("/api/k1/schedule").then(r => r.json()),
+            fetch("/api/k1/rounds").then(r => r.json()),
+        ]).then(([sched, rounds]) => {
+            k1ScheduleCache = sched;
+            k1RoundsCache   = rounds;
+            k1ActiveRound   = rounds.current_round;
+            renderRoundsBanner(rounds, sched, "k1");
+        }).catch(() => {});
+    }
+
+    function renderRoundsBanner(roundsData, schedData, league) {
+        const wrapId = league === "k1" ? "k1-schedule-banner-wrap" : "k2-schedule-banner-wrap";
+        const wrap = document.getElementById(wrapId);
         if (!wrap) return;
 
         const rounds = roundsData.rounds || [];
         if (!rounds.length) return;
 
+        const curRound = league === "k1" ? k1ActiveRound : activeRound;
+        const leagueLabel = league === "k1" ? "K리그1 2026" : "K리그2 2026";
+
         wrap.innerHTML = `
-        <div id="k2-schedule-banner">
+        <div class="ksb-banner" id="${league}-schedule-banner">
             <div class="ksb-header">
-                <span class="ksb-title">K리그2 2026</span>
+                <span class="ksb-title">${leagueLabel}</span>
                 <span class="ksb-sub">라운드 선택 후 경기 클릭 → 예측 보고서</span>
             </div>
-            <div class="ksb-round-tabs" id="ksb-round-tabs">
+            <div class="ksb-round-tabs" id="${league}-round-tabs">
                 ${rounds.map(r => `
-                <button class="ksb-round-btn${r.round === activeRound ? " active" : ""}" data-round="${r.round}">
+                <button class="ksb-round-btn${r.round === curRound ? " active" : ""}" data-round="${r.round}" data-league="${league}">
                     R${r.round}
                     <span class="ksb-round-done">${r.finished}/${r.total}</span>
                 </button>`).join("")}
             </div>
-            <div class="ksb-list" id="ksb-game-list"></div>
+            <div class="ksb-list" id="${league}-game-list"></div>
         </div>`;
 
-        renderRoundGames(activeRound, rounds);
+        renderRoundGames(curRound, rounds, league);
 
         wrap.querySelectorAll(".ksb-round-btn").forEach(btn => {
             btn.addEventListener("click", () => {
                 wrap.querySelectorAll(".ksb-round-btn").forEach(b => b.classList.remove("active"));
                 btn.classList.add("active");
-                activeRound = parseInt(btn.dataset.round);
-                renderRoundGames(activeRound, rounds);
+                const rnd = parseInt(btn.dataset.round);
+                if (league === "k1") k1ActiveRound = rnd;
+                else activeRound = rnd;
+                renderRoundGames(rnd, rounds, league);
             });
         });
     }
 
-    function renderRoundGames(roundNum, rounds) {
-        const list = document.getElementById("ksb-game-list");
+    function renderRoundGames(roundNum, rounds, league) {
+        const list = document.getElementById(`${league}-game-list`);
         if (!list) return;
         const rndData = rounds.find(r => r.round === roundNum);
         if (!rndData) return;
@@ -178,12 +214,14 @@
         const score = predictedScore(home, away, prediction.home);
         const matchups = keyMatchups(home, away);
 
-        // 다음 경기 배너에서 이 매치의 정보 가져오기
+        // 다음 경기 배너에서 이 매치의 정보 가져오기 (K1/K2 모두 참조)
         let nextInfo = null;
-        if (scheduleCache) {
-            nextInfo = (scheduleCache.upcoming || []).find(
+        for (const cache of [scheduleCache, k1ScheduleCache]) {
+            if (!cache) continue;
+            nextInfo = (cache.upcoming || []).find(
                 g => g.home_id === homeId && g.away_id === awayId
             );
+            if (nextInfo) break;
         }
 
         report.innerHTML = `

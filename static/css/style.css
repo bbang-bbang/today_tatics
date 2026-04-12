@@ -2859,14 +2859,44 @@ body {
 .pmk-title { font-size: 0.63rem; color: #4a6a8a; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
 .pmk-item  { font-size: 0.72rem; color: #9ab; padding: 2px 0; }
 
-/* K2 일정 배너 래퍼 */
-#k2-schedule-banner-wrap {
+/* 리그 탭 래퍼 */
+#league-schedule-wrap {
     width: 100%;
     padding: 0 clamp(16px, 4vw, 48px);
     box-sizing: border-box;
 }
+#league-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.league-tab-btn {
+    padding: 5px 16px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: #131c2e;
+    color: #7a8fa8;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.league-tab-btn.active {
+    background: #1e3a5f;
+    color: #4ea4f8;
+    border-color: rgba(78,164,248,0.4);
+}
+.league-tab-panel { display: none; }
+.league-tab-panel.active { display: block; }
 
-/* K2 일정 배너 */
+/* K2/K1 일정 배너 래퍼 (탭 내부) */
+#k2-schedule-banner-wrap,
+#k1-schedule-banner-wrap {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* K2/K1 일정 배너 */
+.ksb-banner,
 #k2-schedule-banner {
     background: linear-gradient(180deg, #0b1424 0%, #0e1830 100%);
     border: 1px solid rgba(78,164,248,0.12);

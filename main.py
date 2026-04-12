@@ -839,6 +839,10 @@ def get_match_prediction():
 
     hid = home_info["sofascore_id"]
     aid = away_info["sofascore_id"]
+    # 리그 구분: K1(410) or K2(777)
+    league = home_info.get("league", "K2")
+    tid_filter = 410 if league == "K1" else 777
+
     db_path = os.path.join(BASE_DIR, "players.db")
     conn = sqlite3.connect(db_path)
     cur  = conn.cursor()
@@ -848,13 +852,13 @@ def get_match_prediction():
     now_year  = str(datetime.datetime.now().year)
 
     def compute_standings(year):
-        """K2 현재 순위표 계산 (최신 시즌)"""
+        """현재 순위표 계산 (해당 리그 기준)"""
         cur.execute("""
             SELECT home_team_id, away_team_id, home_score, away_score
             FROM events
-            WHERE tournament_id=777 AND home_score IS NOT NULL AND away_score IS NOT NULL
+            WHERE tournament_id=? AND home_score IS NOT NULL AND away_score IS NOT NULL
               AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
-        """, (year,))
+        """, (tid_filter, year,))
         standing = {}
         for home_id, away_id, hs, as_ in cur.fetchall():
             for tid, gf, ga, is_home in [(home_id, hs, as_, True), (away_id, as_, hs, False)]:
@@ -882,24 +886,23 @@ def get_match_prediction():
 
     def team_stats(ss_id, side_home):
         """팀 전반 지표 계산"""
-        # 전체 K2 경기 (홈+원정)
         cur.execute("""
             SELECT COUNT(*) g,
                    SUM(CASE WHEN home_score>away_score THEN 1 ELSE 0 END) w,
                    SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END) d,
                    SUM(home_score) gf, SUM(away_score) ga
-            FROM events WHERE tournament_id=777 AND home_team_id=?
+            FROM events WHERE tournament_id=? AND home_team_id=?
               AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
-        """, (ss_id, now_year))
+        """, (tid_filter, ss_id, now_year))
         hrow = cur.fetchone()
         cur.execute("""
             SELECT COUNT(*) g,
                    SUM(CASE WHEN away_score>home_score THEN 1 ELSE 0 END) w,
                    SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END) d,
                    SUM(away_score) gf, SUM(home_score) ga
-            FROM events WHERE tournament_id=777 AND away_team_id=?
+            FROM events WHERE tournament_id=? AND away_team_id=?
               AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
-        """, (ss_id, now_year))
+        """, (tid_filter, ss_id, now_year))
         arow = cur.fetchone()
         hg,hw,hd,hgf,hga = hrow
         ag,aw,ad,agf,aga = arow
@@ -913,9 +916,9 @@ def get_match_prediction():
         # 최근 5경기 폼
         cur.execute("""
             SELECT home_score, away_score, home_team_id FROM events
-            WHERE tournament_id=777 AND (home_team_id=? OR away_team_id=?)
+            WHERE tournament_id=? AND (home_team_id=? OR away_team_id=?)
             ORDER BY date_ts DESC LIMIT 5
-        """, (ss_id, ss_id))
+        """, (tid_filter, ss_id, ss_id))
         recent = cur.fetchall()
         form = []
         for hs, as_, ht in recent:
@@ -928,14 +931,14 @@ def get_match_prediction():
         cur.execute("""
             SELECT SUM(g), SUM(w) FROM (
                 SELECT COUNT(*) g, SUM(CASE WHEN home_score>away_score THEN 1 ELSE 0 END) w
-                FROM events WHERE tournament_id=777 AND home_team_id=?
+                FROM events WHERE tournament_id=? AND home_team_id=?
                   AND CAST(strftime('%m', datetime(date_ts,'unixepoch','localtime')) AS INT)=?
                 UNION ALL
                 SELECT COUNT(*) g, SUM(CASE WHEN away_score>home_score THEN 1 ELSE 0 END) w
-                FROM events WHERE tournament_id=777 AND away_team_id=?
+                FROM events WHERE tournament_id=? AND away_team_id=?
                   AND CAST(strftime('%m', datetime(date_ts,'unixepoch','localtime')) AS INT)=?
             )
-        """, (ss_id, now_month, ss_id, now_month))
+        """, (tid_filter, ss_id, now_month, tid_filter, ss_id, now_month))
         mr = cur.fetchone()
         month_wr = (mr[1] or 0)/(mr[0] or 1)*100 if (mr and mr[0]) else None
 
@@ -945,19 +948,19 @@ def get_match_prediction():
         # 득점 top3 (현재 시즌)
         cur.execute("""
             SELECT MAX(strftime('%Y', datetime(date_ts,'unixepoch','localtime')))
-            FROM events WHERE tournament_id=777
-        """)
+            FROM events WHERE tournament_id=?
+        """, (tid_filter,))
         latest_yr = cur.fetchone()[0]
         cur.execute("""
             SELECT mps.player_id, COALESCE(p.name_ko, mps.player_name), SUM(mps.goals) g
             FROM match_player_stats mps
             JOIN events e ON mps.event_id=e.id
             LEFT JOIN players p ON mps.player_id=p.id
-            WHERE mps.team_id=? AND e.tournament_id=777
+            WHERE mps.team_id=? AND e.tournament_id=?
               AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
               AND mps.goals>0
             GROUP BY mps.player_id ORDER BY g DESC LIMIT 3
-        """, (ss_id, latest_yr))
+        """, (ss_id, tid_filter, latest_yr))
         top_scorers = [{"id": r[0], "name": r[1], "goals": r[2]} for r in cur.fetchall()]
 
         # 유의사항 도출
@@ -1008,9 +1011,9 @@ def get_match_prediction():
                      CASE WHEN away_score>home_score THEN 1 ELSE 0 END
                    END) w,
                SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END) d
-        FROM events WHERE tournament_id=777
+        FROM events WHERE tournament_id=?
           AND ((home_team_id=? AND away_team_id=?) OR (home_team_id=? AND away_team_id=?))
-    """, (hid, hid, aid, aid, hid))
+    """, (tid_filter, hid, hid, aid, aid, hid))
     h2h = cur.fetchone()
     h2h_g, h2h_w, h2h_d = h2h
     h2h_l = (h2h_g or 0) - (h2h_w or 0) - (h2h_d or 0)
@@ -2666,11 +2669,16 @@ def insights_player_detail():
 
 # ── K리그2 다음 경기 일정 ─────────────────────────────────
 KLEAGUE_TEAM_CODE = {
+    # K2
     "K02": "suwon",   "K06": "busan",   "K07": "jeonnam", "K08": "seongnam",
     "K17": "daegu",   "K20": "gyeongnam","K29": "suwon_fc","K31": "seouland",
     "K32": "ansan",   "K34": "asan",    "K36": "gimpo",   "K37": "cheongju",
     "K38": "cheonan", "K39": "hwaseong","K40": "paju",    "K41": "gimhae",
     "K42": "yongin",
+    # K1
+    "K01": "ulsan",   "K03": "pohang",  "K04": "jeju",    "K05": "jeonbuk",
+    "K09": "fcseoul", "K10": "daejeon", "K18": "incheon", "K21": "gangwon",
+    "K22": "gwangju", "K26": "bucheon", "K27": "anyang",  "K35": "gimcheon",
 }
 
 def _fetch_k2_all_games(year=None):
@@ -2782,6 +2790,121 @@ def get_k2_rounds():
             "total":    len(items),
         })
         # 가장 최근 완료 라운드 or 진행 중 라운드를 current로
+        if finished_count > 0:
+            current_round = rnd
+
+    return jsonify({"rounds": rounds, "current_round": current_round})
+
+
+def _fetch_k1_all_games(year=None):
+    """K리그 공식 API에서 K1 전체 경기(완료+예정) 수집 — 1~12월"""
+    import urllib.request, datetime
+    url = "https://www.kleague.com/getScheduleList.do"
+    if year is None:
+        year = datetime.datetime.now().year
+    games = []
+    now_month = datetime.datetime.now().month if year == datetime.datetime.now().year else 12
+    for m in range(1, now_month + 2):
+        if m > 12:
+            break
+        payload = json.dumps({"leagueId": "1", "year": str(year), "month": str(m).zfill(2)}).encode("utf-8")
+        req = urllib.request.Request(url, data=payload,
+            headers={"Content-Type": "application/json; charset=UTF-8", "Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                games += data.get("data", {}).get("scheduleList", [])
+        except Exception:
+            pass
+    return games
+
+
+def _parse_k1_game(g):
+    """K1 API 경기 dict → 통일 포맷"""
+    home_code = g.get("homeTeam", "")
+    away_code = g.get("awayTeam", "")
+    home_id   = KLEAGUE_TEAM_CODE.get(home_code)
+    away_id   = KLEAGUE_TEAM_CODE.get(away_code)
+    home_info = next((t for t in TEAMS if t["id"] == home_id), None)
+    away_info = next((t for t in TEAMS if t["id"] == away_id), None)
+    finished  = g.get("endYn") == "Y" or g.get("gameStatus") == "FE"
+    return {
+        "date":       g.get("gameDate", ""),
+        "time":       g.get("gameTime", ""),
+        "round":      g.get("roundId"),
+        "home_code":  home_code,
+        "away_code":  away_code,
+        "home_id":    home_id,
+        "away_id":    away_id,
+        "home_name":  home_info["name"]  if home_info else g.get("homeTeamName", home_code),
+        "away_name":  away_info["name"]  if away_info else g.get("awayTeamName", away_code),
+        "home_short": home_info["short"] if home_info else g.get("homeTeamName", home_code),
+        "away_short": away_info["short"] if away_info else g.get("awayTeamName", away_code),
+        "venue":      g.get("fieldName", ""),
+        "finished":   finished,
+        "home_score": g.get("homeGoal") if finished else None,
+        "away_score": g.get("awayGoal") if finished else None,
+    }
+
+
+@app.route("/api/k1/schedule")
+def get_k1_schedule():
+    """K1 예정 경기 + 팀별 다음 경기"""
+    import datetime
+    now_str = datetime.datetime.now().strftime("%Y.%m.%d")
+    try:
+        raw = _fetch_k1_all_games()
+    except Exception:
+        return jsonify({"upcoming": [], "next_by_team": {}}), 200
+
+    upcoming = []
+    for g in raw:
+        if g.get("endYn") == "Y" or g.get("gameStatus") == "FE":
+            continue
+        if g.get("gameDate", "") < now_str:
+            continue
+        upcoming.append(_parse_k1_game(g))
+    upcoming.sort(key=lambda x: (x["date"], x["time"]))
+
+    next_by_team = {}
+    for g in upcoming:
+        for side in ("home_id", "away_id"):
+            tid = g.get(side)
+            if tid and tid not in next_by_team:
+                next_by_team[tid] = {**g, "is_home": side == "home_id"}
+
+    return jsonify({"upcoming": upcoming, "next_by_team": next_by_team})
+
+
+@app.route("/api/k1/rounds")
+def get_k1_rounds():
+    """K1 라운드 목록 + 각 라운드 경기 결과/예정"""
+    import datetime
+    try:
+        raw = _fetch_k1_all_games()
+    except Exception:
+        return jsonify({"rounds": [], "current_round": None}), 200
+
+    games_by_round = {}
+    for g in raw:
+        r = g.get("roundId")
+        if not r:
+            continue
+        if r not in games_by_round:
+            games_by_round[r] = []
+        games_by_round[r].append(_parse_k1_game(g))
+
+    rounds = []
+    current_round = None
+    for rnd in sorted(games_by_round.keys()):
+        items = sorted(games_by_round[rnd], key=lambda x: (x["date"], x["time"]))
+        finished_count = sum(1 for g in items if g["finished"])
+        rounds.append({
+            "round":    rnd,
+            "games":    items,
+            "finished": finished_count,
+            "total":    len(items),
+        })
         if finished_count > 0:
             current_round = rnd
 

@@ -64,8 +64,15 @@
                 </div>
             </div>
         </div>
-        <!-- K2 다음 경기 일정 배너 (JS로 렌더링) -->
-        <div id="k2-schedule-banner-wrap"></div>
+        <!-- 리그 일정 배너 (K1 / K2 탭) -->
+        <div id="league-schedule-wrap">
+            <div id="league-tabs">
+                <button class="league-tab-btn active" data-league="k2">K리그2</button>
+                <button class="league-tab-btn" data-league="k1">K리그1</button>
+            </div>
+            <div id="k2-schedule-banner-wrap" class="league-tab-panel active"></div>
+            <div id="k1-schedule-banner-wrap" class="league-tab-panel"></div>
+        </div>
 
         <!-- 매치업 비교 패널 (배너 바로 아래, 팀 선택 시 노출) -->
         <div id="banner-matchup" class="hidden">
