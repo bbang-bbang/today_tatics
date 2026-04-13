@@ -10,9 +10,10 @@ from flask import Flask, render_template, jsonify, request
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-SAVES_DIR  = os.path.join(BASE_DIR, "saves")
-SQUADS_DIR = os.path.join(BASE_DIR, "squads")
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+SAVES_DIR   = os.path.join(BASE_DIR, "saves")
+SQUADS_DIR  = os.path.join(BASE_DIR, "squads")
+STATUS_FILE = os.path.join(BASE_DIR, "data", "player_status.json")
 os.makedirs(SAVES_DIR, exist_ok=True)
 os.makedirs(SQUADS_DIR, exist_ok=True)
 
@@ -187,6 +188,19 @@ def list_saves():
     return jsonify(saves)
 
 
+import re
+_SAFE_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]+$')
+
+def _safe_path(base_dir, file_id):
+    """파일 ID를 검증하고 안전한 절대 경로를 반환한다. 경로 탈출 시 None."""
+    if not file_id or not _SAFE_ID_RE.match(file_id):
+        return None
+    fpath = os.path.normpath(os.path.join(base_dir, f"{file_id}.json"))
+    if not fpath.startswith(os.path.normpath(base_dir)):
+        return None
+    return fpath
+
+
 @app.route("/api/saves", methods=["POST"])
 def create_save():
     body = request.get_json()
@@ -203,7 +217,9 @@ def create_save():
         "createdAt": now,
         "updatedAt": now,
     }
-    fpath = os.path.join(SAVES_DIR, f"{save_id}.json")
+    fpath = _safe_path(SAVES_DIR, save_id)
+    if not fpath:
+        return jsonify({"error": "Invalid ID"}), 400
     with open(fpath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return jsonify(data), 201
@@ -211,8 +227,8 @@ def create_save():
 
 @app.route("/api/saves/<save_id>", methods=["GET"])
 def get_save(save_id):
-    fpath = os.path.join(SAVES_DIR, f"{save_id}.json")
-    if not os.path.exists(fpath):
+    fpath = _safe_path(SAVES_DIR, save_id)
+    if not fpath or not os.path.exists(fpath):
         return jsonify({"error": "Not found"}), 404
     with open(fpath, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -221,8 +237,8 @@ def get_save(save_id):
 
 @app.route("/api/saves/<save_id>", methods=["PUT"])
 def update_save(save_id):
-    fpath = os.path.join(SAVES_DIR, f"{save_id}.json")
-    if not os.path.exists(fpath):
+    fpath = _safe_path(SAVES_DIR, save_id)
+    if not fpath or not os.path.exists(fpath):
         return jsonify({"error": "Not found"}), 404
     with open(fpath, "r", encoding="utf-8") as f:
         existing = json.load(f)
@@ -241,8 +257,8 @@ def update_save(save_id):
 
 @app.route("/api/saves/<save_id>", methods=["DELETE"])
 def delete_save(save_id):
-    fpath = os.path.join(SAVES_DIR, f"{save_id}.json")
-    if not os.path.exists(fpath):
+    fpath = _safe_path(SAVES_DIR, save_id)
+    if not fpath or not os.path.exists(fpath):
         return jsonify({"error": "Not found"}), 404
     os.remove(fpath)
     return jsonify({"ok": True})
@@ -285,7 +301,9 @@ def create_squad():
         "createdAt": now,
         "updatedAt": now,
     }
-    fpath = os.path.join(SQUADS_DIR, f"{squad_id}.json")
+    fpath = _safe_path(SQUADS_DIR, squad_id)
+    if not fpath:
+        return jsonify({"error": "Invalid ID"}), 400
     with open(fpath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return jsonify(data), 201
@@ -294,9 +312,11 @@ def create_squad():
 @app.route("/api/squads/<squad_id>", methods=["GET"])
 def get_squad(squad_id):
     # 직접 파일명으로 시도
-    fpath = os.path.join(SQUADS_DIR, f"{squad_id}.json")
+    fpath = _safe_path(SQUADS_DIR, squad_id)
+    if not fpath:
+        return jsonify({"error": "Invalid ID"}), 400
     if not os.path.exists(fpath):
-        # 내부 id로 스캔
+        # 내부 id로 스캔 (safe: listdir은 SQUADS_DIR 내부만 탐색)
         fpath = None
         for fname in os.listdir(SQUADS_DIR):
             if not fname.endswith(".json"):
@@ -317,7 +337,9 @@ def get_squad(squad_id):
 @app.route("/api/squads/<squad_id>", methods=["DELETE"])
 def delete_squad(squad_id):
     # 직접 파일명으로 시도
-    fpath = os.path.join(SQUADS_DIR, f"{squad_id}.json")
+    fpath = _safe_path(SQUADS_DIR, squad_id)
+    if not fpath:
+        return jsonify({"error": "Invalid ID"}), 400
     if not os.path.exists(fpath):
         # 내부 id로 스캔
         fpath = None
@@ -530,7 +552,8 @@ def get_team_ranking():
         SELECT MAX(strftime('%Y', datetime(date_ts,'unixepoch','localtime')))
         FROM events WHERE tournament_id = 777
     """)
-    latest_year = cur.fetchone()[0]
+    row = cur.fetchone()
+    latest_year = row[0] if row and row[0] else str(datetime.now().year)
 
     # 해당 연도 전체 경기
     cur.execute("""
@@ -601,7 +624,8 @@ def get_team_top_players():
         SELECT MAX(strftime('%Y', datetime(date_ts,'unixepoch','localtime')))
         FROM events WHERE tournament_id = 777
     """)
-    latest_year = cur.fetchone()[0]
+    row = cur.fetchone()
+    latest_year = row[0] if row and row[0] else str(datetime.now().year)
 
     def fetch_top(stat_col, limit=3):
         cur.execute(f"""
@@ -950,7 +974,8 @@ def get_match_prediction():
             SELECT MAX(strftime('%Y', datetime(date_ts,'unixepoch','localtime')))
             FROM events WHERE tournament_id=?
         """, (tid_filter,))
-        latest_yr = cur.fetchone()[0]
+        _row = cur.fetchone()
+        latest_yr = _row[0] if _row and _row[0] else str(datetime.now().year)
         cur.execute("""
             SELECT mps.player_id, COALESCE(p.name_ko, mps.player_name), SUM(mps.goals) g
             FROM match_player_stats mps
@@ -1114,8 +1139,35 @@ def get_standings():
     return jsonify(result)
 
 
-# ── 히트맵 API ───────────────────────────────────────────
+# ── DB 설정 + 인덱스 ────────────────────────────────────
 DB_PATH = os.path.join(BASE_DIR, "players.db")
+
+def _ensure_indexes():
+    """자주 쿼리되는 컬럼에 인덱스를 생성한다 (이미 있으면 무시)."""
+    if not os.path.exists(DB_PATH):
+        return
+    conn = sqlite3.connect(DB_PATH)
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_events_tournament ON events(tournament_id)",
+        "CREATE INDEX IF NOT EXISTS idx_events_date ON events(date_ts)",
+        "CREATE INDEX IF NOT EXISTS idx_mps_position ON match_player_stats(position)",
+        "CREATE INDEX IF NOT EXISTS idx_mps_team_player ON match_player_stats(team_id, player_id)",
+        "CREATE INDEX IF NOT EXISTS idx_mps_match_date ON match_player_stats(match_date)",
+        "CREATE INDEX IF NOT EXISTS idx_heatmap_player_event ON heatmap_points(player_id, event_id)",
+        "CREATE INDEX IF NOT EXISTS idx_players_name_ko ON players(name_ko)",
+        "CREATE INDEX IF NOT EXISTS idx_goal_events_player ON goal_events(player_id)",
+    ]
+    for sql in indexes:
+        try:
+            conn.execute(sql)
+        except Exception:
+            pass  # 테이블이 아직 없을 수 있음
+    conn.commit()
+    conn.close()
+
+_ensure_indexes()
+
+# ── 히트맵 API ───────────────────────────────────────────
 
 # sofascore_id → 한글 팀명 매핑
 _SS_TO_KO = {t["sofascore_id"]: t["name"] for t in TEAMS}
@@ -2175,7 +2227,8 @@ def get_team_goal_timing():
                       AND (g.minute + COALESCE(g.added_time,0)) <= ?
                       {year_clause}
                 """, (ss_id, ss_id, ss_id, s, e_min) + yp)
-            results.append({"label": label, "count": cur.fetchone()[0]})
+            _cr = cur.fetchone()
+            results.append({"label": label, "count": _cr[0] if _cr else 0})
         return results
 
     gf_bands = count_goals("for")
@@ -2319,13 +2372,27 @@ def get_kleague2_heatmap():
 
 # ── 포지션 인사이트 API ──────────────────────────────────
 
+def _year_date_params(year):
+    """year 파라미터를 안전한 SQL 조건절 + 바인딩 파라미터로 변환한다.
+    반환: (sql_condition_string, params_tuple)
+    - year == "all" -> ("", ())
+    - year == "2026" -> ("AND match_date >= ? AND match_date < ?", ("2026-01-01", "2027-01-01"))
+    """
+    if not year or year == "all":
+        return "", ()
+    try:
+        y = int(year)
+    except (ValueError, TypeError):
+        return "", ()
+    return "AND match_date >= ? AND match_date < ?", (f"{y}-01-01", f"{y+1}-01-01")
+
 @app.route("/api/insights/top-performers")
 def insights_top_performers():
     """포지션별 TOP 퍼포머 (최소 3경기 이상, 90분 환산)"""
     year = request.args.get("year", "2026")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+    date_cond, date_params = _year_date_params(year)
 
     def pinfo(r):
         return {
@@ -2351,7 +2418,7 @@ def insights_top_performers():
         WHERE m.position='F' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90
         ORDER BY goals DESC LIMIT 30
-    """).fetchall()
+    """, date_params * 2).fetchall()
     result["F"] = [{**pinfo(r),
         "goals": r["goals"] or 0,
         "pk_goals": r["pk_goals"] or 0,
@@ -2372,7 +2439,7 @@ def insights_top_performers():
         WHERE m.position='M' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90 AND tp>0
         ORDER BY (CAST(ap AS REAL)/tp) DESC LIMIT 30
-    """).fetchall()
+    """, date_params).fetchall()
     result["M"] = [{**pinfo(r),
         "pass_acc": round((r["ap"] or 0) / r["tp"] * 100, 1) if r["tp"] else None,
         "passes_p90": round((r["tp"] or 0) / r["mins"] * 90, 1),
@@ -2390,7 +2457,7 @@ def insights_top_performers():
         WHERE m.position='D' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90
         ORDER BY (tkl + intc*1.5 + clr + aer + duel) / mins DESC LIMIT 30
-    """).fetchall()
+    """, date_params).fetchall()
     result["D"] = [{**pinfo(r),
         "def_score_p90": round(
             ((r["tkl"] or 0) + (r["intc"] or 0)*1.5 + (r["clr"] or 0)
@@ -2407,7 +2474,7 @@ def insights_top_performers():
 @app.route("/api/insights/xg-efficiency")
 def insights_xg_efficiency():
     year = request.args.get("year", "2026")
-    date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+    date_cond, date_params = _year_date_params(year)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(f"""
@@ -2423,7 +2490,7 @@ def insights_xg_efficiency():
         WHERE m.position='F' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND xg>0.5
         ORDER BY goals DESC LIMIT 20
-    """).fetchall()
+    """, date_params * 2).fetchall()
     conn.close()
     return jsonify([{
         "player_id": r["player_id"],
@@ -2447,7 +2514,7 @@ def insights_forward_goals():
     if not player_id:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+        date_cond, date_params = _year_date_params(year)
         rows = conn.execute(f"""
             SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
                    SUM(m.goals) as total_goals,
@@ -2459,7 +2526,7 @@ def insights_forward_goals():
             FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
             WHERE m.position='F' AND m.minutes_played>0 AND m.goals>0 {date_cond}
             GROUP BY m.player_id ORDER BY total_goals DESC LIMIT 30
-        """).fetchall()
+        """, date_params * 2).fetchall()
         conn.close()
         return jsonify([{
             "player_id": r["player_id"],
@@ -2514,7 +2581,7 @@ def insights_forward_goals():
 @app.route("/api/insights/midfielder-pass")
 def insights_midfielder_pass():
     year = request.args.get("year", "2026")
-    date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+    date_cond, date_params = _year_date_params(year)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(f"""
@@ -2526,7 +2593,7 @@ def insights_midfielder_pass():
         WHERE m.position='M' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND tp>=50
         ORDER BY (CAST(ap AS REAL)/tp) DESC LIMIT 25
-    """).fetchall()
+    """, date_params).fetchall()
     conn.close()
     return jsonify([{
         "player_id": r["player_id"],
@@ -2543,7 +2610,7 @@ def insights_midfielder_pass():
 @app.route("/api/insights/defender-score")
 def insights_defender_score():
     year = request.args.get("year", "2026")
-    date_cond = f"AND match_date >= '{year}-01-01' AND match_date < '{int(year)+1}-01-01'" if year != "all" else ""
+    date_cond, date_params = _year_date_params(year)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(f"""
@@ -2556,7 +2623,7 @@ def insights_defender_score():
         WHERE m.position='D' AND m.minutes_played>0 {date_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90
         ORDER BY (tkl + intc*1.5 + clr + aer + duel) / mins DESC LIMIT 25
-    """).fetchall()
+    """, date_params).fetchall()
     conn.close()
     return jsonify([{
         "player_id": r["player_id"],
@@ -2957,6 +3024,63 @@ def get_player_vs_teams():
             "key_passes": r["key_passes"] or 0,
         })
     return jsonify(result)
+
+
+# ── 선수 상태 (부상/출전정지/정상) 관리 API ─────────────
+
+def _load_status():
+    if os.path.exists(STATUS_FILE):
+        with open(STATUS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def _save_status(data):
+    with open(STATUS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+@app.route("/api/player-status", methods=["GET"])
+def get_player_status():
+    """전체 선수 상태 조회. ?teamId=xxx 로 팀 필터 가능."""
+    data = _load_status()
+    team_id = request.args.get("teamId", "")
+    if team_id:
+        data = {k: v for k, v in data.items() if v.get("teamId") == team_id}
+    return jsonify(data)
+
+@app.route("/api/player-status", methods=["POST"])
+def update_player_status():
+    """선수 상태 업데이트. body: {playerId, teamId, name, status, note, returnDate}
+    status: "available" | "injured" | "suspended" | "doubtful"
+    """
+    body = request.get_json()
+    pid = str(body.get("playerId", ""))
+    if not pid:
+        return jsonify({"error": "playerId required"}), 400
+    data = _load_status()
+    status = body.get("status", "available")
+    if status == "available" and pid in data:
+        del data[pid]
+    else:
+        data[pid] = {
+            "playerId": pid,
+            "teamId": body.get("teamId", ""),
+            "name": body.get("name", ""),
+            "status": status,
+            "note": body.get("note", ""),
+            "returnDate": body.get("returnDate", ""),
+            "updatedAt": datetime.now().isoformat(),
+        }
+    _save_status(data)
+    return jsonify({"ok": True, "total": len(data)})
+
+@app.route("/api/player-status/<player_id>", methods=["DELETE"])
+def delete_player_status(player_id):
+    """선수 상태 삭제 (정상 복귀)"""
+    data = _load_status()
+    if player_id in data:
+        del data[player_id]
+        _save_status(data)
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

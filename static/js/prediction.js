@@ -147,11 +147,36 @@
         section.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
+    let _playerStatusCache = null;
+    function loadPlayerStatus() {
+        if (_playerStatusCache) return Promise.resolve(_playerStatusCache);
+        return fetch("/api/player-status").then(r => r.json()).then(d => { _playerStatusCache = d; return d; }).catch(() => ({}));
+    }
+    function statusBadgeHtml(teamId) {
+        if (!_playerStatusCache) return "";
+        const entries = Object.values(_playerStatusCache).filter(s => s.teamId === teamId && s.status !== "available");
+        if (!entries.length) return "";
+        const icons = { injured: "🏥", suspended: "🟥", doubtful: "🔶" };
+        const labels = { injured: "부상", suspended: "출전정지", doubtful: "출전 의문" };
+        return `<div class="pred-status">
+            <div class="pred-status-title">부상/결장</div>
+            ${entries.map(s => `<div class="pred-status-row">
+                <span class="ps-icon">${icons[s.status] || "❓"}</span>
+                <span class="ps-name">${s.name}</span>
+                <span class="ps-label">${labels[s.status] || s.status}</span>
+                ${s.returnDate ? `<span class="ps-return">~${s.returnDate}</span>` : ""}
+                ${s.note ? `<span class="ps-note">${s.note}</span>` : ""}
+            </div>`).join("")}
+        </div>`;
+    }
+
     function loadPrediction(homeId, awayId) {
         report.innerHTML = `<div class="pred-loading">분석 중...</div>`;
-        fetch(`/api/match-prediction?homeTeam=${homeId}&awayTeam=${awayId}`)
-            .then(r => r.json())
-            .then(data => render(data, homeId, awayId))
+        Promise.all([
+            fetch(`/api/match-prediction?homeTeam=${homeId}&awayTeam=${awayId}`).then(r => r.json()),
+            loadPlayerStatus()
+        ])
+            .then(([data]) => render(data, homeId, awayId))
             .catch(() => { report.innerHTML = ""; });
     }
 
@@ -253,6 +278,7 @@
                     <div class="pred-scorers-title">이번 시즌 득점</div>
                     ${home.top_scorers.map(s => `<div class="pred-scorer-row"><span class="scorer-name scorer-link" data-player-id="${s.id}">${s.name}</span><span class="scorer-g">${s.goals}골</span></div>`).join("")}
                 </div>` : ""}
+                ${statusBadgeHtml(homeId)}
             </div>
 
             <!-- 중앙 예측 -->
@@ -312,6 +338,7 @@
                     <div class="pred-scorers-title">이번 시즌 득점</div>
                     ${away.top_scorers.map(s => `<div class="pred-scorer-row"><span class="scorer-name scorer-link" data-player-id="${s.id}">${s.name}</span><span class="scorer-g">${s.goals}골</span></div>`).join("")}
                 </div>` : ""}
+                ${statusBadgeHtml(awayId)}
             </div>
 
         </div>`;

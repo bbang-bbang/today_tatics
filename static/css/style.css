@@ -291,6 +291,45 @@ body {
     white-space: nowrap;
 }
 
+/* 팀 배너 부가 정보 (시즌 + 폼) */
+.team-slot-sub {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    min-height: 18px;
+}
+.sub-league {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #0f3460;
+    color: #7ec8e3;
+}
+.sub-season {
+    font-size: 0.6rem;
+    color: #8899aa;
+}
+.sub-form {
+    display: flex;
+    gap: 2px;
+}
+.fb {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    font-size: 0.55rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 16px;
+    color: #fff;
+    cursor: default;
+}
+.fb-w { background: #15803d; }
+.fb-d { background: #a16207; }
+.fb-l { background: #b91c1c; }
+
 .team-slot-controls {
     display: flex;
     gap: 4px;
@@ -746,6 +785,15 @@ body {
     color: #4a90d9;
 }
 
+/* 선수 상태 (부상/출전정지) */
+.bench-status-btn { font-size: 0.65rem; }
+.bench-status-icon { margin-right: 2px; }
+.bench-player-injured { opacity: 0.5; }
+.bench-player-injured .bench-player-name { text-decoration: line-through; color: #f87171; }
+.bench-player-suspended { opacity: 0.5; }
+.bench-player-suspended .bench-player-name { text-decoration: line-through; color: #fb923c; }
+.bench-player-doubtful .bench-player-name { color: #fbbf24; }
+
 .bench-player-remove:hover {
     color: #e94560;
 }
@@ -825,6 +873,33 @@ body {
 
 .load-btn:hover {
     background: #a0581b !important;
+}
+
+.export-btn {
+    background: #1a5276 !important;
+    border-color: #2980b9 !important;
+}
+.export-btn:hover {
+    background: #2980b9 !important;
+}
+
+/* 커스텀 포메이션 저장 버튼 */
+.formation-save-btn {
+    width: 22px; height: 22px;
+    padding: 0; margin-left: 3px;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    background: #16213e;
+    color: #4ec9b0;
+    font-size: 14px; font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.formation-save-btn:hover {
+    background: #0d7c3e;
+    border-color: #15a050;
+    color: #fff;
 }
 
 /* ── 경기별 히트맵 선택 패널 ─────────────────────────── */
@@ -2780,6 +2855,34 @@ body {
 .pred-away .pred-scorer-row { flex-direction: row-reverse; }
 .scorer-name { color: #c0d0e0; }
 .scorer-g { color: #7bed9f; font-weight: 700; font-size: 0.7rem; }
+
+/* 부상/결장 선수 */
+.pred-status {
+    margin-top: 6px;
+    padding: 5px 8px;
+    background: rgba(185, 28, 28, 0.1);
+    border: 1px solid rgba(185, 28, 28, 0.25);
+    border-radius: 6px;
+}
+.pred-status-title {
+    font-size: 0.6rem;
+    color: #f87171;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 3px;
+}
+.pred-status-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    padding: 1px 0;
+}
+.ps-icon { font-size: 0.7rem; }
+.ps-name { color: #e0e0e0; font-weight: 600; }
+.ps-label { color: #f87171; font-size: 0.62rem; }
+.ps-return { color: #8899aa; font-size: 0.6rem; }
+.ps-note { color: #6b7b8b; font-size: 0.58rem; font-style: italic; }
 
 /* 중앙 패널 */
 .pred-center {

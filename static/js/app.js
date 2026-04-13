@@ -35,6 +35,8 @@
         kitB: "home",
         nextId: 100,
         animSpeed: 1.0,
+        highlightPlayerId: null, // 개인 강조 모드: 이 선수만 하이라이트
+        showRoleTags: false,     // 롤 태그 표시 토글
     };
 
     const canvas = document.getElementById("field");
@@ -205,6 +207,30 @@
                 drawCurvedLine(l.sx, l.sy, l.cx, l.cy, l.ex, l.ey, l.color, false);
             } else if (l.style === 'multiArrow') drawMultiLine(l.points, l.color, false, null);
             else drawOneLine(l.sx, l.sy, l.ex, l.ey, l.style, l.color, false);
+            // 전술 노트 렌더링
+            if (l.note) {
+                let mx, my;
+                if (l.style === 'curvedArrow') {
+                    const mid = fieldToCanvas((l.sx + l.ex) / 2 * 0.5 + l.cx * 0.5, (l.sy + l.ey) / 2 * 0.5 + l.cy * 0.5);
+                    mx = mid.px; my = mid.py;
+                } else if (l.style === 'multiArrow' && l.points.length >= 2) {
+                    const mi = Math.floor(l.points.length / 2);
+                    const mid = fieldToCanvas(l.points[mi].fx, l.points[mi].fy);
+                    mx = mid.px; my = mid.py;
+                } else {
+                    const mid = fieldToCanvas((l.sx + l.ex) / 2, (l.sy + l.ey) / 2);
+                    mx = mid.px; my = mid.py;
+                }
+                ctx.save();
+                ctx.font = "bold 9px 'Segoe UI', sans-serif";
+                ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+                const tw = ctx.measureText(l.note).width;
+                ctx.fillStyle = "rgba(0,0,0,0.7)";
+                ctx.fillRect(mx - tw / 2 - 4, my - 14, tw + 8, 16);
+                ctx.fillStyle = "#ffd700";
+                ctx.fillText(l.note, mx, my);
+                ctx.restore();
+            }
         }
         if (state.drawingLine) {
             const l = state.drawingLine;
@@ -260,27 +286,43 @@
             }
         }
         // 배치된 선수 그리기 (항상 p.x/y 기준, slotIdx는 자국 표시 여부만 사용)
+        const hl = state.highlightPlayerId;
         for (const p of state.players) {
             if (p.onField === false) continue;
+            // 개인 강조 모드: 선택되지 않은 선수는 반투명
+            const dimmed = hl && p.id !== hl;
+            if (dimmed) ctx.globalAlpha = 0.25;
+
             const { px, py } = fieldToCanvas(p.x, p.y);
             const color = getTeamColor(p.team);
             const isDragging = state.dragging === p;
             const r = isDragging ? PLAYER_RADIUS + 3 : PLAYER_RADIUS;
+            const isHighlighted = hl && p.id === hl;
             if (isDragging) { ctx.shadowColor = color; ctx.shadowBlur = 16; }
+            if (isHighlighted) { ctx.shadowColor = "#ffd700"; ctx.shadowBlur = 20; }
             ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
             ctx.fillStyle = color; ctx.fill();
-            ctx.strokeStyle = getTeamStroke(p.team); ctx.lineWidth = 2.5; ctx.stroke();
+            ctx.strokeStyle = isHighlighted ? "#ffd700" : getTeamStroke(p.team);
+            ctx.lineWidth = isHighlighted ? 3.5 : 2.5; ctx.stroke();
             ctx.shadowColor = "transparent"; ctx.shadowBlur = 0;
             const txtCol = getTeamTextColor(p.team);
             ctx.fillStyle = txtCol; ctx.font = "bold 11px 'Segoe UI', sans-serif";
             ctx.textAlign = "center"; ctx.textBaseline = "middle";
             ctx.fillText(p.number, px, py);
+            // 롤 태그 표시
+            if (state.showRoleTags && p.position) {
+                ctx.font = "bold 8px 'Segoe UI', sans-serif";
+                ctx.fillStyle = "rgba(255,255,200,0.9)";
+                ctx.fillText(p.position, px, py - r - 5);
+            }
             ctx.font = "bold 10px 'Segoe UI', sans-serif";
             ctx.fillStyle = "#fff";
             ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 3;
-            const label = p.name + (p.position ? ` (${p.position})` : "");
+            const label = p.name + (!state.showRoleTags && p.position ? ` (${p.position})` : "");
             ctx.fillText(label, px, py + r + 12);
             ctx.shadowColor = "transparent"; ctx.shadowBlur = 0;
+
+            if (dimmed) ctx.globalAlpha = 1;
         }
     }
 
@@ -848,6 +890,10 @@
                     // 선수도 라인도 없을 때만 빈 슬롯 체크
                     const emptySlot = hitTestEmptySlot(px, py);
                     if (emptySlot) openSlotPicker(emptySlot, e.clientX, e.clientY);
+                    else if (state.highlightPlayerId) {
+                        // 빈 영역 클릭 → 개인 강조 해제
+                        state.highlightPlayerId = null; render();
+                    }
                 }
             }
         } else if (state.mode === "erase") {
@@ -947,6 +993,9 @@
                     const p = state._clickedPlayer;
                     clearTimeout(_singleClickTimer);
                     _singleClickTimer = setTimeout(() => {
+                        // 개인 강조 토글
+                        state.highlightPlayerId = (state.highlightPlayerId === p.id) ? null : p.id;
+                        render();
                         if (p.name && p.name !== "선수") loadHeatmap(p.name, p.team);
                     }, 250);
                 }
@@ -1045,7 +1094,17 @@
         clearTimeout(_singleClickTimer);
         const { px, py } = getPointerPos(e);
         const player = hitTest(px, py);
-        if (player) openEditPopup(player, e.clientX, e.clientY);
+        if (player) { openEditPopup(player, e.clientX, e.clientY); return; }
+        // 화살표 더블클릭 → 전술 노트 편집
+        const line = hitTestLine(px, py);
+        if (line) {
+            const current = line.note || "";
+            const note = prompt("전술 노트 (빈칸이면 삭제):", current);
+            if (note === null) return; // 취소
+            line.note = note.trim() || undefined;
+            render();
+            showToast(line.note ? "노트가 추가되었습니다." : "노트가 삭제되었습니다.");
+        }
     });
 
     // ── Right-click: 꺾기 완료 or 선수 제거 ──────────────────
@@ -1122,6 +1181,11 @@
     document.getElementById("btn-play-all").addEventListener("click", playAllLines);
     document.getElementById("btn-clear-lines").addEventListener("click", () => { state.lines = []; render(); });
     document.getElementById("btn-undo-line").addEventListener("click", () => { state.lines.pop(); render(); });
+    document.getElementById("btn-role-tag").addEventListener("click", (e) => {
+        state.showRoleTags = !state.showRoleTags;
+        e.target.classList.toggle("active", state.showRoleTags);
+        render();
+    });
     document.getElementById("btn-reset").addEventListener("click", () => {
         state.lines = [];
         state.players.forEach(p => { p.onField = false; p.slotIdx = null; });
@@ -1140,7 +1204,101 @@
         });
     });
     document.querySelectorAll(".formation-select-team").forEach((sel) => {
-        sel.addEventListener("change", (e) => { loadFormationSide(sel.dataset.side, e.target.value); });
+        sel.addEventListener("change", (e) => {
+            const val = e.target.value;
+            if (val.startsWith("custom_delete:")) {
+                // 삭제 확인
+                const key = val.replace("custom_delete:", "");
+                if (confirm(`"${key}" 포메이션을 삭제하시겠습니까?`)) {
+                    delete state.formations[key];
+                    const stored = JSON.parse(localStorage.getItem("customFormations") || "{}");
+                    delete stored[key];
+                    localStorage.setItem("customFormations", JSON.stringify(stored));
+                    refreshFormationSelects();
+                    showToast("포메이션이 삭제되었습니다.");
+                }
+                sel.value = sel.dataset.side === "A" ? state.formationA : state.formationB;
+                return;
+            }
+            loadFormationSide(sel.dataset.side, val);
+        });
+    });
+
+    // ── 커스텀 포메이션 저장 ──────────────────────────────
+    function refreshFormationSelects() {
+        const builtIn = ["4-4-2","4-3-3","3-5-2","4-2-3-1","4-1-4-1","3-4-3","5-3-2","5-4-1"];
+        const customs = Object.keys(state.formations).filter(k => !builtIn.includes(k)).sort();
+        document.querySelectorAll(".formation-select-team").forEach(sel => {
+            const cur = sel.value;
+            // 기존 커스텀 옵션 제거
+            sel.querySelectorAll("option.custom-fm").forEach(o => o.remove());
+            sel.querySelectorAll("optgroup.custom-fm-group").forEach(g => g.remove());
+            if (customs.length > 0) {
+                const group = document.createElement("optgroup");
+                group.label = "내 포메이션";
+                group.className = "custom-fm-group";
+                customs.forEach(key => {
+                    const opt = document.createElement("option");
+                    opt.value = key; opt.textContent = key; opt.className = "custom-fm";
+                    group.appendChild(opt);
+                    // 삭제 옵션
+                    const delOpt = document.createElement("option");
+                    delOpt.value = "custom_delete:" + key;
+                    delOpt.textContent = "  ✕ " + key + " 삭제";
+                    delOpt.className = "custom-fm";
+                    delOpt.style.color = "#e94560";
+                    group.appendChild(delOpt);
+                });
+                sel.appendChild(group);
+            }
+            sel.value = cur;
+        });
+    }
+
+    // 로컬스토리지에서 커스텀 포메이션 복원
+    function loadCustomFormations() {
+        const stored = JSON.parse(localStorage.getItem("customFormations") || "{}");
+        Object.assign(state.formations, stored);
+        refreshFormationSelects();
+    }
+
+    document.querySelectorAll(".formation-save-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const side = btn.dataset.side;
+            const onField = state.players.filter(p => p.team === side && p.onField !== false);
+            if (onField.length === 0) { showToast("필드에 선수가 없습니다."); return; }
+
+            const name = prompt("포메이션 이름을 입력하세요:", "");
+            if (!name || !name.trim()) return;
+            const key = name.trim();
+
+            // 현재 선수 좌표를 포메이션 데이터로 변환
+            const positions = onField.map(p => ({ x: p.x, y: p.y }));
+            const labels = onField.map(p => p.position || "");
+            // 반대편도 미러링 생성
+            const mirrored = positions.map(pos => ({ x: 1 - pos.x, y: pos.y }));
+            const mirLabels = labels.map(l => {
+                if (l.startsWith("L")) return "R" + l.slice(1);
+                if (l.startsWith("R")) return "L" + l.slice(1);
+                return l;
+            });
+
+            state.formations[key] = {
+                teamA: positions, teamB: mirrored,
+                labelsA: labels, labelsB: mirLabels
+            };
+
+            // 로컬스토리지에 저장
+            const stored = JSON.parse(localStorage.getItem("customFormations") || "{}");
+            stored[key] = state.formations[key];
+            localStorage.setItem("customFormations", JSON.stringify(stored));
+
+            refreshFormationSelects();
+            // 해당 side의 select를 새 포메이션으로 변경
+            document.querySelector(`.formation-select-team[data-side="${side}"]`).value = key;
+            if (side === "A") state.formationA = key; else state.formationB = key;
+            showToast(`"${key}" 포메이션이 저장되었습니다.`);
+        });
     });
 
     // ── 경기 선택 패널 닫기 ───────────────────────────────
@@ -1277,6 +1435,41 @@
         slotPicker.classList.remove("hidden");
     }
 
+    // ── 선수 상태 관리 (부상/출전정지) ─────────────────────
+    let _statusCache = {};
+    function loadStatusCache() {
+        return fetch("/api/player-status").then(r => r.json())
+            .then(d => { _statusCache = d; return d; })
+            .catch(() => ({}));
+    }
+    loadStatusCache();
+
+    const STATUS_ICONS = { injured: "🏥", suspended: "🟥", doubtful: "🔶", available: "" };
+    const STATUS_LABELS = { injured: "부상", suspended: "출전정지", doubtful: "출전 의문", available: "정상" };
+    const STATUS_CYCLE = ["available", "injured", "suspended", "doubtful"];
+
+    function togglePlayerStatus(player, teamId) {
+        const pid = String(player.id);
+        const current = _statusCache[pid]?.status || "available";
+        const nextIdx = (STATUS_CYCLE.indexOf(current) + 1) % STATUS_CYCLE.length;
+        const next = STATUS_CYCLE[nextIdx];
+
+        if (next === "available") {
+            fetch(`/api/player-status/${pid}`, { method: "DELETE" })
+                .then(() => { delete _statusCache[pid]; renderBench(); showToast(`${player.name}: 정상 복귀`); });
+        } else {
+            fetch("/api/player-status", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ playerId: pid, teamId, name: player.name, status: next })
+            }).then(() => {
+                _statusCache[pid] = { playerId: pid, teamId, name: player.name, status: next };
+                renderBench();
+                showToast(`${player.name}: ${STATUS_LABELS[next]}`);
+            });
+        }
+    }
+
     // ── Bench panel ───────────────────────────────────────
     const benchListA = document.getElementById("bench-list-a");
     const benchListB = document.getElementById("bench-list-b");
@@ -1325,6 +1518,27 @@
             name.className = "bench-player-name";
             name.textContent = p.name + (p.position ? ` (${p.position})` : "");
 
+            // 부상/출전정지 상태 표시
+            const pid = String(p.id);
+            const pStatus = _statusCache[pid]?.status || "available";
+            if (pStatus !== "available") {
+                item.classList.add("bench-player-" + pStatus);
+                const statusIcon = document.createElement("span");
+                statusIcon.className = "bench-status-icon";
+                statusIcon.textContent = STATUS_ICONS[pStatus];
+                statusIcon.title = STATUS_LABELS[pStatus];
+                name.prepend(statusIcon);
+            }
+
+            // 상태 토글 버튼
+            const teamObj = side === "A" ? state.teamA : state.teamB;
+            const teamId = teamObj ? teamObj.id : "";
+            const statusBtn = document.createElement("button");
+            statusBtn.className = "bench-player-edit bench-status-btn";
+            statusBtn.textContent = pStatus === "available" ? "+" : STATUS_ICONS[pStatus];
+            statusBtn.title = `상태: ${STATUS_LABELS[pStatus]} (클릭하여 변경)`;
+            statusBtn.addEventListener("click", (e) => { e.stopPropagation(); togglePlayerStatus(p, teamId); });
+
             const editBtn = document.createElement("button");
             editBtn.className = "bench-player-edit";
             editBtn.textContent = "✎";
@@ -1368,7 +1582,7 @@
                 removeBtn2.innerHTML = "&times;";
                 removeBtn2.title = "삭제";
                 removeBtn2.addEventListener("click", () => { state.players = state.players.filter(pl => pl !== p); renderBench(); });
-                item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(placeBtn); item.appendChild(removeBtn2);
+                item.appendChild(dot); item.appendChild(name); item.appendChild(statusBtn); item.appendChild(editBtn); item.appendChild(placeBtn); item.appendChild(removeBtn2);
             } else {
                 const unplaceBtn = document.createElement("button");
                 unplaceBtn.className = "bench-player-edit";
@@ -1387,7 +1601,7 @@
                     state.players = state.players.filter((pl) => pl !== p);
                     render(); renderBench();
                 });
-                item.appendChild(dot); item.appendChild(name); item.appendChild(editBtn); item.appendChild(unplaceBtn); item.appendChild(removeBtn);
+                item.appendChild(dot); item.appendChild(name); item.appendChild(statusBtn); item.appendChild(editBtn); item.appendChild(unplaceBtn); item.appendChild(removeBtn);
             }
             container.appendChild(item);
         }
@@ -1501,9 +1715,9 @@
             slots: state.slots,
             players: state.players.map((p) => ({ id: p.id, team: p.team, x: p.x, y: p.y, onField: p.onField, slotIdx: p.slotIdx ?? null, name: p.name, number: p.number, position: p.position || "", height: p.height || null, weight: p.weight || null, dob: p.dob || "" })),
             lines: state.lines.map((l) => {
-                if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null };
-                if (l.style === 'multiArrow') return { points: l.points, sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null };
-                return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null };
+                if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
+                if (l.style === 'multiArrow') return { points: l.points, sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
+                return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
             }),
             teamAId: state.teamA ? state.teamA.id : null,
             teamBId: state.teamB ? state.teamB.id : null,
@@ -1524,9 +1738,9 @@
         state.balls = (data.balls || []).map(b => ({ id: b.id ?? state.nextId++, x: b.x, y: b.y }));
         // backward compat: old saves use "arrows"
         state.lines = (data.lines || data.arrows || []).map((l) => {
-            if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null };
-            if (l.style === 'multiArrow') return { points: l.points || [], sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: 'multiArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null };
-            return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style || "arrow", color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null };
+            if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
+            if (l.style === 'multiArrow') return { points: l.points || [], sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: 'multiArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
+            return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style || "arrow", color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
         });
         render(); renderBench();
     }
@@ -1571,6 +1785,21 @@
         closeSaveModal();
     });
     document.getElementById("btn-save").addEventListener("click", () => openSaveModal(null, ""));
+
+    // ── 이미지 내보내기 (PNG) ─────────────────────────────
+    document.getElementById("btn-export-png").addEventListener("click", () => {
+        // 히트맵 포함 현재 상태 그대로 캡처
+        const dataUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        const teamA = state.teamA ? state.teamA.short : "A";
+        const teamB = state.teamB ? state.teamB.short : "B";
+        const now = new Date();
+        const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}`;
+        link.download = `tactics_${teamA}_vs_${teamB}_${ts}.png`;
+        link.href = dataUrl;
+        link.click();
+        showToast("이미지가 저장되었습니다.");
+    });
 
     // ── Load modal ────────────────────────────────────────
     const loadModal = document.getElementById("load-modal");
@@ -1722,6 +1951,33 @@
         document.getElementById("name-a").textContent = state.teamA ? state.teamA.name : "HOME";
         setBannerBadge(document.getElementById("badge-b"), state.teamB, DEFAULT_B_COLOR, "A");
         document.getElementById("name-b").textContent = state.teamB ? state.teamB.name : "AWAY";
+        updateTeamSub("A", state.teamA);
+        updateTeamSub("B", state.teamB);
+    }
+
+    // ── 팀 배너 부가 정보 (시즌 + 최근 폼) ─────────────
+    function updateTeamSub(side, team) {
+        const el = document.getElementById("sub-" + side.toLowerCase());
+        if (!el) return;
+        if (!team) { el.innerHTML = ""; return; }
+
+        // 시즌 연도 + 리그 배지
+        const year = new Date().getFullYear();
+        el.innerHTML = `<span class="sub-league">${team.league}</span><span class="sub-season">${year}</span><span class="sub-form" id="form-${side.toLowerCase()}"></span>`;
+
+        // 최근 폼 비동기 로드
+        fetch(`/api/results?teamId=${team.id}`)
+            .then(r => r.json())
+            .then(results => {
+                const formEl = document.getElementById("form-" + side.toLowerCase());
+                if (!formEl || !results.length) return;
+                const recent = results.slice(0, 5);
+                formEl.innerHTML = recent.map(r => {
+                    const cls = r.result === "W" ? "fb-w" : r.result === "D" ? "fb-d" : "fb-l";
+                    return `<span class="fb ${cls}" title="${r.home ? '홈' : '원정'} vs ${r.opponent} ${r.score}">${r.result}</span>`;
+                }).join("");
+            })
+            .catch(() => {});
     }
 
     function updateLegend() {
@@ -1920,6 +2176,7 @@
         fetch("/api/teams").then((r) => r.json()),
     ]).then(([formData, teamData]) => {
         state.formations = formData; state.teams = teamData;
+        loadCustomFormations();
         resize(); loadFormation("4-4-2");
     });
 })();

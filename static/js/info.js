@@ -746,7 +746,7 @@
     // ── 같은 팀 HOME/AWAY 선택 시 렌더 ──────────────────────
     async function renderSameTeam(team) {
         matchupArea.innerHTML = `<div class="matchup-placeholder"><span>불러오는 중...</span></div>`;
-
+        try {
         const [results, stats, statsByYear, ranking] = await Promise.all([
             fetch(`/api/results?teamId=${team.id}`).then(r => r.json()),
             fetch(`/api/team-stats?teamId=${team.id}`).then(r => r.json()),
@@ -766,12 +766,13 @@
 
         grid.appendChild(buildSideStatCol(team, stats, statsByYear, "away", ranking));
         matchupArea.appendChild(grid);
+        } catch (err) { console.warn("renderSameTeam error:", err); matchupArea.innerHTML = `<div class="matchup-placeholder"><span>데이터를 불러올 수 없습니다.</span></div>`; }
     }
 
     // ── 메인 렌더 ────────────────────────────────────────
     async function renderMatchup(teamA, teamB) {
         matchupArea.innerHTML = `<div class="matchup-placeholder"><span>불러오는 중...</span></div>`;
-
+        try {
         const [resultsA, resultsB, h2h, h2hMatches, statsA, statsB,
                statsByYearA, statsByYearB, rankingA, rankingB, topA, topB] = await Promise.all([
             fetch(`/api/results?teamId=${teamA.id}`).then(r => r.json()),
@@ -795,11 +796,12 @@
         grid.appendChild(buildCenterPanel(h2h, h2hMatches, teamA, teamB));
         grid.appendChild(buildTeamCol(teamB, resultsB, statsB, true, statsByYearB, rankingB, topB));
         matchupArea.appendChild(grid);
+        } catch (err) { console.warn("renderMatchup error:", err); matchupArea.innerHTML = `<div class="matchup-placeholder"><span>데이터를 불러올 수 없습니다.</span></div>`; }
     }
 
     async function renderSingle(team, isAway) {
         matchupArea.innerHTML = `<div class="matchup-placeholder"><span>불러오는 중...</span></div>`;
-
+        try {
         const [results, stats, statsByYear, ranking, topPlayers] = await Promise.all([
             fetch(`/api/results?teamId=${team.id}`).then(r => r.json()),
             fetch(`/api/team-stats?teamId=${team.id}`).then(r => r.json()),
@@ -823,6 +825,7 @@
             grid.appendChild(buildEmptyTeamCol(true));
         }
         matchupArea.appendChild(grid);
+        } catch (err) { console.warn("renderSingle error:", err); matchupArea.innerHTML = `<div class="matchup-placeholder"><span>데이터를 불러올 수 없습니다.</span></div>`; }
     }
 
     function clearMatchup() {
