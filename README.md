@@ -1,126 +1,234 @@
 # today_tatics
 
-K리그 전술 분석 웹 애플리케이션 + 수원 삼성 블루윙즈 데이터 수집 파이프라인
+K리그 전술 분석 웹 애플리케이션 — K리그1/2 전 팀 데이터 수집 파이프라인
 
 ---
 
-## 데이터 수집 프로세스
+## 스택
 
-### 개요
+| 항목 | 내용 |
+|------|------|
+| Backend | Python 3 + Flask |
+| Database | SQLite (`players.db`) |
+| Frontend | Vanilla JS + HTML5 Canvas + CSS |
+| Template | Jinja2 (`templates/index.html`) |
+| Data Source | SofaScore API (Playwright), Open-Meteo API, Nominatim, K리그 공식 API |
+| Data Files | `data/*.json` (팀/선수/전적/스탯/부상) |
 
-SofaScore에서 수원 삼성 블루윙즈(K리그2)의 경기별 선수 스탯, 히트맵, 경기장 정보를 수집하고, Open-Meteo API로 경기 당시 날씨를 보완하여 SQLite DB(`players.db`)에 저장한다.
+---
+
+## 실행 방법
+
+```bash
+# 가상환경 활성화
+.venv\Scripts\activate          # Windows
+source .venv/bin/activate       # macOS/Linux
+
+# 의존성 설치 (최초 1회)
+pip install -r requirements.txt
+playwright install chromium     # 크롤러 사용 시
+
+# Flask 서버 실행
+python main.py
+# -> http://127.0.0.1:5000
+```
+
+---
+
+## 프로젝트 구조
 
 ```
-SofaScore API ──▶ crawl_match_stats.py ──▶ match_player_stats 테이블
-                ──▶ crawl_sofascore.py  ──▶ heatmap_points 테이블
-SofaScore API ──▶ fetch_venues.py      ──▶ events 테이블 (경기장 좌표)
-Open-Meteo    ──▶ fetch_weather.py     ──▶ match_player_stats 테이블 (날씨)
+today_tatics/
+  main.py                        # Flask 서버 (45+ API 엔드포인트)
+  update_data.py                 # 증분 업데이트 통합 실행
+  players.db                     # SQLite DB
+  requirements.txt               # Python 의존성
+  templates/
+    index.html                   # 메인 SPA
+  static/
+    css/style.css
+    js/
+      app.js                     # 전술판 코어 (Canvas, 드래그, 화살표, 애니메이션)
+      analytics.js               # 팀 분석 차트
+      banner_stats.js            # 배너 스탯
+      dashboard.js               # 대시보드 위젯
+      info.js                    # 정보 패널
+      insights.js                # 인사이트 뷰
+      k2heatmap.js               # K2 히트맵 시각화
+      player_analytics.js        # 선수 개인 분석 모달
+      player_report.js           # 선수 리포트 (레이더 차트, 스탯 바)
+      prediction.js              # 경기 예측 + 시즌 시뮬레이션
+      standings.js               # 순위표
+    img/                         # 팀 엠블럼, 킷 아이콘
+  data/
+    kleague_players_2026.json    # 2026 시즌 선수 데이터
+    kleague_results_2026.json    # 2026 시즌 경기 결과 (196건)
+    kleague_h2h.json             # 상대 전적
+    kleague_team_stats.json      # 팀 스탯
+    sofascore_teams.json         # SofaScore 팀 ID 매핑
+    player_status.json           # 부상/출전정지/출전의문 수동 관리
+  crawlers/                      # 데이터 수집 스크립트
+  analysis/                      # 분석 스크립트 (읽기 전용)
+  saves/                         # 전술판 저장 파일
+  squads/                        # 스쿼드 파일
+  checklist/                     # 개발 프로세스 문서
 ```
 
 ---
 
-### 스크립트별 역할
+## 데이터 수집 파이프라인
 
-#### `crawl_sofascore.py` — 선수 기본 정보 + 시즌 스탯 + 히트맵
-- K리그1/2 전 팀 선수 정보, 시즌 누적 스탯, 경기별 히트맵 좌표 수집
-- Playwright로 브라우저를 띄워 SofaScore 내부 API(`/api/v1/...`) 호출 (봇 탐지 우회)
-- 저장 테이블: `teams`, `players`, `player_stats`, `heatmap_points`, `events`
+```
+SofaScore API (Playwright)
+  crawl_sofascore.py        -> teams, players, player_stats, heatmap_points, events
+  crawl_match_stats.py      -> match_player_stats (K1/K2 전 팀, --league 플래그)
+  crawl_kleague1_2026.py    -> K1 2026 시즌 경기별 선수 스탯
+  crawl_kleague2_all.py     -> K2 전 팀 히트맵 포함 경기별 선수 스탯
+  build_k1_xg.py            -> K1 xG 모델 데이터 구축
+  fetch_venues.py           -> events (경기장 좌표)
+  fetch_weather.py          -> match_player_stats (날씨)
+  fetch_referees.py         -> events (심판 정보)
+  fetch_injuries.py         -> player_status.json (부상자, K리그는 수동 관리 필요)
 
-#### `crawl_match_stats.py` — 경기별 선수 세부 스탯 (수원 삼성)
-- `/api/v1/event/{event_id}/lineups` 엔드포인트에서 경기당 선수 스탯 수집
-- 수원 삼성 선수만 필터링 (`teamId == 7652`)
-- 이미 수집된 경기는 자동 스킵 (증분 수집)
-- 저장 테이블: `match_player_stats`
-- 수집 항목: rating, goals, assists, passes, crosses, dribbles, tackles, interceptions, clearances, duels, saves 등 35개 컬럼
+K리그 공식 API
+  update_results_2026.py    -> kleague_results_2026.json (경기 결과 증분 수집)
 
-#### `fetch_venues.py` — 경기장 정보 수집
-- `/api/v1/event/{event_id}` 에서 홈팀 venue 정보 추출
-- 경기는 항상 홈팀 경기장에서 열리므로 `homeTeam.venue` 사용
-- SofaScore의 일부 좌표가 lat/lon 뒤집혀 있어 자동 교정 로직 포함
-- 좌표 없는 경우 Nominatim(OpenStreetMap) 무료 지오코딩으로 보완
-- 한국 좌표 유효 범위: 위도 33~39, 경도 124~132
-- 저장 위치: `events.venue_name`, `venue_city`, `venue_lat`, `venue_lon`
-
-#### `fetch_weather.py` — 경기 당시 날씨 수집
-- Open-Meteo Archive API 사용 (무료, API 키 불필요)
-- `events.venue_lat/lon` 기준으로 경기장 위치별 날씨 조회
-- 경기 시작 시각(KST 시간 기준)의 시간별 날씨 데이터 추출
-- 수집 항목: 기온(°C), 습도(%), 풍속(m/s), 날씨 코드/설명
-- 저장 위치: `match_player_stats.temperature`, `humidity`, `wind_speed`, `weather_code`, `weather_desc`, `match_date`
-
-#### `fetch_events.py` — 누락 이벤트 메타데이터 보완
-- `heatmap_points`에는 있지만 `events` 테이블에 없는 event_id 탐지 후 보완
-- `/api/v1/event/{event_id}` 호출로 홈/원정팀 정보 저장
-
-#### `update_data.py` — 증분 업데이트 (통합 실행)
-- 새 경기가 생겼을 때 4단계를 순서대로 자동 실행
-  1. 신규 경기 선수 스탯 수집 (`match_player_stats`)
-  2. 신규 경기 히트맵 수집 (`heatmap_points`)
-  3. 신규 경기 경기장 정보 수집 (`events`)
-  4. 신규 경기 날씨 수집 (`match_player_stats`)
-- `match_player_stats`에는 있지만 `events` 테이블에 없는 orphan 경기 자동 복구
+backfill 스크립트
+  backfill_k1_mps.py        -> K1 match_player_stats 누락분 보완
+  backfill_match_stats.py   -> match_player_stats 일반 누락분 보완
+  backfill_events.py        -> events 누락분 보완
+```
 
 ---
 
-### DB 스키마 요약
+## DB 스키마
 
-| 테이블 | 주요 컬럼 | 비고 |
-|---|---|---|
-| `teams` | id, name, league, tournament_id, season_id | K리그1/2 전 팀 |
-| `players` | id, team_id, name, position, nationality | 선수 기본 정보 |
+| 테이블 | 주요 컬럼 | 현재 레코드 수 |
+|--------|----------|--------------|
+| `teams` | id, name, league, tournament_id, season_id | K리그1/2/3 전 팀 |
+| `players` | id, team_id, name, name_ko, position, height | 1,125명 |
 | `player_stats` | player_id, tournament_id, season_id, rating, goals... | 시즌 누적 스탯 |
-| `events` | id, home/away_team, date_ts, home/away_score, venue_* | 경기 메타데이터 + 경기장 |
-| `heatmap_points` | player_id, event_id, x, y | 경기별 히트맵 좌표 |
-| `match_player_stats` | event_id, player_id, is_home, result, match_date, temperature... | 경기별 선수 세부 스탯 + 날씨 |
+| `events` | id, home/away_team, date_ts, score, venue_* | 1,015경기 |
+| `heatmap_points` | player_id, event_id, x, y | 955,530점 |
+| `match_player_stats` | event_id, player_id, is_home, result, rating, 35개 스탯 + 날씨 | 19,822건 |
+| `goal_events` | player_id, event_id, minute, type | 1,442건 |
 
-#### `match_player_stats` 추가 필드
+### `match_player_stats` 주요 필드
 - `is_home`: 1=홈, 0=원정
 - `result`: 2=승, 1=무, 0=패
 - `match_date`: 경기 시작 일시 (KST)
 - `temperature` / `humidity` / `wind_speed` / `weather_desc`: 경기장 기준 날씨
+- 스탯 35개: rating, goals, assists, passes, key_passes, crosses, dribbles, tackles, interceptions, clearances, aerials_won, saves 등
 
 ---
 
-### 수집 현황 (2026-04-08 기준)
+## 수집 현황 (2026-04-15 기준)
 
 | 항목 | 수치 |
-|---|---|
-| 수원 삼성 수집 경기 수 | 82경기 (2024시즌 ~ 2026시즌) |
-| 경기별 선수 스탯 레코드 | 533건 |
-| 히트맵 좌표 | 158,432점 |
-| 수집 경기장 수 | 18개 |
-| 기온 범위 | -0.1°C ~ 34.7°C |
+|------|------|
+| 2026 시즌 경기 결과 | 196건 (최신 경기일: 2026-04-12) |
+| 히트맵 좌표 | 955,530점 |
+| 수집 경기 수 | 1,015경기 |
+| 경기별 선수 스탯 | 19,822건 |
+| 골 이벤트 | 1,442건 |
+| 등록 선수 수 | 1,125명 |
 
 ---
 
-### 초기 실행 순서
+## API 엔드포인트
+
+| 엔드포인트 | 용도 |
+|-----------|------|
+| `/api/teams` | K리그 전체 팀 목록 |
+| `/api/formations` | 포메이션 좌표 계산 |
+| `/api/saves` (CRUD) | 전술판 저장/불러오기/수정/삭제 |
+| `/api/squads` (CRUD) | 스쿼드 관리 |
+| `/api/results` | 2026 시즌 경기 결과 |
+| `/api/h2h`, `/api/h2h-matches` | 상대 전적 |
+| `/api/team-stats`, `/api/team-stats-by-year` | 팀 스탯 |
+| `/api/team-ranking` | 팀 랭킹 |
+| `/api/team-analytics` | 팀 심층 분석 |
+| `/api/team-top-players` | 팀별 TOP 선수 |
+| `/api/team-goal-timing` | 팀 득점 시간대 분석 |
+| `/api/match-prediction` | 경기 예측 |
+| `/api/prediction-backtest` | 예측 모델 백테스트 |
+| `/api/season-simulation` | 시즌 시뮬레이션 |
+| `/api/predicted-lineup` | 예상 라인업 |
+| `/api/standings` | K1/K2 순위표 |
+| `/api/heatmap` | 선수 히트맵 좌표 |
+| `/api/player-matches` | 선수 경기별 스탯 |
+| `/api/player-stat-report` | 선수 스탯 리포트 |
+| `/api/player-analytics` | 선수 개인 분석 (활동량 지수) |
+| `/api/player-vs-teams` | 선수 상대팀별 성적 |
+| `/api/player-status` (CRUD) | 부상/출전정지/출전의문 관리 |
+| `/api/league-dashboard` | 리그 대시보드 |
+| `/api/k1/schedule`, `/api/k1/rounds` | K1 일정/라운드 |
+| `/api/k2/schedule`, `/api/k2/rounds` | K2 일정/라운드 |
+| `/api/kleague2/teams`, `/players`, `/heatmap` | K2 전용 |
+| `/api/insights/top-performers` | 포지션별 TOP 퍼포머 |
+| `/api/insights/xg-efficiency` | xG 효율 분석 |
+| `/api/insights/forward-goals` | 공격수 득점 패턴 |
+| `/api/insights/midfielder-pass` | 미드필더 패스 분석 |
+| `/api/insights/defender-score` | 수비수 평점 분석 |
+| `/api/insights/player-detail` | 선수 인사이트 상세 |
+
+---
+
+## 크롤러 스크립트 목록
+
+| 스크립트 | 역할 |
+|---------|------|
+| `crawl_sofascore.py` | 선수 기본정보 + 시즌 스탯 + 히트맵 (Playwright) |
+| `crawl_match_stats.py` | 경기별 선수 세부 스탯 (`--league K1/K2/all`) |
+| `crawl_kleague1_2026.py` | K1 2026 시즌 전체 수집 |
+| `crawl_kleague2_all.py` | K2 전 팀 히트맵 포함 수집 |
+| `build_k1_xg.py` | K1 xG 모델 데이터 구축 |
+| `fetch_venues.py` | 경기장 좌표 (SofaScore + Nominatim 보완) |
+| `fetch_weather.py` | 경기 당시 날씨 (Open-Meteo Archive API) |
+| `fetch_referees.py` | 경기별 심판 정보 |
+| `fetch_injuries.py` | 부상자 수집 (K리그는 SofaScore 미제공 → 수동 관리) |
+| `fetch_events.py` | 누락 이벤트 메타 보완 |
+| `update_results_2026.py` | K리그 공식 API → 경기 결과 JSON 증분 수집 |
+| `backfill_k1_mps.py` | K1 match_player_stats 누락분 보완 |
+| `backfill_match_stats.py` | match_player_stats 일반 누락분 보완 |
+| `backfill_events.py` | events 테이블 누락분 보완 |
+| `collect_goal_incidents.py` | 골 이벤트 수집 |
+
+---
+
+## 초기 수집 순서
 
 ```bash
-# 1. 선수 기본 정보 + 히트맵 (전 팀, 시간 오래 걸림)
-python crawl_sofascore.py
+# 1. 선수 기본정보 + 히트맵 (전 팀, 시간 오래 걸림)
+python crawlers/crawl_sofascore.py
 
-# 2. 수원 삼성 경기별 선수 세부 스탯
-python crawl_match_stats.py
+# 2. 경기별 선수 세부 스탯
+python crawlers/crawl_match_stats.py --league all
 
-# 3. 경기장 좌표 수집
-python fetch_venues.py
+# 3. 경기장 좌표
+python crawlers/fetch_venues.py
 
-# 4. 날씨 수집
-python fetch_weather.py
+# 4. 날씨
+python crawlers/fetch_weather.py
+
+# 5. 경기 결과 JSON
+python crawlers/update_results_2026.py
 ```
 
-### 이후 정기 업데이트
+## 증분 업데이트
 
 ```bash
-# 새 경기가 생기면 이것만 실행
+# 새 경기 발생 시
 python update_data.py
 ```
 
 ---
 
-### 주의사항
+## 주의사항
 
-- SofaScore 일부 경기장의 `venueCoordinates`가 lat/lon 뒤집혀 있음 → `fetch_venues.py`에서 자동 교정
-- `crawl_match_stats.py` 실행 시 Flask 서버(`main.py`)를 같이 종료하지 않도록 별도 터미널에서 실행 권장
-- Nominatim API는 초당 1건 제한 → `fetch_venues.py`에서 1.1초 딜레이 적용
-- Open-Meteo Archive API는 당일 데이터가 없을 수 있으므로 경기 후 1~2일 뒤 실행 권장
+- SofaScore 일부 경기장 `venueCoordinates`가 lat/lon 뒤집혀 있음 → `fetch_venues.py`에서 자동 교정
+- Nominatim API 초당 1건 제한 → `fetch_venues.py`에서 1.1초 딜레이 적용
+- Open-Meteo Archive API는 당일 데이터 없을 수 있음 → 경기 후 1~2일 뒤 실행 권장
+- K리그 부상 정보는 SofaScore 미제공 → `data/player_status.json` 수동 관리
+- `requirements.txt`는 ASCII 전용 (Windows pip cp949 인코딩 충돌 방지)
+- 크롤러 실행 시 Flask 서버와 별도 터미널 사용 권장
