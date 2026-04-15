@@ -1261,30 +1261,196 @@ def get_match_prediction():
         """, (ss_id, tid_filter, latest_yr))
         top_scorers = [{"id": r[0], "name": r[1], "goals": r[2]} for r in cur.fetchall()]
 
-        # 유의사항 도출
+        avg_gf = ((hgf or 0)+(agf or 0)) / (total_g or 1)
+        avg_ga = ((hga or 0)+(aga or 0)) / (total_g or 1)
+
+        # ── 클린시트 / 무득점 경기 비율
+        cur.execute("""
+            SELECT
+                SUM(CASE WHEN is_home=1 AND away_g=0 THEN 1
+                         WHEN is_home=0 AND home_g=0 THEN 1 ELSE 0 END) cs,
+                SUM(CASE WHEN is_home=1 AND home_g=0 THEN 1
+                         WHEN is_home=0 AND away_g=0 THEN 1 ELSE 0 END) blank,
+                COUNT(*) total
+            FROM (
+                SELECT home_score home_g, away_score away_g, 1 is_home
+                FROM events WHERE tournament_id=? AND home_team_id=?
+                  AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+                UNION ALL
+                SELECT home_score home_g, away_score away_g, 0 is_home
+                FROM events WHERE tournament_id=? AND away_team_id=?
+                  AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+            )
+        """, (tid_filter, ss_id, now_year, tid_filter, ss_id, now_year))
+        cs_row = cur.fetchone()
+        cs_count  = (cs_row[0] or 0) if cs_row else 0
+        blank_cnt = (cs_row[1] or 0) if cs_row else 0
+        cs_total  = (cs_row[2] or 0) if cs_row else 0
+        clean_sheet_rate = cs_count  / (cs_total or 1) * 100
+        blank_rate       = blank_cnt / (cs_total or 1) * 100
+
+        # ── 접전 경기 (1골차) 승/패
+        cur.execute("""
+            SELECT
+                SUM(CASE WHEN gf-ga=1 THEN 1 ELSE 0 END) cw,
+                SUM(CASE WHEN ga-gf=1 THEN 1 ELSE 0 END) cl,
+                SUM(CASE WHEN ABS(gf-ga)=1 THEN 1 ELSE 0 END) ct
+            FROM (
+                SELECT home_score gf, away_score ga FROM events
+                WHERE tournament_id=? AND home_team_id=?
+                  AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+                UNION ALL
+                SELECT away_score gf, home_score ga FROM events
+                WHERE tournament_id=? AND away_team_id=?
+                  AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+            )
+        """, (tid_filter, ss_id, now_year, tid_filter, ss_id, now_year))
+        cl_row = cur.fetchone()
+        close_win   = (cl_row[0] or 0) if cl_row else 0
+        close_loss  = (cl_row[1] or 0) if cl_row else 0
+        close_total = (cl_row[2] or 0) if cl_row else 0
+        close_wr = close_win / (close_total or 1) * 100
+
+        # ── 대량 득점 (3골+) 빈도
+        cur.execute("""
+            SELECT SUM(CASE WHEN gf>=3 THEN 1 ELSE 0 END), COUNT(*) FROM (
+                SELECT home_score gf FROM events
+                WHERE tournament_id=? AND home_team_id=?
+                  AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+                UNION ALL
+                SELECT away_score gf FROM events
+                WHERE tournament_id=? AND away_team_id=?
+                  AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+            )
+        """, (tid_filter, ss_id, now_year, tid_filter, ss_id, now_year))
+        bs_row = cur.fetchone()
+        big_score_rate = (bs_row[0] or 0) / (bs_row[1] or 1) * 100 if bs_row else 0
+
+        # ── xG 효율 (match_player_stats)
+        cur.execute("""
+            SELECT SUM(mps.goals), SUM(mps.expected_goals)
+            FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+            WHERE mps.team_id=? AND e.tournament_id=?
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+        """, (ss_id, tid_filter, latest_yr))
+        xg_row = cur.fetchone()
+        xg_actual = (xg_row[0] or 0) if xg_row else 0
+        xg_sum_val = (xg_row[1] or 0) if xg_row else 0
+        xg_efficiency = (xg_actual / xg_sum_val) if xg_sum_val >= 3 else None
+
+        # ── 연속 기록 (최근 15경기 기준)
+        cur.execute("""
+            SELECT home_score, away_score, home_team_id FROM events
+            WHERE tournament_id=? AND (home_team_id=? OR away_team_id=?)
+            ORDER BY date_ts DESC LIMIT 15
+        """, (tid_filter, ss_id, ss_id))
+        streak_rows = cur.fetchall()
+        streak_res = []
+        for hs, as_, ht in streak_rows:
+            ih = ht == ss_id
+            gf_s = hs if ih else as_
+            ga_s = as_ if ih else hs
+            streak_res.append("W" if gf_s > ga_s else "D" if gf_s == ga_s else "L")
+        win_streak = sum(1 for _ in __import__("itertools").takewhile(lambda r: r=="W",  streak_res))
+        unbeat_streak = sum(1 for _ in __import__("itertools").takewhile(lambda r: r!="L", streak_res))
+        loss_streak = sum(1 for _ in __import__("itertools").takewhile(lambda r: r=="L",  streak_res))
+
+        # ── 최근 5경기 득점 추세 vs 시즌 평균
+        recent5_gf = sum(
+            (hs if ht==ss_id else as_)
+            for hs, as_, ht in streak_rows[:5]
+        )
+        recent5_avg = recent5_gf / min(5, len(streak_rows)) if streak_rows else avg_gf
+
+        # ── 득점 의존도 (top scorer 기여율)
+        total_team_goals = (hgf or 0) + (agf or 0)
+        scorer_dep = None
+        if top_scorers and total_team_goals >= 5:
+            scorer_dep = top_scorers[0]["goals"] / total_team_goals * 100
+
+        # ── 유의사항 도출 ──
         notes = []
+
+        # 연승/무패/연패 스트릭
+        if win_streak >= 4:
+            notes.append(f"현재 {win_streak}연승 행진 중")
+        elif win_streak >= 3:
+            notes.append(f"최근 {win_streak}연승")
+        elif unbeat_streak >= 6:
+            notes.append(f"최근 {unbeat_streak}경기 무패")
+        if loss_streak >= 3:
+            notes.append(f"현재 {loss_streak}연패 위기")
+        elif form.count("L") >= 3 and loss_streak < 3:
+            notes.append("최근 5경기 부진")
+
+        # 홈/원정 강세
         if ha_gap > 20:
             notes.append(f"홈에서 특히 강함 (홈승률 {home_wr:.0f}% vs 원정 {away_wr:.0f}%)")
         elif ha_gap < -10:
-            notes.append(f"원정이 오히려 강함 (원정승률 {away_wr:.0f}%)")
+            notes.append(f"원정이 오히려 강함 (원정승률 {away_wr:.0f}% vs 홈 {home_wr:.0f}%)")
+
+        # 월별 강/약세
         if month_wr is not None:
             mn = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"][now_month-1]
-            if month_wr >= 55:
+            if month_wr >= 60:
+                notes.append(f"{mn} 절정 (역대 {mn} 승률 {month_wr:.0f}%)")
+            elif month_wr >= 50:
                 notes.append(f"{mn} 강세 (역대 {mn} 승률 {month_wr:.0f}%)")
-            elif month_wr <= 30:
+            elif month_wr <= 20:
+                notes.append(f"{mn} 징크스 (역대 {mn} 승률 {month_wr:.0f}%)")
+            elif month_wr <= 33:
                 notes.append(f"{mn} 약세 (역대 {mn} 승률 {month_wr:.0f}%)")
-        form_w = form.count("W")
-        form_l = form.count("L")
-        if form_w >= 4:
-            notes.append("최근 5경기 상승세")
-        elif form_l >= 3:
-            notes.append("최근 5경기 부진")
-        avg_gf = ((hgf or 0)+(agf or 0)) / (total_g or 1)
-        avg_ga = ((hga or 0)+(aga or 0)) / (total_g or 1)
-        if avg_gf >= 1.6:
-            notes.append(f"공격적 (경기당 평균 {avg_gf:.1f}골)")
-        if avg_ga >= 1.6:
-            notes.append(f"수비 취약 (경기당 평균 {avg_ga:.1f}실점)")
+
+        # 클린시트 / 수비력
+        if clean_sheet_rate >= 50:
+            notes.append(f"수비 철벽 (무실점률 {clean_sheet_rate:.0f}%)")
+        elif clean_sheet_rate >= 35:
+            notes.append(f"수비 견고 (무실점률 {clean_sheet_rate:.0f}%)")
+
+        # 무득점 경기
+        if blank_rate >= 40:
+            notes.append(f"득점력 불안 (무득점 경기 {blank_rate:.0f}%)")
+        elif blank_rate >= 30:
+            notes.append(f"간헐적 득점 침묵 ({blank_rate:.0f}%)")
+
+        # 접전 강/약
+        if close_total >= 3:
+            if close_wr >= 67:
+                notes.append(f"접전에서 강함 (1골차 승률 {close_wr:.0f}%)")
+            elif close_wr <= 30:
+                notes.append(f"접전에서 약함 (1골차 승률 {close_wr:.0f}%)")
+
+        # 대량 득점 폭발력
+        if big_score_rate >= 40:
+            notes.append(f"폭발적 공격력 (3골+ 경기 {big_score_rate:.0f}%)")
+
+        # xG 효율
+        if xg_efficiency is not None:
+            if xg_efficiency >= 1.3:
+                notes.append(f"결정력 탁월 (xG 대비 +{(xg_efficiency-1)*100:.0f}% 득점)")
+            elif xg_efficiency <= 0.7:
+                notes.append(f"결정력 부족 (xG 대비 -{(1-xg_efficiency)*100:.0f}% 손실)")
+
+        # 득점력/실점 기본
+        if avg_gf >= 2.0:
+            notes.append(f"고득점 팀 (경기당 {avg_gf:.1f}골)")
+        elif avg_gf >= 1.6:
+            notes.append(f"공격적 (경기당 {avg_gf:.1f}골)")
+        if avg_ga >= 2.0:
+            notes.append(f"실점 다발 (경기당 {avg_ga:.1f}실점)")
+        elif avg_ga >= 1.6:
+            notes.append(f"수비 취약 (경기당 {avg_ga:.1f}실점)")
+
+        # 득점 의존도
+        if scorer_dep is not None and scorer_dep >= 50:
+            notes.append(f"{top_scorers[0]['name']} 원톱 의존 ({scorer_dep:.0f}%)")
+
+        # 최근 득점 추세
+        if len(streak_rows) >= 3 and avg_gf > 0:
+            if recent5_avg >= avg_gf * 1.4:
+                notes.append(f"최근 공격력 급상승 (최근 {recent5_avg:.1f} vs 시즌 {avg_gf:.1f})")
+            elif recent5_avg <= avg_gf * 0.55:
+                notes.append(f"최근 득점 침체 (최근 {recent5_avg:.1f} vs 시즌 {avg_gf:.1f})")
 
         return {
             "total_games": total_g,
