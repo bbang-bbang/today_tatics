@@ -4,8 +4,15 @@
 - SofaScore homeTeam.venue 에서 경기장명, 도시, 좌표 추출
 - 좌표 이상 시 lat/lon 교정 또는 Nominatim 지오코딩으로 보완
 - events 테이블에 venue_name, venue_city, venue_lat, venue_lon 저장
+
+사용법:
+  python crawlers/fetch_venues.py              # 기본: K2 (수원 삼성 경기 기준)
+  python crawlers/fetch_venues.py --league K1  # K1 전 경기
+  python crawlers/fetch_venues.py --league K2  # K2 전 경기
+  python crawlers/fetch_venues.py --league all # K1+K2 전 경기
 """
 
+import argparse
 import asyncio
 import json
 import sqlite3
@@ -17,6 +24,8 @@ from playwright.async_api import async_playwright
 
 DB_PATH = "players.db"
 DELAY   = 0.4
+
+LEAGUE_TID = {"K1": 410, "K2": 777}
 
 def log(msg):
     sys.stdout.buffer.write((msg + "\n").encode("utf-8", errors="replace"))
@@ -66,20 +75,41 @@ async def api_fetch(page, path):
         return None
 
 async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--league", choices=["K1", "K2", "all"], default=None,
+                        help="대상 리그 (K1/K2/all). 지정 시 해당 리그 전 경기. 미지정 시 기존 기본값(수원삼성).")
+    args = parser.parse_args()
+
     conn = sqlite3.connect(DB_PATH)
     add_columns(conn)
 
-    # 수원 삼성 경기 중 venue가 없는 이벤트
-    rows = conn.execute("""
-        SELECT DISTINCT e.id
-        FROM events e
-        JOIN match_player_stats mps ON e.id = mps.event_id
-        WHERE mps.team_id = 7652
-          AND e.venue_lat IS NULL
-        ORDER BY e.date_ts
-    """).fetchall()
+    if args.league:
+        tids = list(LEAGUE_TID.values()) if args.league == "all" else [LEAGUE_TID[args.league]]
+        placeholders = ",".join("?" for _ in tids)
+        rows = conn.execute(f"""
+            SELECT DISTINCT id FROM events
+            WHERE tournament_id IN ({placeholders})
+              AND venue_lat IS NULL
+              AND home_score IS NOT NULL
+            ORDER BY date_ts
+        """, tids).fetchall()
+        log(f"[{args.league}] 경기장 수집 대상 (venue_lat NULL): {len(rows)}경기")
+        session_url = "https://www.sofascore.com/tournament/football/south-korea/k-league-1/410" \
+            if args.league == "K1" else "https://www.sofascore.com/tournament/football/south-korea/k-league-2/777"
+    else:
+        # 레거시: 수원 삼성 경기만
+        rows = conn.execute("""
+            SELECT DISTINCT e.id
+            FROM events e
+            JOIN match_player_stats mps ON e.id = mps.event_id
+            WHERE mps.team_id = 7652
+              AND e.venue_lat IS NULL
+            ORDER BY e.date_ts
+        """).fetchall()
+        log(f"경기장 수집 대상 (수원 삼성): {len(rows)}경기")
+        session_url = "https://www.sofascore.com/tournament/football/south-korea/k-league-2/777"
+
     event_ids = [r[0] for r in rows]
-    log(f"경기장 수집 대상: {len(event_ids)}경기")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -88,10 +118,7 @@ async def main():
             extra_http_headers={"Referer": "https://www.sofascore.com/"}
         )
         page = await ctx.new_page()
-        await page.goto(
-            "https://www.sofascore.com/tournament/football/south-korea/k-league-2/777",
-            wait_until="domcontentloaded", timeout=60000
-        )
+        await page.goto(session_url, wait_until="domcontentloaded", timeout=60000)
         await asyncio.sleep(3)
         log("세션 준비 완료")
 

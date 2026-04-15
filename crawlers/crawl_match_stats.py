@@ -31,7 +31,7 @@ K2_TEAMS = {
     339827: "아산", 195172: "김포", 314293: "청주", 41263: "천안",
     195174: "화성", 314294: "파주", 41260: "김해", 41266: "용인",
 }
-K1_TOURNAMENT = 276   # K리그1
+K1_TOURNAMENT = 410   # K리그1 (Sofascore tournament ID)
 K2_TOURNAMENT = 777   # K리그2
 
 def log(msg):
@@ -158,6 +158,9 @@ def parse_stats(s):
     """statistics dict → 컬럼 값 dict (SofaScore 실제 키 기준)"""
     def g(key):
         return s.get(key)
+    _ap = g("accuratePass")
+    _tp = g("totalPass")
+    _pass_pct = round(_ap / _tp * 100, 1) if (_ap is not None and _tp) else None
     return {
         "minutes_played":       g("minutesPlayed"),
         "rating":               g("rating"),
@@ -167,10 +170,9 @@ def parse_stats(s):
         "shots_on_target":      g("onTargetScoringAttempt"),
         "big_chances_missed":   g("bigChanceMissed"),
         "expected_goals":       g("expectedGoals"),
-        "total_passes":         g("totalPass"),
-        "accurate_passes":      g("accuratePass"),
-        "accurate_passes_pct":  (round(g("accuratePass") / g("totalPass") * 100, 1)
-                                  if g("totalPass") else None),
+        "total_passes":         _tp,
+        "accurate_passes":      _ap,
+        "accurate_passes_pct":  _pass_pct,
         "key_passes":           g("keyPass"),
         "accurate_long_balls":  g("accurateLongBalls"),
         "total_long_balls":     g("totalLongBalls"),

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-K2 전경기 골 인시던트(득점 시간, 선수, 팀) 수집
+K1/K2 전경기 골 인시던트(득점 시간, 선수, 팀) 수집
 sofascore /api/v1/event/{id}/incidents 사용
 
 goal_type:
@@ -15,6 +15,8 @@ from playwright.async_api import async_playwright
 
 DB_PATH = "players.db"
 DELAY   = 0.25
+
+LEAGUE_TID = {"K1": 410, "K2": 777}
 
 def log(msg):
     sys.stdout.buffer.write((msg + "\n").encode("utf-8", errors="replace"))
@@ -62,23 +64,31 @@ async def api(page, path):
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--refetch", action="store_true", help="기수집 경기도 재수집 (goal_type 업데이트)")
+    parser.add_argument("--league", choices=["K1", "K2", "all"], default="K2",
+                        help="대상 리그 (K1/K2/all, 기본 K2)")
     args = parser.parse_args()
+
+    if args.league == "all":
+        tids = list(LEAGUE_TID.values())
+    else:
+        tids = [LEAGUE_TID[args.league]]
+    placeholders = ",".join("?" for _ in tids)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     init_table(conn)
     cur = conn.cursor()
 
-    # 수집 대상: K2 전경기
-    cur.execute("""
+    # 수집 대상: 지정 리그 전경기
+    cur.execute(f"""
         SELECT id, home_team_id, away_team_id
-        FROM events WHERE tournament_id=777
+        FROM events WHERE tournament_id IN ({placeholders})
         ORDER BY date_ts
-    """)
+    """, tids)
     all_events = cur.fetchall()
 
     # 점수가 0-0인 경기는 골 없으므로 스킵
-    cur.execute("SELECT id FROM events WHERE tournament_id=777 AND home_score=0 AND away_score=0")
+    cur.execute(f"SELECT id FROM events WHERE tournament_id IN ({placeholders}) AND home_score=0 AND away_score=0", tids)
     zero_zero = {r[0] for r in cur.fetchall()}
 
     if args.refetch:
@@ -91,7 +101,7 @@ async def main():
         done = {r[0] for r in cur.fetchall()}
         targets = [e for e in all_events if e["id"] not in done and e["id"] not in zero_zero]
 
-    log(f"전체: {len(all_events)}경기 / 0-0스킵: {len(zero_zero)} / 수집대상: {len(targets)}경기")
+    log(f"[{args.league}] 전체: {len(all_events)}경기 / 0-0스킵: {len(zero_zero)} / 수집대상: {len(targets)}경기")
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)

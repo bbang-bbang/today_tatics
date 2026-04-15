@@ -3097,6 +3097,748 @@ body {
 .pred-h2h-draw { font-size: 0.7rem; color: #888; margin-top: 3px; }
 
 /* ══════════════════════════════════════════════════════
+   예측 엔진 v2 — 신뢰도·히트맵·TOP5·부상·트렌드·타이밍
+══════════════════════════════════════════════════════ */
+
+/* 백테스트 정확도 배너 */
+.pred-backtest {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    background: linear-gradient(90deg, rgba(78,164,248,0.08), rgba(184,126,248,0.08));
+    border: 1px solid rgba(78,164,248,0.25);
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    font-size: 0.72rem;
+}
+.pbt-label {
+    font-weight: 700;
+    color: #8ab0d8;
+    font-size: 0.72rem;
+}
+.pbt-stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+}
+.pbt-v {
+    font-weight: 700;
+    color: #facc15;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+.pbt-k {
+    color: #6a8aa8;
+    font-size: 0.62rem;
+}
+.pbt-sub {
+    margin-left: auto;
+    color: #6a8aa8;
+    font-size: 0.62rem;
+}
+
+/* 라운드별 적중률 차트 */
+.pred-backtest-chart {
+    width: 100%;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+.pbc-title {
+    font-size: 0.62rem;
+    color: #8ab0d8;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.pbc-svg {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    height: auto;
+}
+.pbc-legend {
+    display: flex;
+    gap: 14px;
+    margin-top: 4px;
+    font-size: 0.6rem;
+    color: #8ab0d8;
+}
+.pbc-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.pbc-lg-line {
+    display: inline-block;
+    width: 14px;
+    height: 2px;
+    border-radius: 1px;
+}
+.pbc-lg-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+/* 신뢰도 배지 */
+.pred-confidence {
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap; justify-content: center;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    font-size: 0.72rem;
+}
+.pc-icon { font-size: 0.8rem; }
+.pc-label { font-weight: 700; font-size: 0.72rem; }
+.pc-sub   { color: #6a8aa8; font-size: 0.65rem; }
+
+/* 확장 분석 섹션 */
+.pred-extras {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.pred-extras-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* 스코어 매트릭스 히트맵 */
+.pred-score-matrix {
+    position: relative;
+    background: rgba(18,29,54,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px 10px;
+}
+.psm-title {
+    font-size: 0.72rem;
+    color: #8ab0d8;
+    text-align: center;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.psm-axis-label {
+    position: absolute;
+    font-size: 0.58rem;
+    color: #6a8aa8;
+}
+.psm-axis-away { top: 30px; right: 14px; }
+.psm-axis-home { bottom: 10px; left: 14px; }
+.psm-grid {
+    display: grid;
+    gap: 2px;
+}
+.psm-cell {
+    padding: 5px 2px;
+    text-align: center;
+    font-size: 0.64rem;
+    border-radius: 3px;
+    color: #e8f2ff;
+    min-width: 0;
+}
+.psm-corner { background: transparent; }
+.psm-head {
+    background: rgba(255,255,255,0.04);
+    color: #8ab0d8;
+    font-weight: 700;
+    font-size: 0.62rem;
+}
+.psm-val { font-variant-numeric: tabular-nums; }
+.psm-top {
+    outline: 1.5px solid #facc15;
+    font-weight: 700;
+    color: #fff;
+}
+
+/* 상위 스코어 TOP5 */
+.pred-top-scores {
+    background: rgba(18,29,54,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+.pts-title {
+    font-size: 0.72rem;
+    color: #8ab0d8;
+    text-align: center;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.pts-list { display: flex; flex-direction: column; gap: 6px; }
+.pts-row {
+    display: grid;
+    grid-template-columns: 18px 50px 1fr 46px;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+}
+.pts-rank {
+    color: #6a8aa8;
+    text-align: center;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.pts-score {
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-align: center;
+    color: #e8f2ff;
+    font-variant-numeric: tabular-nums;
+}
+.pts-h { color: #7eb8ff; }
+.pts-a { color: #c79ef8; }
+.pts-bar-wrap {
+    background: rgba(255,255,255,0.05);
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.pts-bar {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #4ea4f8, #b87ef8);
+    border-radius: 4px;
+}
+.pts-pct {
+    color: #c8d8f0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+.pts-best .pts-score { color: #facc15; }
+
+/* 부상자 임팩트 카드 */
+.pred-injury-impact {
+    background: rgba(248,113,113,0.06);
+    border: 1px solid rgba(248,113,113,0.25);
+    border-radius: 8px;
+    padding: 8px 10px;
+    width: 100%;
+}
+.pred-away .pred-injury-impact { text-align: right; }
+.pii-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 0.68rem;
+}
+.pred-away .pii-header { justify-content: flex-end; }
+.pii-icon { font-size: 0.85rem; }
+.pii-title { color: #fda4af; font-weight: 700; flex: 1; }
+.pred-away .pii-title { text-align: right; }
+.pii-loss {
+    color: #f87171;
+    font-weight: 700;
+    background: rgba(248,113,113,0.15);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+}
+.pii-list { display: flex; flex-direction: column; gap: 3px; }
+.pii-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.65rem;
+    flex-wrap: wrap;
+}
+.pred-away .pii-row { justify-content: flex-end; }
+.pii-p-name { color: #e8f2ff; font-weight: 600; }
+.pii-p-tag {
+    color: #c8d8f0;
+    background: rgba(255,255,255,0.05);
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 0.6rem;
+}
+.pii-p-stat { color: #a8c8e8; font-size: 0.62rem; }
+.pii-p-ret  { color: #6a8aa8; font-size: 0.6rem; }
+
+/* 폼 트렌드 */
+.pred-trend-block {
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+.ptb-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6rem;
+    color: #8ab0d8;
+    margin-bottom: 3px;
+}
+.ptb-pct {
+    color: #c8d8f0;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+.pred-trend-svg {
+    display: block;
+    width: 100%;
+    height: 36px;
+}
+
+/* 시즌 시뮬레이션 (일정 배너 내) */
+.season-sim-toggle {
+    margin-top: 10px;
+    width: 100%;
+    background: linear-gradient(90deg, rgba(78,164,248,0.15), rgba(184,126,248,0.15));
+    border: 1px solid rgba(78,164,248,0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #c8d8f0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.season-sim-toggle:hover {
+    background: linear-gradient(90deg, rgba(78,164,248,0.25), rgba(184,126,248,0.25));
+}
+.season-sim-container {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+.season-sim-container.open {
+    max-height: 800px;
+    margin-top: 8px;
+    overflow-y: auto;
+}
+.season-sim-body {
+    background: rgba(18,29,54,0.7);
+    border-radius: 8px;
+    padding: 12px;
+}
+.ssb-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.65rem;
+    color: #8ab0d8;
+}
+.ssb-zone { color: #facc15; }
+.ssb-table { display: flex; flex-direction: column; gap: 2px; }
+.ssb-row {
+    display: grid;
+    grid-template-columns: 28px 1fr 100px 80px 50px 50px 50px;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    font-size: 0.7rem;
+    border-radius: 4px;
+}
+.ssb-row:hover { background: rgba(255,255,255,0.03); }
+.ssb-row.ssb-head {
+    color: #6a8aa8;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sst-rank {
+    color: #6a8aa8;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.sst-team { color: #e8f2ff; font-weight: 600; }
+.sst-pts { color: #8ab0d8; font-size: 0.62rem; }
+.sst-bar {
+    background: rgba(255,255,255,0.05);
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.sst-bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+.sst-pct {
+    text-align: right;
+    color: #c8d8f0;
+    font-variant-numeric: tabular-nums;
+}
+.sim-empty {
+    padding: 16px;
+    text-align: center;
+    color: #6a8aa8;
+    font-size: 0.75rem;
+}
+
+/* 모바일: 시즌 시뮬 row 컬럼 축소 */
+@media (max-width: 768px) {
+    .ssb-row {
+        grid-template-columns: 22px 1fr 60px 36px 36px 36px;
+        font-size: 0.62rem;
+    }
+    .sst-bar { display: none; }
+}
+
+/* 예상 라인업 카드 */
+.pred-lineup {
+    background: rgba(18,29,54,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+.pred-lineup-home { border-left: 3px solid #4ea4f8; }
+.pred-lineup-away { border-left: 3px solid #b87ef8; }
+.lu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.lu-label { font-size: 0.72rem; color: #8ab0d8; font-weight: 700; }
+.lu-formation {
+    background: rgba(250,204,21,0.15);
+    color: #facc15;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-variant-numeric: tabular-nums;
+}
+.lu-section { margin-bottom: 6px; }
+.lu-section-title {
+    font-size: 0.55rem;
+    color: #6a8aa8;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+}
+.lu-player {
+    display: grid;
+    grid-template-columns: 22px 28px 1fr 32px;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px;
+    font-size: 0.72rem;
+    border-radius: 4px;
+}
+.lu-player:hover { background: rgba(255,255,255,0.03); }
+.lu-injured { opacity: 0.6; text-decoration: line-through; }
+.lu-injured .lu-name { text-decoration: line-through; }
+.lu-pos {
+    text-align: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    border-radius: 3px;
+    padding: 1px 0;
+}
+.lu-num {
+    color: #6a8aa8;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 0.65rem;
+}
+.lu-name { color: #e8f2ff; font-weight: 500; }
+.lu-inj-icon { font-size: 0.7rem; }
+.lu-rating {
+    text-align: right;
+    color: #facc15;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.68rem;
+    font-weight: 600;
+}
+.lu-based {
+    margin-top: 6px;
+    font-size: 0.6rem;
+    color: #6a8aa8;
+    text-align: right;
+}
+.lu-out {
+    margin-top: 8px;
+    padding: 6px 8px;
+    background: rgba(248,113,113,0.06);
+    border: 1px solid rgba(248,113,113,0.2);
+    border-radius: 6px;
+}
+.lu-out-title {
+    font-size: 0.65rem;
+    color: #fda4af;
+    font-weight: 700;
+    margin-bottom: 3px;
+}
+.lu-out-row { font-size: 0.62rem; color: #c8d8f0; }
+
+/* 휴식일 + 심판 정보 카드 */
+.pred-rest-ref {
+    background: rgba(18,29,54,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.rrc-rest {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.rrc-rest-block {
+    text-align: center;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 6px;
+    padding: 8px 6px;
+}
+.rrc-rest-label {
+    font-size: 0.6rem;
+    color: #6a8aa8;
+    margin-bottom: 4px;
+}
+.rrc-rest-val {
+    font-size: 1.2rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+.rrc-rest-tag {
+    margin-top: 3px;
+    font-size: 0.62rem;
+    color: #c8d8f0;
+}
+.rrc-ref {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.rrc-ref-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+.rrc-ref-icon { font-size: 0.85rem; }
+.rrc-ref-name {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #e8f2ff;
+    flex: 1;
+}
+.rrc-ref-strict {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+.rrc-strict-strict   { background: rgba(248,113,113,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
+.rrc-strict-normal   { background: rgba(78,164,248,0.15); color: #4ea4f8; border: 1px solid rgba(78,164,248,0.3); }
+.rrc-strict-lenient  { background: rgba(123,237,159,0.15); color: #7bed9f; border: 1px solid rgba(123,237,159,0.3); }
+.rrc-ref-stats {
+    font-size: 0.62rem;
+    color: #8ab0d8;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+    .pred-rest-ref { grid-template-columns: 1fr; }
+}
+
+/* 세트피스 매치업 카드 */
+.pred-setpiece {
+    background: rgba(18,29,54,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    grid-column: 1 / -1;
+}
+.sp-title {
+    font-size: 0.75rem;
+    color: #facc15;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 10px;
+    letter-spacing: 0.03em;
+}
+.sp-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.sp-team {
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+}
+.sp-home { border-left: 3px solid #4ea4f8; }
+.sp-away { border-left: 3px solid #b87ef8; }
+.sp-team-name {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #e8f2ff;
+    margin-bottom: 8px;
+}
+.sp-home .sp-team-name { color: #7eb8ff; }
+.sp-away .sp-team-name { color: #c79ef8; }
+.sp-stat {
+    margin-bottom: 6px;
+}
+.sp-stat-bar {
+    position: relative;
+    height: 14px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 2px;
+}
+.sp-stat-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+.sp-off { background: linear-gradient(90deg, #7bed9f, #4ea4f8); }
+.sp-def { background: linear-gradient(90deg, #fbbf24, #f87171); }
+.sp-stat-val {
+    position: absolute;
+    right: 6px;
+    top: 0;
+    line-height: 14px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #e8f2ff;
+    font-variant-numeric: tabular-nums;
+}
+.sp-stat-lbl {
+    font-size: 0.6rem;
+    color: #8ab0d8;
+}
+.sp-stat-sub {
+    color: #6a8aa8;
+    font-size: 0.56rem;
+}
+.sp-split {
+    margin-top: 8px;
+    display: flex;
+    gap: 6px;
+    justify-content: flex-start;
+}
+.sp-tag {
+    font-size: 0.58rem;
+    background: rgba(255,255,255,0.05);
+    color: #c8d8f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-variant-numeric: tabular-nums;
+}
+.sp-pk  { border: 1px solid rgba(250,204,21,0.3); color: #facc15; }
+.sp-fk  { border: 1px solid rgba(123,237,159,0.3); color: #7bed9f; }
+.sp-insights {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: rgba(250,204,21,0.06);
+    border: 1px solid rgba(250,204,21,0.2);
+    border-radius: 6px;
+}
+.sp-insight {
+    font-size: 0.68rem;
+    color: #facc15;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .sp-grid { grid-template-columns: 1fr; }
+}
+
+/* 골 타이밍 바 */
+.pred-timing {
+    background: rgba(18,29,54,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+.ptm-head {
+    font-size: 0.7rem;
+    color: #8ab0d8;
+    text-align: center;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+}
+.ptm-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 28px;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 0.68rem;
+}
+.ptm-lbl { color: #6a8aa8; font-size: 0.62rem; }
+.ptm-bar {
+    display: inline-block;
+    height: 8px;
+    border-radius: 4px;
+    min-width: 2px;
+}
+.ptm-v {
+    color: #e8f2ff;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* 예상 스코어 λ 라벨 강조 */
+.pse-label { font-size: 0.68rem; color: #6a8aa8; }
+.pse-score { font-weight: 700; }
+
+/* ── 모바일 (≤ 768px) 1열 스택 ───────────────────────── */
+@media (max-width: 768px) {
+    .pred-grid {
+        grid-template-columns: 1fr;
+        padding: 14px 12px;
+        gap: 14px;
+    }
+    .pred-team-panel.pred-away {
+        align-items: flex-start;
+        text-align: left;
+    }
+    .pred-away .pred-badges { justify-content: flex-start; }
+    .pred-away .pii-header  { justify-content: flex-start; }
+    .pred-away .pii-title   { text-align: left; }
+    .pred-away .pii-row     { justify-content: flex-start; }
+    .pred-away .pred-injury-impact { text-align: left; }
+    .pred-extras-row {
+        grid-template-columns: 1fr;
+    }
+    .psm-cell {
+        padding: 4px 1px;
+        font-size: 0.56rem;
+    }
+    .pts-row {
+        grid-template-columns: 16px 44px 1fr 40px;
+        font-size: 0.7rem;
+    }
+}
+
+/* ══════════════════════════════════════════════════════
    선수 분석 모달 (Player Analytics)
 ══════════════════════════════════════════════════════ */
 .pa-modal { position: fixed; inset: 0; z-index: 8000; display: flex; align-items: center; justify-content: center; }

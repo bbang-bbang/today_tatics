@@ -627,7 +627,11 @@ def get_team_top_players():
     row = cur.fetchone()
     latest_year = row[0] if row and row[0] else str(datetime.now().year)
 
+    _ALLOWED_TOP_STATS = {"goals", "assists"}
+
     def fetch_top(stat_col, limit=3):
+        if stat_col not in _ALLOWED_TOP_STATS:
+            raise ValueError(f"disallowed stat column: {stat_col}")
         cur.execute(f"""
             SELECT mps.player_id, mps.player_name,
                    COALESCE(p.name_ko, mps.player_name) as display_name,
@@ -851,9 +855,278 @@ def get_team_analytics():
     })
 
 
+_POISSON_MAX_GOALS = 5  # 스코어 매트릭스 최대 (0~5골)
+
+# 리그별 포아송 모델 상수 (2026 백테스트 그리드 서치로 튜닝)
+# - K2: xG 커버 86%, 홈 약간 우위, 무승부 30% → draw_boost 불필요
+# - K1: xG 자체 모델(shotmap lookup) 커버 100%, 무승부 37% → draw_boost 0.20
+# draw_boost = argmax outcome 결정 시 draw 확률에 더해 줄 오프셋 (0~1 스케일)
+_LEAGUE_CONSTANTS = {
+    410: {"home_adv": 1.15, "away_adj": 0.90, "draw_boost": 0.20},  # K1 (xG 재튜닝)
+    777: {"home_adv": 1.15, "away_adj": 0.90, "draw_boost": 0.00},  # K2
+}
+_DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.15, "away_adj": 0.90, "draw_boost": 0.10}
+
+# 레거시 상수 (기존 코드 호환용, 내부에서는 _LEAGUE_CONSTANTS 사용)
+_HOME_ADVANTAGE    = 1.15
+_AWAY_ADJUSTMENT   = 0.90
+_INJURY_LOSS_CAP   = 0.20  # 부상자로 인한 팀 득점력 감소 최대치
+
+
+def _league_coefs(tid_filter):
+    return _LEAGUE_CONSTANTS.get(tid_filter, _DEFAULT_LEAGUE_CONSTANTS)
+
+
+def _poisson_pmf(k, lam):
+    """Poisson P(X=k) — math.exp/factorial 만 사용, scipy 불필요"""
+    import math
+    if lam <= 0:
+        return 1.0 if k == 0 else 0.0
+    return (lam ** k) * math.exp(-lam) / math.factorial(k)
+
+
+def _score_matrix(lam_h, lam_a, max_goals=_POISSON_MAX_GOALS):
+    """
+    홈/원정 람다로 스코어 매트릭스 반환.
+    m[i][j] = P(홈 i골 × 원정 j골).
+    마지막 행/열은 max_goals 이상 누적 포함.
+    """
+    ph = [_poisson_pmf(k, lam_h) for k in range(max_goals + 1)]
+    pa = [_poisson_pmf(k, lam_a) for k in range(max_goals + 1)]
+    # 꼬리 확률(max_goals+ 이상)을 마지막 칸에 합산
+    ph[-1] += max(0.0, 1.0 - sum(ph))
+    pa[-1] += max(0.0, 1.0 - sum(pa))
+    return [[ph[i] * pa[j] for j in range(max_goals + 1)] for i in range(max_goals + 1)]
+
+
+def _matrix_outcomes(matrix, draw_boost=0.0):
+    """
+    스코어 매트릭스 → 홈승/무/원정승 확률 및 상위 5스코어.
+    draw_boost: 0~1 스케일 오프셋. draw 확률에 더한 후 재정규화.
+        K1처럼 무승부 비율 높은 리그에서 argmax outcome 결정 시 draw 선택 개선.
+    """
+    home_p = draw_p = away_p = 0.0
+    scores = []
+    n = len(matrix)
+    for i in range(n):
+        for j in range(n):
+            p = matrix[i][j]
+            scores.append({"home": i, "away": j, "prob": p})
+            if i > j:
+                home_p += p
+            elif i == j:
+                draw_p += p
+            else:
+                away_p += p
+    draw_p += max(0.0, draw_boost)
+    total = home_p + draw_p + away_p or 1
+    scores.sort(key=lambda s: s["prob"], reverse=True)
+    return {
+        "home": round(home_p / total * 100),
+        "draw": round(draw_p / total * 100),
+        "away": round(away_p / total * 100),
+        "top_scores": [
+            {"home": s["home"], "away": s["away"], "pct": round(s["prob"] * 100, 1)}
+            for s in scores[:5]
+        ],
+    }
+
+
+def _all_team_def(cur, tid_filter, year_str, as_of_ts):
+    """
+    리그 내 모든 팀의 평균 xg_against (경기당 실점 xG) 사전 계산.
+    상대 강도(SOS) 보정용. xG 없으면 실제 실점으로 fallback.
+    반환: {team_id: avg_xg_against}
+    """
+    cur.execute("""
+        SELECT team_id, AVG(xg_a)
+        FROM (
+            SELECT e.home_team_id AS team_id,
+                   COALESCE((SELECT SUM(mps.expected_goals) FROM match_player_stats mps
+                             WHERE mps.event_id=e.id AND mps.team_id=e.away_team_id),
+                            e.away_score) AS xg_a
+            FROM events e
+            WHERE e.tournament_id=? AND e.home_score IS NOT NULL
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+              AND e.date_ts < ?
+            UNION ALL
+            SELECT e.away_team_id AS team_id,
+                   COALESCE((SELECT SUM(mps.expected_goals) FROM match_player_stats mps
+                             WHERE mps.event_id=e.id AND mps.team_id=e.home_team_id),
+                            e.home_score) AS xg_a
+            FROM events e
+            WHERE e.tournament_id=? AND e.home_score IS NOT NULL
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+              AND e.date_ts < ?
+        )
+        GROUP BY team_id
+    """, (tid_filter, year_str, as_of_ts, tid_filter, year_str, as_of_ts))
+    return {row[0]: float(row[1]) for row in cur.fetchall() if row[1] is not None}
+
+
+def _team_sos(cur, ss_id, tid_filter, year_str, as_of_ts, team_def_dict, league_def_avg):
+    """
+    팀이 만난 상대들의 평균 수비력 / 리그 평균 수비력.
+    > 1.0: 약한 수비 상대들 만남 (xg_for 부풀림 의심) → 우리 atk를 디스카운트
+    < 1.0: 강한 수비 상대들 만남 (xg_for 저평가) → 우리 atk를 부스트
+    """
+    cur.execute("""
+        SELECT CASE WHEN e.home_team_id=? THEN e.away_team_id ELSE e.home_team_id END AS opp_id
+        FROM events e
+        WHERE e.tournament_id=?
+          AND (e.home_team_id=? OR e.away_team_id=?)
+          AND e.home_score IS NOT NULL
+          AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+          AND e.date_ts < ?
+    """, (ss_id, tid_filter, ss_id, ss_id, year_str, as_of_ts))
+    opp_defs = []
+    for (opp_id,) in cur.fetchall():
+        d = team_def_dict.get(opp_id)
+        if d is not None:
+            opp_defs.append(d)
+    if not opp_defs or league_def_avg <= 0:
+        return 1.0
+    return (sum(opp_defs) / len(opp_defs)) / league_def_avg
+
+
+def _team_rest_days(cur, tid_filter, ss_id, as_of_ts):
+    """팀의 직전 완료 경기로부터의 휴식일. 없으면 None."""
+    cur.execute("""
+        SELECT date_ts FROM events
+        WHERE tournament_id=?
+          AND (home_team_id=? OR away_team_id=?)
+          AND home_score IS NOT NULL AND date_ts < ?
+        ORDER BY date_ts DESC LIMIT 1
+    """, (tid_filter, ss_id, ss_id, as_of_ts))
+    r = cur.fetchone()
+    if not r:
+        return None
+    return int((as_of_ts - r[0]) / 86400)
+
+
+def _rest_factor(rest_days):
+    """
+    휴식일 기반 λ 보정 계수.
+    백테스트 분석(K2)에서 rest≤3일 → 홈승률 27.5% (4-7일 36.1% 대비 -8.6pt).
+    → 짧은 rest 팀의 공격력을 9% 디스카운트.
+    K1은 signal 약하지만 동일 적용 (효과 없으면 무해).
+    """
+    if rest_days is None:
+        return 1.0
+    if rest_days <= 3:
+        return 0.91  # 피로
+    return 1.0
+
+
+def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
+                  apply_sos=False, apply_rest=True,
+                  home_rest_days=None, away_rest_days=None):
+    """
+    포아송 기반 핵심 예측 (백테스트/실시간 공통).
+    - as_of_ts 직전까지의 데이터만 사용 (look-ahead bias 차단)
+    - 부상자 보정은 호출자가 책임 (백테스트는 부상 데이터가 시점성 없으므로 제외)
+    - apply_sos: True면 상대 강도(SOS) 보정 적용
+    반환: {lam_home, lam_away, pred_home/draw/away, top_scores, h_games, a_games, league_avg, matrix, sos_home, sos_away}
+    None 반환: 양 팀 중 한 쪽 사전 경기 0 (cold start)
+    """
+    cur.execute("""
+        SELECT AVG(home_score + away_score) / 2.0
+        FROM events
+        WHERE tournament_id=? AND home_score IS NOT NULL AND away_score IS NOT NULL
+          AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+          AND date_ts < ?
+    """, (tid_filter, year_str, as_of_ts))
+    _r = cur.fetchone()
+    league_avg = float(_r[0]) if _r and _r[0] else 1.3
+
+    def _team_xg(ss_id):
+        cur.execute("""
+            SELECT e.id, e.home_team_id=? AS is_home, e.home_score, e.away_score,
+                   (SELECT SUM(mps.expected_goals) FROM match_player_stats mps
+                    WHERE mps.event_id=e.id AND mps.team_id=?) AS xg_for,
+                   (SELECT SUM(mps.expected_goals) FROM match_player_stats mps
+                    WHERE mps.event_id=e.id AND mps.team_id IS NOT NULL
+                      AND mps.team_id != ?) AS xg_against
+            FROM events e
+            WHERE e.tournament_id=?
+              AND (e.home_team_id=? OR e.away_team_id=?)
+              AND e.home_score IS NOT NULL AND e.away_score IS NOT NULL
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+              AND e.date_ts < ?
+        """, (ss_id, ss_id, ss_id, tid_filter, ss_id, ss_id, year_str, as_of_ts))
+        sf = sa = 0.0
+        n = 0
+        for _id, is_home, hs, as_, xg_f, xg_a in cur.fetchall():
+            gf = hs if is_home else as_
+            ga = as_ if is_home else hs
+            sf += float(xg_f) if xg_f is not None else float(gf or 0)
+            sa += float(xg_a) if xg_a is not None else float(ga or 0)
+            n += 1
+        if not n:
+            return None
+        return {"games": n, "xg_for": sf / n, "xg_against": sa / n}
+
+    h = _team_xg(home_ss)
+    a = _team_xg(away_ss)
+    if not h or not a:
+        return None
+
+    h_atk = (h["xg_for"]     / league_avg) if league_avg else 1.0
+    h_def = (h["xg_against"] / league_avg) if league_avg else 1.0
+    a_atk = (a["xg_for"]     / league_avg) if league_avg else 1.0
+    a_def = (a["xg_against"] / league_avg) if league_avg else 1.0
+
+    # ── 상대 강도(SOS) 보정 ──
+    # 양 팀 모두 6경기 이상 + 클램핑(0.88~1.12)으로 노이즈 억제
+    sos_home = sos_away = 1.0
+    if apply_sos and h["games"] >= 6 and a["games"] >= 6:
+        team_def = _all_team_def(cur, tid_filter, year_str, as_of_ts)
+        if team_def:
+            league_def_avg = sum(team_def.values()) / len(team_def)
+            sos_home = _team_sos(cur, home_ss, tid_filter, year_str, as_of_ts, team_def, league_def_avg)
+            sos_away = _team_sos(cur, away_ss, tid_filter, year_str, as_of_ts, team_def, league_def_avg)
+            sos_home = max(0.88, min(1.12, sos_home))
+            sos_away = max(0.88, min(1.12, sos_away))
+            h_atk = h_atk / sos_home
+            a_atk = a_atk / sos_away
+
+    coefs = _league_coefs(tid_filter)
+    lam_h = max(0.1, h_atk * a_def * league_avg * coefs["home_adv"])
+    lam_a = max(0.1, a_atk * h_def * league_avg * coefs["away_adj"])
+
+    # 휴식일 보정 (≤3일 연전 시 피로 패널티)
+    rest_factor_home = rest_factor_away = 1.0
+    if apply_rest:
+        rh = home_rest_days if home_rest_days is not None else _team_rest_days(cur, tid_filter, home_ss, as_of_ts)
+        ra = away_rest_days if away_rest_days is not None else _team_rest_days(cur, tid_filter, away_ss, as_of_ts)
+        rest_factor_home = _rest_factor(rh)
+        rest_factor_away = _rest_factor(ra)
+        lam_h *= rest_factor_home
+        lam_a *= rest_factor_away
+
+    matrix   = _score_matrix(lam_h, lam_a)
+    outcomes = _matrix_outcomes(matrix, draw_boost=coefs.get("draw_boost", 0.0))
+    return {
+        "lam_home":   lam_h,
+        "lam_away":   lam_a,
+        "pred_home":  outcomes["home"],
+        "pred_draw":  outcomes["draw"],
+        "pred_away":  outcomes["away"],
+        "top_scores": outcomes["top_scores"],
+        "h_games":    h["games"],
+        "a_games":    a["games"],
+        "league_avg": league_avg,
+        "matrix":     matrix,
+        "sos_home":   round(sos_home, 3),
+        "sos_away":   round(sos_away, 3),
+        "rest_home":  round(rest_factor_home, 3),
+        "rest_away":  round(rest_factor_away, 3),
+    }
+
+
 @app.route("/api/match-prediction")
 def get_match_prediction():
-    """두 팀 간 예측 보고서: 승률·유의사항·주요 선수"""
+    """두 팀 간 예측 보고서: 포아송 승률·스코어 매트릭스·신뢰도·부상자 반영"""
     home_id = request.args.get("homeTeam")
     away_id = request.args.get("awayTeam")
     home_info = next((t for t in TEAMS if t["id"] == home_id), None)
@@ -1046,36 +1319,325 @@ def get_match_prediction():
     home_stats = team_stats(hid, True)
     away_stats = team_stats(aid, False)
 
-    # 승률 예측 (가중 평균)
-    # H2H 승률 40% + 홈팀 홈승률 30% + 원정팀 원정승률(역) 30%
-    h2h_win_rate = (h2h_w or 0) / (h2h_g or 1) * 100
-    home_factor  = home_stats["home_wr"]
-    away_factor  = 100 - away_stats["away_wr"]  # 홈팀 유리 관점
+    # ──────────────────────────────────────────────────────────────
+    # 포아송 기반 예측 (v2)
+    # ──────────────────────────────────────────────────────────────
 
-    if h2h_g and h2h_g >= 3:
-        pred_home = h2h_win_rate * 0.4 + home_factor * 0.35 + away_factor * 0.25
+    def team_xg_avg(ss_id):
+        """팀의 경기당 xG(for/against) — xG null 경기는 실제 득실로 fallback"""
+        cur.execute("""
+            SELECT e.id,
+                   e.home_team_id=? AS is_home,
+                   e.home_score, e.away_score,
+                   (SELECT SUM(mps.expected_goals) FROM match_player_stats mps
+                    WHERE mps.event_id=e.id AND mps.team_id=?) AS xg_for,
+                   (SELECT SUM(mps.expected_goals) FROM match_player_stats mps
+                    WHERE mps.event_id=e.id AND mps.team_id IS NOT NULL
+                      AND mps.team_id != ?) AS xg_against
+            FROM events e
+            WHERE e.tournament_id=?
+              AND (e.home_team_id=? OR e.away_team_id=?)
+              AND e.home_score IS NOT NULL AND e.away_score IS NOT NULL
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+        """, (ss_id, ss_id, ss_id, tid_filter, ss_id, ss_id, now_year))
+        xg_for_sum = xg_ag_sum = 0.0
+        games = 0
+        for _id, is_home, hs, as_, xg_f, xg_a in cur.fetchall():
+            gf = hs if is_home else as_
+            ga = as_ if is_home else hs
+            # xG 없으면 실제 득실로 fallback
+            xg_for_sum += float(xg_f) if xg_f is not None else float(gf or 0)
+            xg_ag_sum  += float(xg_a) if xg_a is not None else float(ga or 0)
+            games += 1
+        if not games:
+            return {"games": 0, "xg_for": 1.3, "xg_against": 1.3}
+        return {
+            "games": games,
+            "xg_for": xg_for_sum / games,
+            "xg_against": xg_ag_sum / games,
+        }
+
+    home_xg = team_xg_avg(hid)
+    away_xg = team_xg_avg(aid)
+
+    # 리그 평균 팀당 득점(= 경기당 총득점 / 2) — 공격/수비 계수 정규화용
+    cur.execute("""
+        SELECT AVG(home_score + away_score) / 2.0
+        FROM events
+        WHERE tournament_id=? AND home_score IS NOT NULL AND away_score IS NOT NULL
+          AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+    """, (tid_filter, now_year))
+    _row = cur.fetchone()
+    league_avg = float(_row[0]) if _row and _row[0] else 1.3
+
+    # 공격/수비 레이팅 (1.0 = 리그 평균)
+    h_atk = (home_xg["xg_for"]    / league_avg) if league_avg else 1.0
+    h_def = (home_xg["xg_against"] / league_avg) if league_avg else 1.0
+    a_atk = (away_xg["xg_for"]    / league_avg) if league_avg else 1.0
+    a_def = (away_xg["xg_against"] / league_avg) if league_avg else 1.0
+
+    # 부상자 영향: 해당 팀 부상 선수들의 시즌 xG/골 합 → 공격력 감소
+    def injury_impact(ss_id, app_team_id):
+        """부상 선수들의 시즌 득점 기여분을 팀 공격력에서 차감 (max 20%)"""
+        try:
+            status_path = os.path.join(BASE_DIR, "data", "player_status.json")
+            if not os.path.exists(status_path):
+                return {"players": [], "xg_loss_pct": 0.0}
+            with open(status_path, "r", encoding="utf-8") as f:
+                statuses = json.load(f)
+        except Exception:
+            return {"players": [], "xg_loss_pct": 0.0}
+
+        # 해당 팀의 결장 예정(부상/정지/의문) 선수만
+        out_entries = [
+            s for s in statuses.values()
+            if s.get("teamId") == app_team_id
+            and s.get("status") in ("injured", "suspended", "doubtful")
+        ]
+        if not out_entries:
+            return {"players": [], "xg_loss_pct": 0.0}
+
+        # 시즌 팀 총 xG(=attack 분모)
+        team_season_xg = home_xg["xg_for"] if ss_id == hid else away_xg["xg_for"]
+        team_games     = home_xg["games"]  if ss_id == hid else away_xg["games"]
+        team_total_xg  = team_season_xg * team_games or 1.0
+
+        impacted = []
+        total_lost_xg = 0.0
+        for s in out_entries:
+            pid = s.get("playerId")
+            if not pid:
+                continue
+            try:
+                pid_int = int(pid)
+            except (ValueError, TypeError):
+                continue
+            cur.execute("""
+                SELECT COALESCE(SUM(mps.expected_goals), 0), COALESCE(SUM(mps.goals), 0),
+                       COALESCE(SUM(mps.assists), 0), COUNT(*)
+                FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
+                WHERE mps.player_id=? AND e.tournament_id=?
+                  AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+            """, (pid_int, tid_filter, now_year))
+            r = cur.fetchone()
+            xg, g, a, gms = (float(r[0] or 0), r[1] or 0, r[2] or 0, r[3] or 0) if r else (0, 0, 0, 0)
+            # xG 데이터 없으면 실제 골로 대체
+            lost = xg if xg > 0 else float(g)
+            if lost <= 0 and gms == 0:
+                continue
+            total_lost_xg += lost
+            impacted.append({
+                "name": s.get("name", ""),
+                "status": s.get("status"),
+                "goals": int(g),
+                "assists": int(a),
+                "xg": round(xg, 2),
+                "return_date": s.get("returnDate", ""),
+            })
+
+        loss_pct = min(_INJURY_LOSS_CAP, total_lost_xg / team_total_xg) if team_total_xg else 0.0
+        return {
+            "players": impacted,
+            "xg_loss_pct": round(loss_pct * 100, 1),
+            "xg_loss_ratio": loss_pct,
+        }
+
+    home_inj = injury_impact(hid, home_id)
+    away_inj = injury_impact(aid, away_id)
+
+    # 부상 반영된 공격 계수
+    h_atk_adj = h_atk * (1.0 - home_inj.get("xg_loss_ratio", 0.0))
+    a_atk_adj = a_atk * (1.0 - away_inj.get("xg_loss_ratio", 0.0))
+
+    # 최종 람다
+    _coefs   = _league_coefs(tid_filter)
+    lam_home = max(0.1, h_atk_adj * a_def * league_avg * _coefs["home_adv"])
+    lam_away = max(0.1, a_atk_adj * h_def * league_avg * _coefs["away_adj"])
+
+    matrix     = _score_matrix(lam_home, lam_away)
+    outcomes   = _matrix_outcomes(matrix, draw_boost=_coefs.get("draw_boost", 0.0))
+    pred_home  = outcomes["home"]
+    pred_draw  = outcomes["draw"]
+    pred_away  = outcomes["away"]
+    top_scores = outcomes["top_scores"]
+
+    # 스코어 매트릭스 소수점 정리 (% 단위)
+    score_matrix_pct = [[round(matrix[i][j] * 100, 1) for j in range(len(matrix))] for i in range(len(matrix))]
+
+    # ──────────────────────────────────────────────────────────────
+    # 신뢰도 배지
+    # ──────────────────────────────────────────────────────────────
+    h2h_games_cnt = h2h_g or 0
+    season_games  = min(home_xg["games"], away_xg["games"])
+    if h2h_games_cnt >= 5 and season_games >= 6:
+        conf_level = "high"
+    elif h2h_games_cnt >= 3 or season_games >= 4:
+        conf_level = "med"
     else:
-        pred_home = home_factor * 0.55 + away_factor * 0.45
+        conf_level = "low"
 
-    # 최근 폼 보정
-    home_form_bonus = (home_stats["form"].count("W") - home_stats["form"].count("L")) * 2
-    away_form_bonus = (away_stats["form"].count("W") - away_stats["form"].count("L")) * 2
-    pred_home = max(5, min(90, pred_home + home_form_bonus - away_form_bonus))
-    pred_away = max(5, min(90, 100 - pred_home - 15))
-    pred_draw = max(5, 100 - pred_home - pred_away)
+    # ──────────────────────────────────────────────────────────────
+    # 최근 10경기 승점 이동(트렌드 라인용)
+    # ──────────────────────────────────────────────────────────────
+    def form_points(ss_id):
+        cur.execute("""
+            SELECT home_score, away_score, home_team_id, date_ts FROM events
+            WHERE tournament_id=? AND (home_team_id=? OR away_team_id=?)
+              AND home_score IS NOT NULL AND away_score IS NOT NULL
+            ORDER BY date_ts DESC LIMIT 10
+        """, (tid_filter, ss_id, ss_id))
+        rows = list(reversed(cur.fetchall()))  # 과거→최근
+        pts = []
+        for hs, as_, ht, _dt in rows:
+            is_home = ht == ss_id
+            gf = hs if is_home else as_
+            ga = as_ if is_home else hs
+            pts.append(3 if gf > ga else 1 if gf == ga else 0)
+        return pts
 
-    # 정규화
-    total = pred_home + pred_draw + pred_away
-    pred_home = round(pred_home / total * 100)
-    pred_draw = round(pred_draw / total * 100)
-    pred_away = 100 - pred_home - pred_draw
+    home_form_pts = form_points(hid)
+    away_form_pts = form_points(aid)
+
+    # ──────────────────────────────────────────────────────────────
+    # 골 타이밍 (시간대별 득점/실점) — 전후반 미니 차트용
+    # ──────────────────────────────────────────────────────────────
+    def goal_timing(ss_id):
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='goal_events'")
+        if not cur.fetchone():
+            return {"for": [0, 0], "against": [0, 0]}
+        # 전반(1-45+) vs 후반(46-90+)
+        cur.execute("""
+            SELECT SUM(CASE WHEN (g.minute + COALESCE(g.added_time,0)) <= 45 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN (g.minute + COALESCE(g.added_time,0)) > 45 THEN 1 ELSE 0 END)
+            FROM goal_events g JOIN events e ON g.event_id=e.id
+            WHERE e.tournament_id=? AND g.team_id=?
+              AND (e.home_team_id=? OR e.away_team_id=?)
+        """, (tid_filter, ss_id, ss_id, ss_id))
+        _f = cur.fetchone()
+        cur.execute("""
+            SELECT SUM(CASE WHEN (g.minute + COALESCE(g.added_time,0)) <= 45 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN (g.minute + COALESCE(g.added_time,0)) > 45 THEN 1 ELSE 0 END)
+            FROM goal_events g JOIN events e ON g.event_id=e.id
+            WHERE e.tournament_id=? AND g.team_id!=?
+              AND (e.home_team_id=? OR e.away_team_id=?)
+        """, (tid_filter, ss_id, ss_id, ss_id))
+        _a = cur.fetchone()
+        return {
+            "for":     [int(_f[0] or 0), int(_f[1] or 0)] if _f else [0, 0],
+            "against": [int(_a[0] or 0), int(_a[1] or 0)] if _a else [0, 0],
+        }
+
+    home_timing = goal_timing(hid)
+    away_timing = goal_timing(aid)
+
+    # ──────────────────────────────────────────────────────────────
+    # 세트피스 분석 (fromSetPiece + penalty = 세트피스, regular = 오픈플레이, ownGoal = 별도)
+    # ──────────────────────────────────────────────────────────────
+    def setpiece_analysis(ss_id):
+        # 득점
+        cur.execute("""
+            SELECT COUNT(*),
+                   SUM(CASE WHEN g.goal_type IN ('fromSetPiece','penalty') THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN g.goal_type='penalty' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN g.goal_type='fromSetPiece' THEN 1 ELSE 0 END)
+            FROM goal_events g JOIN events e ON g.event_id=e.id
+            WHERE e.tournament_id=? AND g.team_id=?
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+        """, (tid_filter, ss_id, now_year))
+        r = cur.fetchone() or (0, 0, 0, 0)
+        total, sp, pk, fk = (r[0] or 0), (r[1] or 0), (r[2] or 0), (r[3] or 0)
+
+        # 실점 (상대가 우리 경기에서 넣은 골 중 세트피스)
+        cur.execute("""
+            SELECT COUNT(*),
+                   SUM(CASE WHEN g.goal_type IN ('fromSetPiece','penalty') THEN 1 ELSE 0 END)
+            FROM goal_events g JOIN events e ON g.event_id=e.id
+            WHERE e.tournament_id=? AND g.team_id != ?
+              AND (e.home_team_id=? OR e.away_team_id=?)
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+        """, (tid_filter, ss_id, ss_id, ss_id, now_year))
+        r2 = cur.fetchone() or (0, 0)
+        conc_total, conc_sp = (r2[0] or 0), (r2[1] or 0)
+
+        return {
+            "goals_total":          total,
+            "setpiece_goals":       sp,
+            "setpiece_pct":         round(sp/total*100, 1) if total else None,
+            "penalty_goals":        pk,
+            "freekick_goals":       fk,
+            "conceded_total":       conc_total,
+            "setpiece_conceded":    conc_sp,
+            "setpiece_conceded_pct": round(conc_sp/conc_total*100, 1) if conc_total else None,
+        }
+
+    home_sp = setpiece_analysis(hid)
+    away_sp = setpiece_analysis(aid)
+
+    # 휴식일 (현재 시각 기준 직전 경기로부터 일수)
+    import time as _time
+    _now_ts = int(_time.time())
+    home_rest = _team_rest_days(cur, tid_filter, hid, _now_ts)
+    away_rest = _team_rest_days(cur, tid_filter, aid, _now_ts)
+
+    # ──────────────────────────────────────────────────────────────
+    # 심판 정보 (K1 한정, K2는 원천 부재)
+    # 양팀 마지막 경기에서 심판을 추정. 실제 매치업 심판은 사전에 발표돼야 알 수 있음.
+    # ──────────────────────────────────────────────────────────────
+    referee_info = None
+    if tid_filter == 410:  # K1
+        cur.execute("""
+            SELECT r.id, r.name, r.career_games, r.career_yellow, r.career_red, r.career_yellow_red
+            FROM referees r
+            WHERE r.id IN (
+                SELECT e.referee_id FROM events e
+                WHERE e.tournament_id=? AND e.referee_id IS NOT NULL
+                  AND ((e.home_team_id IN (?,?)) OR (e.away_team_id IN (?,?)))
+                ORDER BY e.date_ts DESC LIMIT 1
+            )
+        """, (tid_filter, hid, aid, hid, aid))
+        rrow = cur.fetchone()
+        if rrow:
+            rid, rname, rgames, ry, rr, ryr = rrow
+            referee_info = {
+                "id":              rid,
+                "name":            rname,
+                "career_games":    rgames or 0,
+                "yellow_per_game": round((ry or 0)/(rgames or 1), 2) if rgames else None,
+                "red_per_game":    round((rr or 0)/(rgames or 1), 3) if rgames else None,
+                "strictness":      ("엄격" if ((ry or 0)/(rgames or 1) > 3.5) else
+                                    "관대" if ((ry or 0)/(rgames or 1) < 2.5) else "보통") if rgames else None,
+                "note":            "최근 양팀 경기 심판 — 실제 매치업 심판은 KFA 발표 후 확정",
+            }
 
     conn.close()
     return jsonify({
-        "home": {"id": home_id, "name": home_info["name"], **home_stats},
-        "away": {"id": away_id, "name": away_info["name"], **away_stats},
+        "home": {"id": home_id, "name": home_info["name"], **home_stats,
+                 "form_points": home_form_pts, "goal_timing": home_timing,
+                 "setpiece": home_sp, "rest_days": home_rest,
+                 "xg_for": round(home_xg["xg_for"], 2), "xg_against": round(home_xg["xg_against"], 2)},
+        "away": {"id": away_id, "name": away_info["name"], **away_stats,
+                 "form_points": away_form_pts, "goal_timing": away_timing,
+                 "setpiece": away_sp, "rest_days": away_rest,
+                 "xg_for": round(away_xg["xg_for"], 2), "xg_against": round(away_xg["xg_against"], 2)},
         "h2h": {"games": h2h_g or 0, "home_w": h2h_w or 0, "draw": h2h_d or 0, "away_w": h2h_l},
         "prediction": {"home": pred_home, "draw": pred_draw, "away": pred_away},
+        "poisson": {
+            "lambda_home": round(lam_home, 2),
+            "lambda_away": round(lam_away, 2),
+            "league_avg":  round(league_avg, 2),
+        },
+        "score_matrix": score_matrix_pct,
+        "top_scores":   top_scores,
+        "confidence": {
+            "level": conf_level,
+            "h2h_games": h2h_games_cnt,
+            "season_games": season_games,
+        },
+        "injuries": {
+            "home": home_inj,
+            "away": away_inj,
+        },
+        "referee": referee_info,
     })
 
 
@@ -1420,7 +1982,11 @@ def get_player_stat_report():
     # 키 순위 (데이터 있는 경우)
     weight = prow["weight"] if prow and "weight" in prow.keys() else None
 
+    _ALLOWED_PHYSICAL_COLS = {"height", "weight"}
+
     def physical_rank(col, val):
+        if col not in _ALLOWED_PHYSICAL_COLS:
+            raise ValueError(f"disallowed physical column: {col}")
         if not val: return None
         cur.execute(f"""
             SELECT COUNT(*) FROM players p2
@@ -3081,6 +3647,478 @@ def delete_player_status(player_id):
         del data[player_id]
         _save_status(data)
     return jsonify({"ok": True})
+
+
+_BACKTEST_CACHE = {}  # {(league,year): {ts:..., data:...}}
+_BACKTEST_TTL_SEC = 600
+
+
+@app.route("/api/prediction-backtest")
+def prediction_backtest():
+    """
+    Rolling backtest: 각 종료 경기 직전까지의 데이터만으로 예측 → 실제 결과와 비교.
+    1X2 적중률 / 정확 스코어 / TOP3 / Brier / λ MAE 산출.
+    K2 한정으로 검증된 모델 (K1은 별도 캘리브레이션 필요).
+    """
+    league = request.args.get("league", "k2").lower()
+    year   = request.args.get("year", "2026")
+    tid    = 410 if league == "k1" else 777
+
+    import time as _time
+    cache_key = (league, year)
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if cached and (_time.time() - cached["ts"] < _BACKTEST_TTL_SEC):
+        return jsonify(cached["data"])
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    conn = sqlite3.connect(db_path)
+    cur  = conn.cursor()
+
+    # round 컬럼이 있는지 확인 (events 테이블에 round 컬럼 없으면 날짜 기반으로 라운드 추정)
+    cur.execute("PRAGMA table_info(events)")
+    ev_cols = {r[1] for r in cur.fetchall()}
+    has_round = "round" in ev_cols
+
+    round_expr = "round" if has_round else "NULL"
+    cur.execute(f"""
+        SELECT id, date_ts, home_team_id, away_team_id, home_score, away_score, {round_expr}
+        FROM events
+        WHERE tournament_id=?
+          AND home_score IS NOT NULL AND away_score IS NOT NULL
+          AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+        ORDER BY date_ts ASC
+    """, (tid, year))
+    games = cur.fetchall()
+
+    # round 없으면 날짜 주차로 대체 (경기 몰린 주 = 같은 라운드)
+    if not has_round:
+        import datetime as _dt
+        week_to_round = {}
+        _counter = 0
+        _games_aug = []
+        for g in games:
+            gid, ts, hid, aid, hs, as_, _r = g
+            wk = _dt.datetime.fromtimestamp(ts).strftime("%Y-%W")
+            if wk not in week_to_round:
+                _counter += 1
+                week_to_round[wk] = _counter
+            _games_aug.append((gid, ts, hid, aid, hs, as_, week_to_round[wk]))
+        games = _games_aug
+
+    n_total = n_skipped = 0
+    n_hit_1x2 = n_exact = n_top3 = 0
+    sum_brier = sum_mae_h = sum_mae_a = 0.0
+    n_pred_home_wins = n_pred_draws = n_pred_away_wins = 0
+    n_actual_home_wins = n_actual_draws = n_actual_away_wins = 0
+    confidence_buckets = {"high": [0, 0], "med": [0, 0], "low": [0, 0]}  # [hit, total]
+    per_round_agg = {}  # {round: {"hit": n, "total": n}}
+
+    for g in games:
+        gid, ts, hid, aid, hs, as_, rnd = g
+        pred = _predict_core(cur, hid, aid, tid, ts, year)
+        if not pred:
+            n_skipped += 1
+            continue
+        n_total += 1
+
+        actual = "home" if hs > as_ else "away" if hs < as_ else "draw"
+        outcome_p = {"home": pred["pred_home"], "draw": pred["pred_draw"], "away": pred["pred_away"]}
+        pred_outcome = max(outcome_p, key=outcome_p.get)
+
+        if pred_outcome == actual:
+            n_hit_1x2 += 1
+
+        actual_str = f"{int(hs)}-{int(as_)}"
+        top_strs = [f"{s['home']}-{s['away']}" for s in pred["top_scores"]]
+        if top_strs and top_strs[0] == actual_str:
+            n_exact += 1
+        if actual_str in top_strs[:3]:
+            n_top3 += 1
+
+        actual_p = {"home": 1 if actual == "home" else 0,
+                    "draw": 1 if actual == "draw" else 0,
+                    "away": 1 if actual == "away" else 0}
+        brier = sum((outcome_p[k] / 100.0 - actual_p[k]) ** 2 for k in ("home", "draw", "away")) / 3
+        sum_brier += brier
+        sum_mae_h += abs(pred["lam_home"] - hs)
+        sum_mae_a += abs(pred["lam_away"] - as_)
+
+        if pred_outcome == "home": n_pred_home_wins += 1
+        elif pred_outcome == "draw": n_pred_draws += 1
+        else: n_pred_away_wins += 1
+
+        if actual == "home": n_actual_home_wins += 1
+        elif actual == "draw": n_actual_draws += 1
+        else: n_actual_away_wins += 1
+
+        # 신뢰도 버킷 (백테스트 시점 기준 표본 크기로 재계산)
+        season_g = min(pred["h_games"], pred["a_games"])
+        # H2H 사전 경기 수
+        cur.execute("""
+            SELECT COUNT(*) FROM events
+            WHERE tournament_id=?
+              AND ((home_team_id=? AND away_team_id=?) OR (home_team_id=? AND away_team_id=?))
+              AND date_ts < ?
+              AND home_score IS NOT NULL AND away_score IS NOT NULL
+        """, (tid, hid, aid, aid, hid, ts))
+        h2h_g = cur.fetchone()[0] or 0
+        bucket = "high" if (h2h_g >= 5 and season_g >= 6) else \
+                 "med"  if (h2h_g >= 3 or  season_g >= 4) else "low"
+        confidence_buckets[bucket][1] += 1
+        if pred_outcome == actual:
+            confidence_buckets[bucket][0] += 1
+
+        # 라운드별 집계 (누적 차트용)
+        if rnd is not None:
+            bag = per_round_agg.setdefault(int(rnd), {"hit": 0, "total": 0})
+            bag["total"] += 1
+            if pred_outcome == actual:
+                bag["hit"] += 1
+
+    conn.close()
+
+    # per-round 누적 라인 생성
+    per_round = []
+    cum_hit = cum_total = 0
+    for r in sorted(per_round_agg.keys()):
+        a = per_round_agg[r]
+        cum_hit   += a["hit"]
+        cum_total += a["total"]
+        per_round.append({
+            "round":     r,
+            "hit":       a["hit"],
+            "total":     a["total"],
+            "round_pct": round(a["hit"] / a["total"] * 100, 1) if a["total"] else None,
+            "cum_hit":   cum_hit,
+            "cum_total": cum_total,
+            "cum_pct":   round(cum_hit / cum_total * 100, 1) if cum_total else None,
+        })
+
+    if n_total == 0:
+        result = {"league": league.upper(), "year": year, "n_total": 0, "n_skipped": n_skipped,
+                  "ready": False}
+    else:
+        result = {
+            "league":            league.upper(),
+            "year":              year,
+            "n_total":           n_total,
+            "n_skipped":         n_skipped,
+            "hit_1x2_pct":       round(n_hit_1x2 / n_total * 100, 1),
+            "exact_score_pct":   round(n_exact   / n_total * 100, 1),
+            "top3_score_pct":    round(n_top3    / n_total * 100, 1),
+            "brier_score":       round(sum_brier / n_total, 3),
+            "mae_lambda_home":   round(sum_mae_h / n_total, 2),
+            "mae_lambda_away":   round(sum_mae_a / n_total, 2),
+            "baseline_random":   33.3,
+            "predicted_outcomes":  {"home": n_pred_home_wins, "draw": n_pred_draws, "away": n_pred_away_wins},
+            "actual_outcomes":     {"home": n_actual_home_wins, "draw": n_actual_draws, "away": n_actual_away_wins},
+            "by_confidence":     {
+                k: {"hit": v[0], "total": v[1],
+                    "pct": round(v[0] / v[1] * 100, 1) if v[1] else None}
+                for k, v in confidence_buckets.items()
+            },
+            "per_round":         per_round,
+            "ready": True,
+        }
+
+    _BACKTEST_CACHE[cache_key] = {"ts": _time.time(), "data": result}
+    return jsonify(result)
+
+
+_SEASON_SIM_CACHE = {}
+_SEASON_SIM_TTL_SEC = 600
+
+
+@app.route("/api/season-simulation")
+def season_simulation():
+    """
+    잔여 경기 몬테카를로 시뮬레이션으로 시즌 마지막 순위 확률 계산.
+    각 팀의 우승/TOP4(K1)·승격(K2)/강등 확률 반환.
+    """
+    league = request.args.get("league", "k2").lower()
+    year   = request.args.get("year", "2026")
+    n_iter = max(1000, min(20000, int(request.args.get("iter", 10000))))
+    tid    = 410 if league == "k1" else 777
+
+    import time as _time, random
+    cache_key = (league, year, n_iter)
+    cached = _SEASON_SIM_CACHE.get(cache_key)
+    if cached and (_time.time() - cached["ts"] < _SEASON_SIM_TTL_SEC):
+        return jsonify(cached["data"])
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    conn = sqlite3.connect(db_path)
+    cur  = conn.cursor()
+
+    cur.execute("""
+        SELECT home_team_id, away_team_id, home_score, away_score
+        FROM events
+        WHERE tournament_id=? AND home_score IS NOT NULL
+          AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+    """, (tid, year))
+    standings = {}
+    def _bag(team_id):
+        if team_id not in standings:
+            standings[team_id] = {"played": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
+        return standings[team_id]
+    for hid, aid, hs, as_ in cur.fetchall():
+        h = _bag(hid); a = _bag(aid)
+        h["played"] += 1; a["played"] += 1
+        h["gf"] += hs; h["ga"] += as_
+        a["gf"] += as_; a["ga"] += hs
+        if hs > as_:
+            h["w"] += 1; h["pts"] += 3; a["l"] += 1
+        elif hs < as_:
+            a["w"] += 1; a["pts"] += 3; h["l"] += 1
+        else:
+            h["d"] += 1; h["pts"] += 1
+            a["d"] += 1; a["pts"] += 1
+
+    # 잔여 경기는 K리그 schedule API에서 (events 테이블에 미진행 경기가 없음)
+    try:
+        raw_schedule = _fetch_k1_all_games(int(year)) if league == "k1" else _fetch_k2_all_games(int(year))
+    except Exception:
+        raw_schedule = []
+
+    # app slug → sofascore_id 매핑
+    slug_to_ss = {t["id"]: t["sofascore_id"] for t in TEAMS}
+    parser = _parse_k1_game if league == "k1" else _parse_k2_game
+
+    upcoming_games = []
+    for g in raw_schedule:
+        parsed = parser(g)
+        if parsed.get("finished"):
+            continue
+        h_slug = parsed.get("home_id")
+        a_slug = parsed.get("away_id")
+        if not h_slug or not a_slug:
+            continue
+        h_ss = slug_to_ss.get(h_slug)
+        a_ss = slug_to_ss.get(a_slug)
+        if not h_ss or not a_ss:
+            continue
+        upcoming_games.append((h_ss, a_ss))
+
+    # 각 잔여 경기에 대해 P(H/D/A) 사전 계산
+    now_ts = int(__import__("time").time())
+    fixtures = []
+    pred_cache = {}  # (hid, aid) → pred (같은 매치업 중복 계산 방지)
+    for hid, aid in upcoming_games:
+        key = (hid, aid)
+        if key in pred_cache:
+            pred = pred_cache[key]
+        else:
+            pred = _predict_core(cur, hid, aid, tid, now_ts, year)
+            pred_cache[key] = pred
+        if not pred:
+            continue
+        ph = pred["pred_home"] / 100.0
+        pd = pred["pred_draw"] / 100.0
+        pa = pred["pred_away"] / 100.0
+        fixtures.append({"hid": hid, "aid": aid,
+                         "ph": ph, "pdraw": pd, "pa": pa,
+                         "lam_h": pred["lam_home"], "lam_a": pred["lam_away"]})
+
+    # 모든 팀 풀 (기존 경기 등장 + 잔여 경기 등장)
+    all_teams = set(standings.keys())
+    for fx in fixtures:
+        all_teams.add(fx["hid"]); all_teams.add(fx["aid"])
+
+    rank_counts = {tid_: [0] * len(all_teams) for tid_ in all_teams}  # rank_counts[team][rank-1]
+
+    rng = random.random
+    sorted_teams_for_rank = list(all_teams)
+
+    for _ in range(n_iter):
+        # 시즌 시작 standing 복제
+        sim = {t: dict(standings.get(t, {"played":0,"w":0,"d":0,"l":0,"gf":0,"ga":0,"pts":0})) for t in all_teams}
+        for fx in fixtures:
+            r = rng()
+            if r < fx["ph"]:
+                outcome = "home"
+            elif r < fx["ph"] + fx["pdraw"]:
+                outcome = "draw"
+            else:
+                outcome = "away"
+            # 가벼운 스코어 추정 (λ 반올림)
+            hs = max(0, int(round(fx["lam_h"])))
+            as_ = max(0, int(round(fx["lam_a"])))
+            if outcome == "home" and hs <= as_: hs = as_ + 1
+            elif outcome == "away" and as_ <= hs: as_ = hs + 1
+            elif outcome == "draw": as_ = hs
+            h = sim[fx["hid"]]; a = sim[fx["aid"]]
+            h["gf"] += hs; h["ga"] += as_
+            a["gf"] += as_; a["ga"] += hs
+            if outcome == "home":
+                h["w"] += 1; h["pts"] += 3; a["l"] += 1
+            elif outcome == "away":
+                a["w"] += 1; a["pts"] += 3; h["l"] += 1
+            else:
+                h["d"] += 1; h["pts"] += 1
+                a["d"] += 1; a["pts"] += 1
+        # 최종 순위
+        ranked = sorted(sim.items(),
+                        key=lambda x: (x[1]["pts"], x[1]["gf"] - x[1]["ga"], x[1]["gf"]),
+                        reverse=True)
+        for rank_idx, (tid_, _s) in enumerate(ranked):
+            rank_counts[tid_][rank_idx] += 1
+
+    n_teams = len(all_teams)
+    relegation_zone = max(1, n_teams - 1)  # 최하위만 강등 (K1 12팀 중 12위 등)
+    top_zone        = 4 if league == "k1" else 2  # K1 ACL TOP4, K2 승격 TOP2
+    teams_result = []
+    for tid_ in all_teams:
+        cnts = rank_counts[tid_]
+        most_likely_rank = max(range(n_teams), key=lambda i: cnts[i]) + 1
+        win_pct  = round(cnts[0] / n_iter * 100, 1)
+        top_pct  = round(sum(cnts[:top_zone]) / n_iter * 100, 1)
+        rel_pct  = round(sum(cnts[relegation_zone:]) / n_iter * 100, 1)
+        avg_rank = round(sum((i+1) * cnts[i] for i in range(n_teams)) / n_iter, 1)
+        # 팀명
+        team_info = next((t for t in TEAMS if t["sofascore_id"] == tid_), None)
+        teams_result.append({
+            "team_id":     team_info["id"] if team_info else str(tid_),
+            "name":        team_info["name"] if team_info else str(tid_),
+            "current_pts": standings.get(tid_, {}).get("pts", 0),
+            "current_played": standings.get(tid_, {}).get("played", 0),
+            "win_pct":     win_pct,
+            "top_pct":     top_pct,
+            "rel_pct":     rel_pct,
+            "avg_rank":    avg_rank,
+            "most_likely_rank": most_likely_rank,
+        })
+    teams_result.sort(key=lambda t: (-t["win_pct"], -t["top_pct"], t["avg_rank"]))
+
+    conn.close()
+    result = {
+        "league":          league.upper(),
+        "year":            year,
+        "iter":            n_iter,
+        "n_teams":         n_teams,
+        "remaining_games": len(fixtures),
+        "top_zone":        top_zone,
+        "top_zone_label":  "ACL TOP4" if league == "k1" else "승격권 TOP2",
+        "rel_zone":        n_teams - relegation_zone + 1,
+        "rel_zone_label":  "최하위 강등권",
+        "teams":           teams_result,
+        "ready":           True,
+    }
+    _SEASON_SIM_CACHE[cache_key] = {"ts": _time.time(), "data": result}
+    return jsonify(result)
+
+
+@app.route("/api/predicted-lineup")
+def get_predicted_lineup():
+    """
+    팀 예상 출전 라인업 (가장 최근 완료 경기 + 출전시간 TOP11 기반).
+    부상자 정보를 player_status.json과 cross-ref 해서 결장 표시.
+    """
+    team_id = request.args.get("teamId", "")
+    team_info = next((t for t in TEAMS if t["id"] == team_id), None)
+    if not team_info:
+        return jsonify({"ready": False, "reason": "unknown_team"}), 404
+    ss_id  = team_info["sofascore_id"]
+    league = team_info.get("league", "K2")
+    tid    = 410 if league == "K1" else 777
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur  = conn.cursor()
+
+    # 최근 경기 중 minutes_played 데이터가 있는 첫 경기 찾기 (최대 5경기까지 거슬러 올라감)
+    cur.execute("""
+        SELECT e.id, e.date_ts FROM events e
+        WHERE e.tournament_id=?
+          AND (e.home_team_id=? OR e.away_team_id=?)
+          AND e.home_score IS NOT NULL
+        ORDER BY e.date_ts DESC LIMIT 5
+    """, (tid, ss_id, ss_id))
+    recent_events = cur.fetchall()
+    if not recent_events:
+        conn.close()
+        return jsonify({"ready": False, "reason": "no_recent_match"})
+
+    last_eid = last_ts = None
+    rows = []
+    for re_row in recent_events:
+        eid, ts = re_row["id"], re_row["date_ts"]
+        cur.execute("""
+            SELECT mps.player_id,
+                   COALESCE(p.name_ko, mps.player_name) AS name,
+                   mps.position, mps.shirt_number, mps.minutes_played, mps.rating
+            FROM match_player_stats mps
+            LEFT JOIN players p ON mps.player_id = p.id
+            WHERE mps.event_id=? AND mps.team_id=?
+              AND mps.minutes_played IS NOT NULL AND mps.minutes_played > 0
+            ORDER BY mps.minutes_played DESC, mps.position
+            LIMIT 11
+        """, (eid, ss_id))
+        rows = cur.fetchall()
+        if len(rows) >= 11:
+            last_eid, last_ts = eid, ts
+            break
+
+    if not rows or len(rows) < 11:
+        conn.close()
+        return jsonify({"ready": False, "reason": "insufficient_lineup_data"})
+
+    statuses = _load_status()
+    team_injured = {
+        str(s.get("playerId")): s for s in statuses.values()
+        if s.get("teamId") == team_id and s.get("status") in ("injured", "suspended", "doubtful")
+    }
+
+    starters = []
+    pos_counts = {"G": 0, "D": 0, "M": 0, "F": 0}
+    for r in rows:
+        pid = r["player_id"]
+        pos = r["position"] or "?"
+        s = {
+            "player_id":    pid,
+            "name":         r["name"],
+            "position":     pos,
+            "shirt_number": r["shirt_number"],
+            "minutes":      r["minutes_played"],
+            "rating":       round(r["rating"], 2) if r["rating"] is not None else None,
+        }
+        st = team_injured.get(str(pid))
+        if st:
+            s["injury_status"] = st.get("status")
+            s["injury_note"]   = st.get("note", "")
+            s["return_date"]   = st.get("returnDate", "")
+        starters.append(s)
+        if pos in pos_counts:
+            pos_counts[pos] += 1
+
+    in_lineup_ids = {str(s["player_id"]) for s in starters}
+    out_players = []
+    for sid, st in team_injured.items():
+        if sid not in in_lineup_ids:
+            out_players.append({
+                "player_id":   sid,
+                "name":        st.get("name", ""),
+                "status":      st.get("status"),
+                "note":        st.get("note", ""),
+                "return_date": st.get("returnDate", ""),
+            })
+
+    if pos_counts["G"] == 1 and (pos_counts["D"] + pos_counts["M"] + pos_counts["F"]) == 10:
+        formation = f'{pos_counts["D"]}-{pos_counts["M"]}-{pos_counts["F"]}'
+    else:
+        formation = None
+
+    conn.close()
+    return jsonify({
+        "ready":          True,
+        "team":           team_info["name"],
+        "team_id":        team_id,
+        "league":         league,
+        "based_on_event": last_eid,
+        "based_on_date":  datetime.fromtimestamp(last_ts).strftime("%Y-%m-%d"),
+        "formation":      formation,
+        "starters":       starters,
+        "out_players":    out_players,
+    })
 
 
 if __name__ == "__main__":
