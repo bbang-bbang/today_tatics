@@ -666,6 +666,22 @@ def _ko_name_by_ss_id(ss_id):
         return _ENG_TO_KO.get(ss_id)
 
 
+_LEAGUE_TID_BY_KEY = {"K1": 410, "K2": 777}
+
+
+def _team_league(ss_id):
+    """sofascore team id → ('K1'|'K2', tournament_id). 매칭 안 되면 ('K2', 777) 기본."""
+    try:
+        sid = int(ss_id)
+    except (ValueError, TypeError):
+        return "K2", 777
+    for t in TEAMS:
+        if t["sofascore_id"] == sid:
+            key = t.get("league", "K2")
+            return key, _LEAGUE_TID_BY_KEY.get(key, 777)
+    return "K2", 777
+
+
 @app.route("/api/team-analytics")
 def get_team_analytics():
     """팀별 상대팀 승률 / 월별 승률 / 홈어웨이 분석"""
@@ -2488,11 +2504,18 @@ def get_player_analytics():
 
     name, position, team_id, height, preferred_foot = row["nm"], row["pos"], row["team_id"], row["height"], row["preferred_foot"]
 
-    # 팀 한국어명 조회
-    cur.execute("SELECT DISTINCT mps.team_id FROM match_player_stats mps WHERE mps.player_id=? LIMIT 1", (player_id,))
+    # 팀 한국어명 조회 + 소속 리그 판별 (가장 최근에 뛴 팀 기준)
+    cur.execute("""
+        SELECT mps.team_id
+        FROM match_player_stats mps
+        JOIN events e ON mps.event_id = e.id
+        WHERE mps.player_id = ? AND e.date_ts IS NOT NULL
+        ORDER BY e.date_ts DESC LIMIT 1
+    """, (player_id,))
     tid_row = cur.fetchone()
     ss_team_id = tid_row[0] if tid_row else team_id
     team_name = _ko_name_by_ss_id(ss_team_id) or str(ss_team_id)
+    league_key, tournament_id = _team_league(ss_team_id)
 
     year_clause = "AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?" if year else ""
     yp = (year,) if year else ()
@@ -2501,9 +2524,9 @@ def get_player_analytics():
     cur.execute("""
         SELECT DISTINCT strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) yr
         FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
-        WHERE mps.player_id=? AND e.tournament_id=777 AND e.date_ts IS NOT NULL
+        WHERE mps.player_id=? AND e.tournament_id=? AND e.date_ts IS NOT NULL
         ORDER BY yr
-    """, (player_id,))
+    """, (player_id, tournament_id))
     available_years = [r[0] for r in cur.fetchall()]
 
     # 시즌별 집계
@@ -2512,9 +2535,9 @@ def get_player_analytics():
                COUNT(*) games, SUM(mps.goals) goals, SUM(mps.assists) assists,
                AVG(mps.rating) rating, SUM(mps.minutes_played) minutes
         FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
-        WHERE mps.player_id=? AND e.tournament_id=777
+        WHERE mps.player_id=? AND e.tournament_id=?
         GROUP BY yr ORDER BY yr
-    """, (player_id,))
+    """, (player_id, tournament_id))
     season_summary = [
         {"year": r[0], "games": r[1], "goals": r[2] or 0, "assists": r[3] or 0,
          "rating": round(r[4], 2) if r[4] else None, "minutes": r[5] or 0}
@@ -2527,9 +2550,9 @@ def get_player_analytics():
                COUNT(*) games, SUM(mps.goals) goals, SUM(mps.assists) assists,
                AVG(mps.rating) rating
         FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
-        WHERE mps.player_id=? AND e.tournament_id=777 {year_clause}
+        WHERE mps.player_id=? AND e.tournament_id=? {year_clause}
         GROUP BY mn ORDER BY mn
-    """, (player_id,) + yp)
+    """, (player_id, tournament_id) + yp)
     monthly = [
         {"month": r[0], "games": r[1], "goals": r[2] or 0, "assists": r[3] or 0,
          "rating": round(r[4], 2) if r[4] else None}
@@ -2543,9 +2566,9 @@ def get_player_analytics():
                mps.goals, mps.assists, mps.rating, mps.result, mps.is_home,
                e.home_score, e.away_score
         FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
-        WHERE mps.player_id=? AND e.tournament_id=777 AND e.date_ts IS NOT NULL
+        WHERE mps.player_id=? AND e.tournament_id=? AND e.date_ts IS NOT NULL
         ORDER BY e.date_ts DESC LIMIT 10
-    """, (player_id,))
+    """, (player_id, tournament_id))
     recent_form = []
     for r in cur.fetchall():
         d = _dt.datetime.utcfromtimestamp(r[0])
@@ -2567,7 +2590,7 @@ def get_player_analytics():
             "score": f"{r[7]}-{r[8]}" if r[7] is not None else "?"
         })
 
-    # 레이더: 전체 선수 대비 백분위 (5경기 이상, 300분 이상)
+    # 레이더: 소속 리그 전체 선수 대비 백분위 (5경기 이상, 300분 이상)
     cur.execute(f"""
         SELECT mps.player_id,
                SUM(mps.goals) + SUM(mps.assists)        AS ga,
@@ -2580,10 +2603,10 @@ def get_player_analytics():
                SUM(mps.attempted_dribbles)               AS adr,
                COUNT(*)                                  AS games
         FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
-        WHERE e.tournament_id=777 {year_clause}
+        WHERE e.tournament_id=? {year_clause}
         GROUP BY mps.player_id
         HAVING games >= 5 AND mins >= 300
-    """, yp)
+    """, (tournament_id,) + yp)
 
     all_stats = {}
     for r in cur.fetchall():
@@ -2593,8 +2616,8 @@ def get_player_analytics():
             "attack":   (ga or 0) / mins * 90,
             "passing":  pass_pct or 0,
             "defense":  (def_acts or 0) / mins * 90,
-            "shooting": (sot / ts) * 100 if ts and ts >= 3 else 0,
-            "dribble":  (sdr / adr) * 100 if adr and adr >= 3 else 0,
+            "shooting": ((sot or 0) / ts) * 100 if ts and ts >= 3 else 0,
+            "dribble":  ((sdr or 0) / adr) * 100 if adr and adr >= 3 else 0,
         }
 
     radar = {}
@@ -2619,10 +2642,10 @@ def get_player_analytics():
                SUM(mps.minutes_played)                                 AS mins,
                COUNT(*)                                                AS games
         FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
-        WHERE e.tournament_id=777 {year_clause}
+        WHERE e.tournament_id=? {year_clause}
         GROUP BY mps.player_id
         HAVING games >= 3 AND mins >= 150
-    """, yp)
+    """, (tournament_id,) + yp)
 
     all_activity = {}
     for r in cur.fetchall():
@@ -2666,8 +2689,8 @@ def get_player_analytics():
         SELECT COUNT(*), SUM(mps.goals), SUM(mps.assists), AVG(mps.rating), SUM(mps.minutes_played),
                SUM(mps.yellow_cards), SUM(mps.red_cards)
         FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
-        WHERE mps.player_id=? AND e.tournament_id=777 {year_clause}
-    """, (player_id,) + yp)
+        WHERE mps.player_id=? AND e.tournament_id=? {year_clause}
+    """, (player_id, tournament_id) + yp)
     agg = cur.fetchone()
     conn.close()
 
@@ -2686,6 +2709,7 @@ def get_player_analytics():
             "yellow_cards": agg[5] or 0,
             "red_cards":    agg[6] or 0,
         },
+        "league":          league_key,
         "available_years": available_years,
         "season_summary":  season_summary,
         "monthly":         monthly,
@@ -2702,8 +2726,11 @@ def get_player_analytics():
 
 @app.route("/api/league-dashboard")
 def get_league_dashboard():
-    """K2 리그 전체 선수 인사이트 대시보드"""
+    """K리그 전체 선수 인사이트 대시보드 (league=k1|k2, 기본 k2)"""
     year = request.args.get("year")   # None → 전체
+    tournament_id = _league_tid(request.args.get("league"))
+    if tournament_id is None:
+        return jsonify({"error": "invalid league"}), 400
 
     db_path = os.path.join(BASE_DIR, "players.db")
     conn = sqlite3.connect(db_path)
@@ -2716,8 +2743,8 @@ def get_league_dashboard():
     # 사용 가능 연도
     cur.execute("""
         SELECT DISTINCT strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) yr
-        FROM events e WHERE e.tournament_id=777 AND e.date_ts IS NOT NULL ORDER BY yr
-    """)
+        FROM events e WHERE e.tournament_id=? AND e.date_ts IS NOT NULL ORDER BY yr
+    """, (tournament_id,))
     available_years = [r[0] for r in cur.fetchall()]
 
     # ── 랭킹 공통 쿼리 ─────────────────────────────────────────
@@ -2746,11 +2773,11 @@ def get_league_dashboard():
         FROM match_player_stats mps
         JOIN events e ON mps.event_id=e.id
         LEFT JOIN players p ON mps.player_id=p.id
-        WHERE e.tournament_id=777 {year_clause}
+        WHERE e.tournament_id=? {year_clause}
         GROUP BY mps.player_id
         HAVING games >= 3
     """
-    cur.execute(base_sql, yp)
+    cur.execute(base_sql, (tournament_id,) + yp)
     rows = cur.fetchall()
 
     def row_to_dict(r):
@@ -2866,9 +2893,9 @@ def get_league_dashboard():
                COUNT(DISTINCT e.id) games
         FROM match_player_stats mps
         JOIN events e ON mps.event_id=e.id
-        WHERE e.tournament_id=777 {year_clause}
+        WHERE e.tournament_id=? {year_clause}
         GROUP BY mn ORDER BY mn
-    """, yp)
+    """, (tournament_id,) + yp)
     monthly_trend = [
         {"month": r[0], "goals": r[1] or 0, "assists": r[2] or 0,
          "rating": round(r[3],2) if r[3] else None, "games": r[4]}
@@ -2998,17 +3025,24 @@ def get_team_goal_timing():
     })
 
 
-@app.route("/api/kleague2/teams")
-def get_kleague2_teams():
-    """히트맵 데이터가 있는 K리그2 팀 목록 (수원 삼성 제외)"""
-    if not os.path.exists(DB_PATH):
-        return jsonify([])
+LEAGUE_TOURNAMENT_ID = {"k1": 410, "k2": 777}
+
+
+def _league_tid(league_raw):
+    """쿼리 파라미터 league → tournament_id. 기본값 k2(777). 잘못된 값은 None."""
+    key = (league_raw or "k2").strip().lower()
+    return LEAGUE_TOURNAMENT_ID.get(key)
+
+
+def _heatmap_teams_for_league(tournament_id):
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute("""
-        SELECT DISTINCT team_id FROM match_player_stats
-        WHERE team_id != 7652
-        ORDER BY team_id
-    """).fetchall()
+        SELECT DISTINCT mps.team_id
+        FROM match_player_stats mps
+        JOIN events e ON mps.event_id = e.id
+        WHERE e.tournament_id = ? AND mps.team_id != 7652
+        ORDER BY mps.team_id
+    """, (tournament_id,)).fetchall()
     conn.close()
     team_map = {t["sofascore_id"]: t for t in TEAMS}
     result = []
@@ -3018,45 +3052,33 @@ def get_kleague2_teams():
             result.append({"id": t["id"], "sofascore_id": tid, "name": t["name"],
                            "short": t["short"], "emblem": t["emblem"], "primary": t["primary"]})
     result.sort(key=lambda x: x["name"])
-    return jsonify(result)
+    return result
 
 
-@app.route("/api/kleague2/players")
-def get_kleague2_players():
-    """팀별 선수 목록 (player_id + 이름)"""
-    team_id = request.args.get("teamId", "").strip()
-    if not team_id:
-        return jsonify({"error": "teamId required"}), 400
-    if not os.path.exists(DB_PATH):
-        return jsonify([])
+def _heatmap_players_for_team(team_id, tournament_id):
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute("""
-        SELECT DISTINCT player_id, player_name, position,
-               COUNT(DISTINCT event_id) as games,
-               ROUND(AVG(rating), 2) as avg_rating
-        FROM match_player_stats
-        WHERE team_id = ? AND player_name IS NOT NULL
-        GROUP BY player_id
-        ORDER BY games DESC, player_name
-    """, (team_id,)).fetchall()
+        SELECT mps.player_id,
+               COALESCE(NULLIF(mps.player_name,''), p.name_ko, p.name) AS name,
+               COALESCE(mps.position, p.position) AS pos,
+               COUNT(DISTINCT mps.event_id) as games,
+               ROUND(AVG(mps.rating), 2) as avg_rating
+        FROM match_player_stats mps
+        JOIN events e ON mps.event_id = e.id
+        LEFT JOIN players p ON mps.player_id = p.id
+        WHERE mps.team_id = ? AND e.tournament_id = ?
+        GROUP BY mps.player_id
+        HAVING name IS NOT NULL
+        ORDER BY games DESC, name
+    """, (team_id, tournament_id)).fetchall()
     conn.close()
-    return jsonify([{
+    return [{
         "playerId": r[0], "name": r[1], "position": r[2],
         "games": r[3], "avgRating": r[4]
-    } for r in rows])
+    } for r in rows]
 
 
-@app.route("/api/kleague2/heatmap")
-def get_kleague2_heatmap():
-    """선수 ID 기반 히트맵 (수원 삼성 외 팀)"""
-    player_id = request.args.get("playerId", "").strip()
-    team_id   = request.args.get("teamId", "").strip()
-    event_id  = request.args.get("eventId", "").strip()
-    if not player_id or not team_id:
-        return jsonify({"error": "playerId and teamId required"}), 400
-    if not os.path.exists(DB_PATH):
-        return jsonify({"points": []})
-
+def _heatmap_points_for_player(player_id, team_id, event_id, tournament_id):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -3065,28 +3087,27 @@ def get_kleague2_heatmap():
             SELECT h.x, h.y, e.away_team_id
             FROM heatmap_points h
             LEFT JOIN events e ON h.event_id = e.id
-            WHERE h.player_id = ? AND h.event_id = ?
-        """, (player_id, event_id)).fetchall()
+            WHERE h.player_id = ? AND h.event_id = ? AND e.tournament_id = ?
+        """, (player_id, event_id, tournament_id)).fetchall()
     else:
         rows = conn.execute("""
             SELECT h.x, h.y, e.away_team_id
             FROM heatmap_points h
             LEFT JOIN events e ON h.event_id = e.id
-            WHERE h.player_id = ?
-        """, (player_id,)).fetchall()
+            WHERE h.player_id = ? AND e.tournament_id = ?
+        """, (player_id, tournament_id)).fetchall()
 
     points = _flip_points(rows, int(team_id))
 
-    # 경기 목록
     matches_rows = conn.execute("""
         SELECT DISTINCT e.id, e.home_team_id, e.home_team_name,
                e.away_team_id, e.away_team_name,
                e.home_score, e.away_score, e.date_ts
         FROM heatmap_points h
         JOIN events e ON h.event_id = e.id
-        WHERE h.player_id = ? AND e.date_ts IS NOT NULL
+        WHERE h.player_id = ? AND e.tournament_id = ? AND e.date_ts IS NOT NULL
         ORDER BY e.date_ts DESC
-    """, (player_id,)).fetchall()
+    """, (player_id, tournament_id)).fetchall()
 
     matches = [{
         "id":        r["id"],
@@ -3099,7 +3120,71 @@ def get_kleague2_heatmap():
     } for r in matches_rows]
 
     conn.close()
-    return jsonify({"points": points, "matches": matches, "playerId": player_id})
+    return {"points": points, "matches": matches, "playerId": player_id}
+
+
+@app.route("/api/kleague2/teams")
+def get_kleague2_teams():
+    """히트맵 데이터가 있는 K리그2 팀 목록 (수원 삼성 제외)"""
+    if not os.path.exists(DB_PATH):
+        return jsonify([])
+    return jsonify(_heatmap_teams_for_league(LEAGUE_TOURNAMENT_ID["k2"]))
+
+
+@app.route("/api/kleague1/teams")
+def get_kleague1_teams():
+    """히트맵 데이터가 있는 K리그1 팀 목록"""
+    if not os.path.exists(DB_PATH):
+        return jsonify([])
+    return jsonify(_heatmap_teams_for_league(LEAGUE_TOURNAMENT_ID["k1"]))
+
+
+@app.route("/api/kleague2/players")
+def get_kleague2_players():
+    """K리그2 팀별 선수 목록 (player_id + 이름)"""
+    team_id = request.args.get("teamId", "").strip()
+    if not team_id:
+        return jsonify({"error": "teamId required"}), 400
+    if not os.path.exists(DB_PATH):
+        return jsonify([])
+    return jsonify(_heatmap_players_for_team(team_id, LEAGUE_TOURNAMENT_ID["k2"]))
+
+
+@app.route("/api/kleague1/players")
+def get_kleague1_players():
+    """K리그1 팀별 선수 목록 (player_id + 이름)"""
+    team_id = request.args.get("teamId", "").strip()
+    if not team_id:
+        return jsonify({"error": "teamId required"}), 400
+    if not os.path.exists(DB_PATH):
+        return jsonify([])
+    return jsonify(_heatmap_players_for_team(team_id, LEAGUE_TOURNAMENT_ID["k1"]))
+
+
+@app.route("/api/kleague2/heatmap")
+def get_kleague2_heatmap():
+    """K리그2 선수 ID 기반 히트맵"""
+    player_id = request.args.get("playerId", "").strip()
+    team_id   = request.args.get("teamId", "").strip()
+    event_id  = request.args.get("eventId", "").strip()
+    if not player_id or not team_id:
+        return jsonify({"error": "playerId and teamId required"}), 400
+    if not os.path.exists(DB_PATH):
+        return jsonify({"points": []})
+    return jsonify(_heatmap_points_for_player(player_id, team_id, event_id, LEAGUE_TOURNAMENT_ID["k2"]))
+
+
+@app.route("/api/kleague1/heatmap")
+def get_kleague1_heatmap():
+    """K리그1 선수 ID 기반 히트맵"""
+    player_id = request.args.get("playerId", "").strip()
+    team_id   = request.args.get("teamId", "").strip()
+    event_id  = request.args.get("eventId", "").strip()
+    if not player_id or not team_id:
+        return jsonify({"error": "playerId and teamId required"}), 400
+    if not os.path.exists(DB_PATH):
+        return jsonify({"points": []})
+    return jsonify(_heatmap_points_for_player(player_id, team_id, event_id, LEAGUE_TOURNAMENT_ID["k1"]))
 
 
 # ── 포지션 인사이트 API ──────────────────────────────────

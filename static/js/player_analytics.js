@@ -42,6 +42,7 @@
     function render(d, playerId, activeYear) {
         destroyCharts();
         const { info, available_years, season_summary, monthly, recent_form, radar, activity } = d;
+        const leagueLabel = d.league === "K1" ? "K리그1" : "K리그2";
 
         const posLabel = { "G": "GK", "D": "DF", "M": "MF", "F": "FW" }[info.position] || info.position;
         const ratingHtml = info.rating ? `<span class="pa-pill pa-pill-rating">${info.rating.toFixed(2)} ★</span>` : "";
@@ -103,7 +104,7 @@
         <div class="pa-charts-row">
             <!-- 레이더 차트 -->
             <div class="pa-radar-wrap">
-                <div class="pa-section-title">포지션 레이더 <span class="pa-sub">(K2 전체 선수 대비 백분위)</span></div>
+                <div class="pa-section-title">포지션 레이더 <span class="pa-sub">(${leagueLabel} 전체 선수 대비 백분위)</span></div>
                 <canvas id="chart-pa-radar"></canvas>
             </div>
 

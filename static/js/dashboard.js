@@ -1,11 +1,12 @@
-// dashboard.js — K2 리그 인사이트 대시보드
+// dashboard.js — K리그 인사이트 대시보드 (K1/K2)
 
 (function () {
     /* ── 상태 ──────────────────────────────────────────────── */
-    let currentYear  = null;   // null = 전체
-    let currentTab   = "ranking";
-    let currentRank  = "scorers";
-    let dashData     = null;
+    let currentYear   = null;   // null = 전체
+    let currentLeague = "k1";   // 기본 K리그1
+    let currentTab    = "ranking";
+    let currentRank   = "scorers";
+    let dashData      = null;
 
     // Chart 인스턴스 캐시
     const CHARTS = {};
@@ -38,7 +39,9 @@
     /* ── 데이터 로드 ──────────────────────────────────────── */
     function load(year) {
         currentYear = year || null;
-        const url = `/api/league-dashboard${year ? `?year=${year}` : ""}`;
+        const params = new URLSearchParams({ league: currentLeague });
+        if (year) params.set("year", year);
+        const url = `/api/league-dashboard?${params.toString()}`;
         fetch(url)
             .then(r => r.json())
             .then(data => {
@@ -46,6 +49,20 @@
                 buildYearFilter(data.available_years);
                 renderCurrentTab();
             });
+    }
+
+    // 리그 탭 (선택): #ld-league-tabs가 존재하면 자동 바인딩
+    const leagueTabsEl = document.getElementById("ld-league-tabs");
+    if (leagueTabsEl) {
+        leagueTabsEl.querySelectorAll("[data-league]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                if (btn.classList.contains("active")) return;
+                leagueTabsEl.querySelectorAll("[data-league]")
+                    .forEach(b => b.classList.toggle("active", b === btn));
+                currentLeague = btn.dataset.league;
+                load(currentYear);
+            });
+        });
     }
 
     function buildYearFilter(years) {

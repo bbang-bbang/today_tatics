@@ -1,4 +1,4 @@
-// K리그2 선수 히트맵 모달
+// K리그 선수 히트맵 모달 (K1/K2 토글)
 (function () {
     const modal       = document.getElementById("k2-heatmap-modal");
     const btnOpen     = document.getElementById("btn-k2-heatmap");
@@ -21,10 +21,14 @@
     const loading       = document.getElementById("k2-heatmap-loading");
     const canvas        = document.getElementById("k2-heatmap-canvas");
     const ctx           = canvas.getContext("2d");
+    const leagueTabs    = document.querySelectorAll("#heatmap-league-tabs .hm-league-tab");
 
+    let currentLeague = "k1";  // 기본 K리그1
     let currentTeam   = null;  // { sofascore_id, name, primary }
     let currentPlayer = null;  // { playerId, name }
     let allMatches    = [];
+
+    const apiBase = () => `/api/kleague${currentLeague === "k1" ? "1" : "2"}`;
 
     // ── 열기/닫기 ──────────────────────────────────────────
     btnOpen.addEventListener("click", () => {
@@ -38,6 +42,18 @@
     backTeam.addEventListener("click",   () => showStep("team"));
     backPlayer.addEventListener("click", () => showStep("player"));
 
+    leagueTabs.forEach(tab => {
+        tab.addEventListener("click", () => {
+            if (tab.classList.contains("active")) return;
+            leagueTabs.forEach(t => t.classList.toggle("active", t === tab));
+            currentLeague = tab.dataset.league;
+            currentTeam = null;
+            currentPlayer = null;
+            showStep("team");
+            loadTeams();
+        });
+    });
+
     function showStep(step) {
         stepTeam.classList.toggle("hidden",    step !== "team");
         stepPlayer.classList.toggle("hidden",  step !== "player");
@@ -47,7 +63,7 @@
     // ── 팀 목록 ─────────────────────────────────────────────
     async function loadTeams() {
         teamGrid.innerHTML = "<p style='color:#aaa'>로딩 중...</p>";
-        const res  = await fetch("/api/kleague2/teams");
+        const res  = await fetch(`${apiBase()}/teams`);
         const teams = await res.json();
         teamGrid.innerHTML = "";
         teams.forEach(t => {
@@ -69,7 +85,7 @@
         playerList.innerHTML = "<p style='color:#aaa'>로딩 중...</p>";
         showStep("player");
 
-        const res     = await fetch(`/api/kleague2/players?teamId=${team.sofascore_id}`);
+        const res     = await fetch(`${apiBase()}/players?teamId=${team.sofascore_id}`);
         const players = await res.json();
         playerList.innerHTML = "";
 
@@ -110,7 +126,7 @@
         matchList.innerHTML = "";
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const res  = await fetch(`/api/kleague2/heatmap?playerId=${player.playerId}&teamId=${currentTeam.sofascore_id}`);
+        const res  = await fetch(`${apiBase()}/heatmap?playerId=${player.playerId}&teamId=${currentTeam.sofascore_id}`);
         const data = await res.json();
         loading.style.display = "none";
 
@@ -123,7 +139,7 @@
     async function loadMatchHeatmap(eventId) {
         loading.style.display = "flex";
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const res  = await fetch(`/api/kleague2/heatmap?playerId=${currentPlayer.playerId}&teamId=${currentTeam.sofascore_id}&eventId=${eventId}`);
+        const res  = await fetch(`${apiBase()}/heatmap?playerId=${currentPlayer.playerId}&teamId=${currentTeam.sofascore_id}&eventId=${eventId}`);
         const data = await res.json();
         loading.style.display = "none";
         drawHeatmap(data.points || []);
@@ -140,7 +156,7 @@
             renderMatchList(allMatches, null);
             loading.style.display = "flex";
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const res  = await fetch(`/api/kleague2/heatmap?playerId=${currentPlayer.playerId}&teamId=${currentTeam.sofascore_id}`);
+            const res  = await fetch(`${apiBase()}/heatmap?playerId=${currentPlayer.playerId}&teamId=${currentTeam.sofascore_id}`);
             const data = await res.json();
             loading.style.display = "none";
             drawHeatmap(data.points || []);

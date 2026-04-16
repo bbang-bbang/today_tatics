@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Today Tactics - 축구 전술판</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=3">
+    <link rel="stylesheet" href="/static/css/style.css?v=4">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
     // 전역 에러 핸들링 + fetch 래퍼
@@ -163,7 +163,7 @@
                         <button id="btn-save" class="action-btn save-btn" title="현재 전술 저장">저장</button>
                         <button id="btn-load" class="action-btn load-btn" title="저장된 전술 불러오기">불러오기</button>
                         <button id="btn-export-png" class="action-btn export-btn" title="전술판을 이미지로 내보내기">이미지 저장</button>
-                        <button id="btn-k2-heatmap" class="action-btn" title="K리그2 선수 히트맵">🔥 히트맵</button>
+                        <button id="btn-k2-heatmap" class="action-btn" title="K리그 선수 히트맵">🔥 히트맵</button>
                     </div>
                 </nav>
                 <canvas id="field"></canvas>
@@ -302,11 +302,17 @@
         </div>
     </div>
 
-    <!-- K리그2 선수 히트맵 모달 -->
+    <!-- K리그 선수 히트맵 모달 -->
     <div id="k2-heatmap-modal" class="modal hidden">
         <div class="modal-backdrop"></div>
         <div class="modal-content k2-heatmap-content">
-            <h2>K리그2 선수 히트맵</h2>
+            <h2>K리그 선수 히트맵</h2>
+
+            <!-- 리그 토글 -->
+            <div id="heatmap-league-tabs" class="heatmap-league-tabs">
+                <button class="hm-league-tab active" data-league="k1">K리그1</button>
+                <button class="hm-league-tab" data-league="k2">K리그2</button>
+            </div>
 
             <!-- STEP 1: 팀 선택 -->
             <div id="k2-step-team">

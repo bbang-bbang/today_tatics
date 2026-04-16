@@ -243,49 +243,69 @@
         </div>`;
     }
 
-    // 라운드별 누적 적중률 SVG 라인차트
+    // 라운드별 적중률 막대 차트
     function backtestChartHtml(perRound) {
         if (!perRound || perRound.length < 2) return "";
-        const W = 360, H = 80, PAD_L = 28, PAD_R = 10, PAD_T = 10, PAD_B = 20;
+        const W = 380, H = 100, PAD_L = 30, PAD_R = 12, PAD_T = 14, PAD_B = 22;
         const innerW = W - PAD_L - PAD_R;
         const innerH = H - PAD_T - PAD_B;
-        const rounds = perRound.map(r => r.round);
-        const rMin = rounds[0], rMax = rounds[rounds.length - 1];
-        const xAt = r => rounds.length === 1 ? PAD_L + innerW / 2 : PAD_L + ((r - rMin) / (rMax - rMin)) * innerW;
+        const n = perRound.length;
+        const BAR_GAP = 0.25;
+        const barW = (innerW / n) * (1 - BAR_GAP);
+        const slotW = innerW / n;
         const yAt = pct => PAD_T + (1 - pct / 100) * innerH;
+        const zeroY = yAt(0);
 
-        // 누적선 좌표
-        const cumPts = perRound.map(r => `${xAt(r.round).toFixed(1)},${yAt(r.cum_pct || 0).toFixed(1)}`).join(" ");
-        // 라운드별 점
-        const dots = perRound.map(r => {
-            const cx = xAt(r.round).toFixed(1);
-            const cy = yAt(r.round_pct || 0).toFixed(1);
-            return `<circle cx="${cx}" cy="${cy}" r="3" fill="#facc15" stroke="#0d1530" stroke-width="1"><title>R${r.round} · 라운드 ${r.round_pct}% (${r.hit}/${r.total})</title></circle>`;
+        // 막대 — 성과 구간별 색상
+        const bars = perRound.map((r, i) => {
+            const pct = r.round_pct || 0;
+            const x = (PAD_L + i * slotW + slotW * BAR_GAP / 2).toFixed(1);
+            const y = yAt(pct).toFixed(1);
+            const bh = Math.max(1, zeroY - yAt(pct)).toFixed(1);
+            const fill = pct >= 50 ? "#4ade80" : pct >= 33 ? "#facc15" : "#f87171";
+            const isLast = i === n - 1;
+            const opacity = isLast ? "1" : "0.75";
+            const label = isLast || pct >= 60 || pct === 0
+                ? `<text x="${(+x + barW / 2).toFixed(1)}" y="${(+y - 2).toFixed(1)}" font-size="7.5" fill="${fill}" text-anchor="middle" font-weight="700">${pct}%</text>`
+                : "";
+            return `<rect x="${x}" y="${y}" width="${barW.toFixed(1)}" height="${bh}" rx="2" fill="${fill}" opacity="${opacity}">
+                <title>R${r.round} · ${pct}% (${r.hit}/${r.total})</title></rect>${label}`;
         }).join("");
-        // 33% 무작위 기준선
-        const baselineY = yAt(33.3).toFixed(1);
+
+        // 50% / 33% 기준선
+        const ref50Y = yAt(50).toFixed(1);
+        const ref33Y = yAt(33.3).toFixed(1);
+
         // y축 라벨
         const yLabels = [0, 50, 100].map(v => `
-            <text x="${PAD_L - 4}" y="${yAt(v) + 3}" font-size="8" fill="#6a8aa8" text-anchor="end">${v}</text>
-            <line x1="${PAD_L}" y1="${yAt(v)}" x2="${W - PAD_R}" y2="${yAt(v)}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <text x="${PAD_L - 4}" y="${(yAt(v) + 3).toFixed(1)}" font-size="8" fill="#4a6a88" text-anchor="end">${v}</text>
+            <line x1="${PAD_L}" y1="${yAt(v).toFixed(1)}" x2="${W - PAD_R}" y2="${yAt(v).toFixed(1)}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
         `).join("");
-        // x축 라벨
-        const xLabels = perRound.map(r => `<text x="${xAt(r.round)}" y="${H - PAD_B + 11}" font-size="8" fill="#6a8aa8" text-anchor="middle">R${r.round}</text>`).join("");
+
+        // x축 라벨 (라운드 수 많으면 짝수만)
+        const xLabels = perRound.map((r, i) => {
+            if (n > 8 && i % 2 !== 0) return "";
+            const cx = (PAD_L + i * slotW + slotW / 2).toFixed(1);
+            return `<text x="${cx}" y="${H - PAD_B + 12}" font-size="8" fill="#4a6a88" text-anchor="middle">R${r.round}</text>`;
+        }).join("");
 
         return `
         <div class="pred-backtest-chart">
-            <div class="pbc-title">라운드별 적중률</div>
             <svg class="pbc-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
                 ${yLabels}
-                <line x1="${PAD_L}" y1="${baselineY}" x2="${W - PAD_R}" y2="${baselineY}" stroke="#f87171" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
-                <text x="${W - PAD_R - 2}" y="${baselineY - 2}" font-size="7" fill="#f87171" text-anchor="end">33% (무작위)</text>
-                <polyline points="${cumPts}" fill="none" stroke="#4ea4f8" stroke-width="2" stroke-linejoin="round"/>
-                ${dots}
+                <!-- 50% 기준선 -->
+                <line x1="${PAD_L}" y1="${ref50Y}" x2="${W - PAD_R}" y2="${ref50Y}" stroke="rgba(255,255,255,0.12)" stroke-width="1" stroke-dasharray="4,3"/>
+                <!-- 33% 무작위 기준선 -->
+                <line x1="${PAD_L}" y1="${ref33Y}" x2="${W - PAD_R}" y2="${ref33Y}" stroke="#f87171" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+                <text x="${W - PAD_R - 2}" y="${(+ref33Y - 2).toFixed(1)}" font-size="7" fill="#f87171" text-anchor="end" opacity="0.7">랜덤 33%</text>
+                <!-- 라운드별 막대 -->
+                ${bars}
                 ${xLabels}
             </svg>
             <div class="pbc-legend">
-                <span class="pbc-lg"><span class="pbc-lg-line" style="background:#4ea4f8"></span>누적 적중률</span>
-                <span class="pbc-lg"><span class="pbc-lg-dot" style="background:#facc15"></span>라운드별</span>
+                <span class="pbc-lg"><span class="pbc-lg-bar" style="background:#4ade80"></span>50%↑</span>
+                <span class="pbc-lg"><span class="pbc-lg-bar" style="background:#facc15"></span>33~50%</span>
+                <span class="pbc-lg"><span class="pbc-lg-bar" style="background:#f87171"></span>33%↓</span>
             </div>
         </div>`;
     }

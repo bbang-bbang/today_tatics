@@ -29,14 +29,25 @@
         if (teamsLoaded) return;
         fetch("/api/teams").then(r => r.json()).then(teams => {
             teamsLoaded = true;
-            const k2Teams = teams.filter(t => t.league === "K2")
-                .sort((a, b) => a.name.localeCompare(b.name, "ko"));
+            const grouped = { K1: [], K2: [] };
+            teams.forEach(t => {
+                if (grouped[t.league]) grouped[t.league].push(t);
+            });
+            Object.values(grouped).forEach(arr =>
+                arr.sort((a, b) => a.name.localeCompare(b.name, "ko"))
+            );
             teamSelect.innerHTML = '<option value="">팀 선택...</option>';
-            k2Teams.forEach(t => {
-                const opt = document.createElement("option");
-                opt.value = t.id;
-                opt.textContent = t.name;
-                teamSelect.appendChild(opt);
+            [["K1", "K리그1"], ["K2", "K리그2"]].forEach(([key, label]) => {
+                if (!grouped[key].length) return;
+                const og = document.createElement("optgroup");
+                og.label = label;
+                grouped[key].forEach(t => {
+                    const opt = document.createElement("option");
+                    opt.value = t.id;
+                    opt.textContent = t.name;
+                    og.appendChild(opt);
+                });
+                teamSelect.appendChild(og);
             });
         });
     }

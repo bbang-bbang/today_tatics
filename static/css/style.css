@@ -595,6 +595,7 @@ body {
 /* Canvas */
 #canvas-container {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -1964,7 +1965,7 @@ body {
 .st-badge.L { background: rgba(255,138,101,0.2); color: #ff8a65; }
 @media (max-width: 900px) { .standings-wrap { flex-direction: column; } }
 
-/* ── K리그2 선수 히트맵 모달 ─────────────────────────── */
+/* ── K리그 선수 히트맵 모달 ─────────────────────────── */
 .k2-heatmap-content {
     width: 700px;
     max-width: 95vw;
@@ -1973,6 +1974,29 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+.heatmap-league-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.hm-league-tab {
+    flex: 1;
+    padding: 8px 12px;
+    background: #1e2130;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #bbb;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.hm-league-tab:hover { background: #2a2f45; color: #fff; }
+.hm-league-tab.active {
+    background: #2553a5;
+    border-color: #3a7fd4;
+    color: #fff;
+    font-weight: 600;
 }
 .k2-step-label { font-size: 13px; color: #aaa; margin-bottom: 6px; }
 .k2-team-grid {
@@ -3146,22 +3170,15 @@ body {
     padding-top: 8px;
     border-top: 1px solid rgba(255,255,255,0.06);
 }
-.pbc-title {
-    font-size: 0.62rem;
-    color: #8ab0d8;
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
 .pbc-svg {
     display: block;
     width: 100%;
-    max-width: 420px;
+    max-width: 440px;
     height: auto;
 }
 .pbc-legend {
     display: flex;
-    gap: 14px;
+    gap: 12px;
     margin-top: 4px;
     font-size: 0.6rem;
     color: #8ab0d8;
@@ -3170,6 +3187,13 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+}
+.pbc-lg-bar {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    opacity: 0.85;
 }
 .pbc-lg-line {
     display: inline-block;
@@ -4133,6 +4157,23 @@ body {
     border-radius: 0;
     padding: 16px;
     box-sizing: border-box;
+}
+
+/* 중간 해상도 (1280px 이하): 선수 리포트를 전술판 아래로 스택
+   — 3컬럼(툴바+캔버스+벤치+리포트)이 좁아져 캔버스가 찌그러지는 것 방지 */
+@media (max-width: 1280px) {
+    #board-report-wrap {
+        flex-direction: column;
+    }
+    #player-report-section {
+        flex: 0 0 auto;
+        width: 100%;
+        height: auto;
+        min-height: 320px;
+        max-height: 560px;
+        border-left: 1px solid #0f3460;
+        border-top: none;
+    }
 }
 .pr-header {
     display: flex; align-items: center; justify-content: space-between;
