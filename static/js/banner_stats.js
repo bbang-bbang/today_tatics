@@ -12,8 +12,8 @@
     }
 
     function watchBanner() {
-        const nameA = document.getElementById("name-a");
-        const nameB = document.getElementById("name-b");
+        const nameA = document.getElementById("fhud-name-a");
+        const nameB = document.getElementById("fhud-name-b");
         if (!nameA || !nameB) return;
 
         const observer = new MutationObserver(() => {

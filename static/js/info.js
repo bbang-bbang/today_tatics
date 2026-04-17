@@ -529,15 +529,17 @@
 
     // ── 팀 배너 변화 감지 ────────────────────────────────
     function watchBanner() {
-        const nameA = document.getElementById("name-a");
-        const nameB = document.getElementById("name-b");
+        const nameA = document.getElementById("fhud-name-a");
+        const nameB = document.getElementById("fhud-name-b");
         if (!nameA || !nameB) return;
+
+        const matchTeam = (text) => teamsData.find(t => t.short === text) || teamsData.find(t => t.name === text);
 
         const observer = new MutationObserver(() => {
             const textA = nameA.textContent.trim();
             const textB = nameB.textContent.trim();
-            const teamA = teamsData.find(t => t.name === textA);
-            const teamB = teamsData.find(t => t.name === textB);
+            const teamA = matchTeam(textA);
+            const teamB = matchTeam(textB);
 
             if (teamA && teamB) {
                 document.dispatchEvent(new CustomEvent("teamsSelected", { detail: { home: teamA, away: teamB } }));

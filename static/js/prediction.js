@@ -178,8 +178,9 @@
             return `
             <div class="ksb-item${finishedCls}"
                  data-home="${g.home_id}" data-away="${g.away_id}"
-                 data-finished="${finished}">
-                <span class="ksb-date">${g.date.replace(/\./g,"/").slice(5)}</span>
+                 data-finished="${finished}"
+                 data-full-date="${g.date}">
+                <span class="ksb-date" data-full-date="${g.date}">${g.date.replace(/\./g,"/").slice(5)}</span>
                 <span class="ksb-match">
                     <span class="ksb-team ksb-home">${g.home_short}</span>
                     ${scoreHtml}
@@ -198,6 +199,20 @@
                 section.classList.remove("hidden");
                 loadPrediction(homeId, awayId);
                 section.scrollIntoView({ behavior: "smooth", block: "start" });
+
+                // 종료된 경기라면 전술판에도 실제 라인업 적용 시도
+                const isFinished = item.dataset.finished === "true";
+                const gameDate = item.dataset.fullDate || null;
+                if (isFinished && gameDate) {
+                    fetch(`/api/match-lineup?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data && data.ready) {
+                                document.dispatchEvent(new CustomEvent("matchLineupLoaded", { detail: data }));
+                            }
+                        })
+                        .catch(() => {});
+                }
             });
         });
     }

@@ -388,4 +388,35 @@
             }
         });
     }
+
+    /* ── 확장 모드 토글 ────────────────────────────────── */
+    const expandBtn = document.getElementById("pr-expand-btn");
+    const backdrop  = document.getElementById("pr-backdrop");
+
+    function setExpanded(on) {
+        section.classList.toggle("pr-expanded", on);
+        if (backdrop) backdrop.classList.toggle("active", on);
+        document.body.classList.toggle("pr-expanded-lock", on);
+        if (expandBtn) expandBtn.setAttribute("aria-expanded", on ? "true" : "false");
+        // Chart.js가 컨테이너 크기 변화를 감지하도록 resize 이벤트 발송
+        // 트랜지션 끝난 뒤 차트들 재정렬
+        setTimeout(() => {
+            [radarChart, activityChart, vsTeamsChart].forEach(c => { try { c && c.resize(); } catch {} });
+            window.dispatchEvent(new Event("resize"));
+        }, 220);
+    }
+
+    if (expandBtn) {
+        expandBtn.addEventListener("click", () => {
+            setExpanded(!section.classList.contains("pr-expanded"));
+        });
+    }
+    if (backdrop) {
+        backdrop.addEventListener("click", () => setExpanded(false));
+    }
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && section.classList.contains("pr-expanded")) {
+            setExpanded(false);
+        }
+    });
 })();

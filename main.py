@@ -4372,5 +4372,290 @@ def get_predicted_lineup():
     })
 
 
+# ── 경기 라인업 불러오기 ─────────────────────────────────
+# SofaScore lineup 데이터를 전술판에 그대로 로드하기 위한 API.
+# crawlers/crawl_lineups.py 가 채운 match_lineups 테이블을 조회한다.
+
+def _default_labels_for_rows(rows):
+    """미지 포메이션(예: 4-5-1)용 기본 라벨 생성. rows=[4,5,1] -> ['GK','D1','D2','D3','D4','M1'...'F1']."""
+    labels = ["GK"]
+    prefixes = ("D", "M", "F")
+    for i, count in enumerate(rows):
+        prefix = prefixes[min(i, len(prefixes) - 1)] if i < len(prefixes) else "A"
+        if count == 1:
+            labels.append(prefix)
+        else:
+            for j in range(count):
+                labels.append(f"{prefix}{j+1}")
+    return labels
+
+
+def _build_formation_slots(formation, mirror=False):
+    """포메이션 문자열 -> [{slot_order, x, y, label}]. mirror=True면 원정팀용(x 반전)."""
+    if not formation or not all(part.isdigit() for part in formation.split("-")):
+        formation = "4-4-2"  # fallback
+    if formation in POSITION_LABELS:
+        labels = POSITION_LABELS[formation]
+    else:
+        rows = [int(x) for x in formation.split("-")]
+        labels = _default_labels_for_rows(rows)
+    positions = compute_formation(formation)
+    # 홈=좌측, 원정=우측(반전)
+    slots = []
+    for i, pos in enumerate(positions):
+        x = round(1.0 - pos["x"], 3) if mirror else pos["x"]
+        label = labels[i] if i < len(labels) else ""
+        if mirror:
+            if label.startswith("L"): label = "R" + label[1:]
+            elif label.startswith("R"): label = "L" + label[1:]
+        slots.append({"slot_order": i, "x": x, "y": pos["y"], "label": label})
+    return slots
+
+
+def _team_info_by_sofascore_id(ss_id):
+    t = next((t for t in TEAMS if t.get("sofascore_id") == ss_id), None)
+    if not t:
+        return None
+    return {
+        "slug":        t["id"],
+        "name":        t["name"],
+        "short":       t["short"],
+        "league":      t.get("league"),
+        "emblem":      t.get("emblem"),
+        "primary":     t.get("primary"),
+        "secondary":   t.get("secondary"),
+        "accent":      t.get("accent"),
+    }
+
+
+@app.route("/api/matches-by-date")
+def matches_by_date():
+    """
+    특정 날짜에 치러진 경기 목록 반환.
+    쿼리: ?date=YYYY-MM-DD  (없으면 라인업이 저장된 전체 경기)
+        ?has_lineup=1     (라인업 데이터가 있는 경기만)
+    """
+    date_str   = request.args.get("date", "").strip()
+    has_lineup = request.args.get("has_lineup") == "1"
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur  = conn.cursor()
+
+    where   = []
+    params  = []
+    if date_str:
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "invalid date"}), 400
+        start_ts = int(dt.timestamp())
+        end_ts   = start_ts + 86400
+        where.append("e.date_ts >= ? AND e.date_ts < ?")
+        params.extend([start_ts, end_ts])
+
+    if has_lineup:
+        where.append("EXISTS (SELECT 1 FROM match_lineups m WHERE m.event_id = e.id)")
+
+    sql = """
+        SELECT e.id, e.home_team_id, e.home_team_name, e.away_team_id, e.away_team_name,
+               e.date_ts, e.home_score, e.away_score, e.tournament_id,
+               (SELECT 1 FROM match_lineups m WHERE m.event_id = e.id LIMIT 1) AS has_lu
+        FROM events e
+        WHERE e.tournament_id IN (410, 777)
+    """
+    if where:
+        sql += " AND " + " AND ".join(where)
+    sql += " ORDER BY e.date_ts ASC, e.id ASC"
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+
+    out = []
+    for r in rows:
+        ts = r["date_ts"] or 0
+        dt = datetime.fromtimestamp(ts) if ts else None
+        home_info = _team_info_by_sofascore_id(r["home_team_id"])
+        away_info = _team_info_by_sofascore_id(r["away_team_id"])
+        out.append({
+            "event_id":      r["id"],
+            "date_ts":       ts,
+            "date":          dt.strftime("%Y-%m-%d") if dt else "",
+            "kickoff":       dt.strftime("%H:%M") if dt else "",
+            "tournament_id": r["tournament_id"],
+            "league":        "K1" if r["tournament_id"] == 410 else "K2",
+            "home_score":    r["home_score"],
+            "away_score":    r["away_score"],
+            "has_lineup":    bool(r["has_lu"]),
+            "home": {
+                "team_id":   r["home_team_id"],
+                "name":      r["home_team_name"],
+                "slug":      home_info["slug"] if home_info else None,
+                "short":     home_info["short"] if home_info else (r["home_team_name"] or ""),
+                "emblem":    home_info["emblem"] if home_info else None,
+            },
+            "away": {
+                "team_id":   r["away_team_id"],
+                "name":      r["away_team_name"],
+                "slug":      away_info["slug"] if away_info else None,
+                "short":     away_info["short"] if away_info else (r["away_team_name"] or ""),
+                "emblem":    away_info["emblem"] if away_info else None,
+            },
+        })
+
+    conn.close()
+    return jsonify(out)
+
+
+@app.route("/api/matches-latest-lineup-date")
+def matches_latest_lineup_date():
+    """라인업이 저장된 가장 최근 경기일(YYYY-MM-DD) 반환. 프론트 기본값용."""
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute("""
+        SELECT MAX(e.date_ts) FROM events e
+        WHERE EXISTS (SELECT 1 FROM match_lineups m WHERE m.event_id = e.id)
+    """).fetchone()
+    conn.close()
+    ts = row[0] if row else None
+    if not ts:
+        return jsonify({"date": None})
+    return jsonify({"date": datetime.fromtimestamp(ts).strftime("%Y-%m-%d")})
+
+
+@app.route("/api/match-lineup")
+def match_lineup():
+    """
+    특정 경기의 홈/원정 라인업(포메이션 + 선발 + 교체) 반환.
+    전술판이 그대로 적용할 수 있도록 슬롯 좌표까지 계산해서 내려준다.
+    쿼리:
+      - ?event_id=<int>                                (SofaScore event id 직접 지정)
+      - ?date=YYYY-MM-DD(또는 YYYY.MM.DD)&home_slug=X&away_slug=Y
+        (K리그 일정 패널 등 event_id 없을 때 팀 슬러그로 조회)
+    """
+    event_id = request.args.get("event_id", "").strip()
+    date_str = request.args.get("date", "").strip()
+    home_slug = request.args.get("home_slug", "").strip()
+    away_slug = request.args.get("away_slug", "").strip()
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur  = conn.cursor()
+
+    ev = None
+    if event_id:
+        try:
+            event_id = int(event_id)
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "event_id must be int"}), 400
+        ev = cur.execute("""
+            SELECT id, home_team_id, home_team_name, away_team_id, away_team_name,
+                   date_ts, home_score, away_score, tournament_id
+            FROM events WHERE id = ?
+        """, (event_id,)).fetchone()
+    elif date_str and home_slug and away_slug:
+        # date: "YYYY-MM-DD" 또는 "YYYY.MM.DD" 허용
+        dt_str = date_str.replace(".", "-")
+        try:
+            dt = datetime.strptime(dt_str, "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "invalid date"}), 400
+        start_ts, end_ts = int(dt.timestamp()), int(dt.timestamp()) + 86400
+        home_team = next((t for t in TEAMS if t["id"] == home_slug), None)
+        away_team = next((t for t in TEAMS if t["id"] == away_slug), None)
+        if not home_team or not away_team:
+            conn.close()
+            return jsonify({"error": "unknown team slug"}), 400
+        ev = cur.execute("""
+            SELECT id, home_team_id, home_team_name, away_team_id, away_team_name,
+                   date_ts, home_score, away_score, tournament_id
+            FROM events
+            WHERE date_ts >= ? AND date_ts < ?
+              AND home_team_id = ? AND away_team_id = ?
+            LIMIT 1
+        """, (start_ts, end_ts, home_team["sofascore_id"], away_team["sofascore_id"])).fetchone()
+    else:
+        conn.close()
+        return jsonify({"error": "event_id or (date+home_slug+away_slug) required"}), 400
+
+    if not ev:
+        conn.close()
+        return jsonify({"ready": False, "reason": "event_not_found"}), 404
+
+    resolved_event_id = ev["id"]
+    lu_rows = cur.execute("""
+        SELECT ml.is_home, ml.team_id, ml.formation, ml.player_id, ml.player_name,
+               ml.shirt_number, ml.position, ml.is_starter, ml.slot_order,
+               ml.confirmed,
+               COALESCE(p.name_ko, ml.player_name) AS name_display,
+               p.height
+        FROM match_lineups ml
+        LEFT JOIN players p ON p.id = ml.player_id
+        WHERE ml.event_id = ?
+        ORDER BY ml.is_home DESC, ml.is_starter DESC, ml.slot_order ASC
+    """, (resolved_event_id,)).fetchall()
+
+    if not lu_rows:
+        conn.close()
+        return jsonify({"ready": False, "reason": "no_lineup", "event_id": resolved_event_id})
+
+    def build_side(is_home_flag, ss_team_id, ss_team_name):
+        rows = [r for r in lu_rows if r["is_home"] == is_home_flag]
+        if not rows:
+            return None
+        formation = next((r["formation"] for r in rows if r["formation"]), None)
+        slots     = _build_formation_slots(formation, mirror=(not is_home_flag))
+
+        starters, subs = [], []
+        for r in rows:
+            p = {
+                "player_id":    r["player_id"],
+                "name":         r["name_display"] or r["player_name"] or "",
+                "name_raw":     r["player_name"] or "",
+                "shirt_number": r["shirt_number"],
+                "position":     r["position"],
+                "height":       r["height"],
+            }
+            if r["is_starter"]:
+                p["slot_order"] = r["slot_order"]
+                starters.append(p)
+            else:
+                subs.append(p)
+
+        team_info = _team_info_by_sofascore_id(ss_team_id) or {}
+        return {
+            "team_id":    ss_team_id,
+            "slug":       team_info.get("slug"),
+            "name":       team_info.get("name") or ss_team_name,
+            "short":      team_info.get("short") or ss_team_name,
+            "emblem":     team_info.get("emblem"),
+            "formation":  formation or "4-4-2",
+            "slots":      slots,
+            "starters":   starters,
+            "subs":       subs,
+        }
+
+    confirmed = any(r["confirmed"] for r in lu_rows)
+    home = build_side(1, ev["home_team_id"], ev["home_team_name"])
+    away = build_side(0, ev["away_team_id"], ev["away_team_name"])
+
+    conn.close()
+    ts = ev["date_ts"] or 0
+    return jsonify({
+        "ready":      True,
+        "event_id":   ev["id"],
+        "date_ts":    ts,
+        "date":       datetime.fromtimestamp(ts).strftime("%Y-%m-%d") if ts else "",
+        "kickoff":    datetime.fromtimestamp(ts).strftime("%H:%M") if ts else "",
+        "home_score": ev["home_score"],
+        "away_score": ev["away_score"],
+        "league":     "K1" if ev["tournament_id"] == 410 else "K2",
+        "confirmed":  confirmed,
+        "home":       home,
+        "away":       away,
+    })
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

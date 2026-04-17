@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Today Tactics - 축구 전술판</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4">
+    <link rel="stylesheet" href="/static/css/style.css?v=9">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
     // 전역 에러 핸들링 + fetch 래퍼
@@ -26,62 +26,6 @@
         <header id="toolbar">
             <h1>Today Tactics</h1>
         </header>
-        <!-- 팀 선택 배너 -->
-        <div id="team-banner">
-            <div class="team-slot" id="slot-a">
-                <div class="team-slot-badge" id="badge-a">
-                    <span class="badge-letter">A</span>
-                </div>
-                <div class="team-slot-info">
-                    <span class="team-slot-name" id="name-a">HOME</span>
-                    <div class="team-slot-sub" id="sub-a"></div>
-                    <div class="team-slot-controls">
-                        <button class="team-pick-btn" data-side="A">팀 선택</button>
-                        <button class="kit-toggle-btn active" data-side="A" data-kit="home">HOME</button>
-                        <button class="kit-toggle-btn" data-side="A" data-kit="away">AWAY</button>
-                        <select class="formation-select-team" data-side="A" title="HOME 포메이션">
-                            <option value="4-4-2">4-4-2</option>
-                            <option value="4-3-3">4-3-3</option>
-                            <option value="3-5-2">3-5-2</option>
-                            <option value="4-2-3-1">4-2-3-1</option>
-                            <option value="4-1-4-1">4-1-4-1</option>
-                            <option value="3-4-3">3-4-3</option>
-                            <option value="5-3-2">5-3-2</option>
-                            <option value="5-4-1">5-4-1</option>
-                        </select>
-                        <button class="formation-save-btn" data-side="A" title="현재 배치를 포메이션으로 저장">+</button>
-                    </div>
-                </div>
-            </div>
-            <div class="team-banner-vs">
-                <span class="vs-text">VS</span>
-            </div>
-            <div class="team-slot" id="slot-b">
-                <div class="team-slot-badge" id="badge-b">
-                    <span class="badge-letter">B</span>
-                </div>
-                <div class="team-slot-info">
-                    <span class="team-slot-name" id="name-b">AWAY</span>
-                    <div class="team-slot-sub" id="sub-b"></div>
-                    <div class="team-slot-controls">
-                        <button class="team-pick-btn" data-side="B">팀 선택</button>
-                        <button class="kit-toggle-btn active" data-side="B" data-kit="home">HOME</button>
-                        <button class="kit-toggle-btn" data-side="B" data-kit="away">AWAY</button>
-                        <select class="formation-select-team" data-side="B" title="AWAY 포메이션">
-                            <option value="4-4-2">4-4-2</option>
-                            <option value="4-3-3">4-3-3</option>
-                            <option value="3-5-2">3-5-2</option>
-                            <option value="4-2-3-1">4-2-3-1</option>
-                            <option value="4-1-4-1">4-1-4-1</option>
-                            <option value="3-4-3">3-4-3</option>
-                            <option value="5-3-2">5-3-2</option>
-                            <option value="5-4-1">5-4-1</option>
-                        </select>
-                        <button class="formation-save-btn" data-side="B" title="현재 배치를 포메이션으로 저장">+</button>
-                    </div>
-                </div>
-            </div>
-        </div>
         <!-- 리그 일정 배너 (K1 / K2 탭) -->
         <div id="league-schedule-wrap">
             <div id="league-tabs">
@@ -165,8 +109,65 @@
                         <button id="btn-export-png" class="action-btn export-btn" title="전술판을 이미지로 내보내기">이미지 저장</button>
                         <button id="btn-k2-heatmap" class="action-btn" title="K리그 선수 히트맵">🔥 히트맵</button>
                     </div>
+                    <div class="ltb-divider"></div>
+                    <!-- 경기에서 불러오기 (SofaScore 라인업) -->
+                    <div class="ltb-group">
+                        <button id="btn-match-load" class="action-btn match-load-btn" title="특정 날짜의 경기 포메이션/선수를 전술판에 자동 적용">📅 경기에서 불러오기</button>
+                    </div>
                 </nav>
-                <canvas id="field"></canvas>
+                <div id="field-wrap">
+                    <!-- 포메이션 HUD (전술판 상단 오버레이) -->
+                    <div id="formation-hud">
+                        <div class="fhud-block fhud-block-a">
+                            <button class="team-pick-btn fhud-team-chip" data-side="A" title="HOME 팀 선택">
+                                <span class="fhud-chip-badge" id="fhud-badge-a">
+                                    <span class="fhud-chip-letter">H</span>
+                                </span>
+                                <span class="fhud-chip-name" id="fhud-name-a">HOME</span>
+                            </button>
+                            <div class="fhud-kit-group" role="group" aria-label="HOME 킷">
+                                <button class="kit-toggle-btn fhud-kit-btn active" data-side="A" data-kit="home" title="홈 유니폼">H</button>
+                                <button class="kit-toggle-btn fhud-kit-btn" data-side="A" data-kit="away" title="원정 유니폼">A</button>
+                            </div>
+                            <select class="formation-select-team" data-side="A" title="HOME 포메이션">
+                                <option value="4-4-2">4-4-2</option>
+                                <option value="4-3-3">4-3-3</option>
+                                <option value="3-5-2">3-5-2</option>
+                                <option value="4-2-3-1">4-2-3-1</option>
+                                <option value="4-1-4-1">4-1-4-1</option>
+                                <option value="3-4-3">3-4-3</option>
+                                <option value="5-3-2">5-3-2</option>
+                                <option value="5-4-1">5-4-1</option>
+                            </select>
+                            <button class="formation-save-btn" data-side="A" title="현재 배치를 포메이션으로 저장">+</button>
+                        </div>
+                        <span class="fhud-vs">VS</span>
+                        <div class="fhud-block fhud-block-b">
+                            <button class="formation-save-btn" data-side="B" title="현재 배치를 포메이션으로 저장">+</button>
+                            <select class="formation-select-team" data-side="B" title="AWAY 포메이션">
+                                <option value="4-4-2">4-4-2</option>
+                                <option value="4-3-3">4-3-3</option>
+                                <option value="3-5-2">3-5-2</option>
+                                <option value="4-2-3-1">4-2-3-1</option>
+                                <option value="4-1-4-1">4-1-4-1</option>
+                                <option value="3-4-3">3-4-3</option>
+                                <option value="5-3-2">5-3-2</option>
+                                <option value="5-4-1">5-4-1</option>
+                            </select>
+                            <div class="fhud-kit-group" role="group" aria-label="AWAY 킷">
+                                <button class="kit-toggle-btn fhud-kit-btn active" data-side="B" data-kit="home" title="홈 유니폼">H</button>
+                                <button class="kit-toggle-btn fhud-kit-btn" data-side="B" data-kit="away" title="원정 유니폼">A</button>
+                            </div>
+                            <button class="team-pick-btn fhud-team-chip" data-side="B" title="AWAY 팀 선택">
+                                <span class="fhud-chip-badge" id="fhud-badge-b">
+                                    <span class="fhud-chip-letter">A</span>
+                                </span>
+                                <span class="fhud-chip-name" id="fhud-name-b">AWAY</span>
+                            </button>
+                        </div>
+                    </div>
+                    <canvas id="field"></canvas>
+                </div>
                 <aside id="bench-panel">
                     <div class="bench-section" data-side="A">
                         <div class="bench-header">
@@ -204,11 +205,17 @@
                 </aside>
             </main>
         </div>
-        <!-- 선수 개별 분석 (전술판 옆) -->
+        <!-- 선수 개별 분석 (전술판 옆, 확장 시 풀스크린 모달로 morph) -->
+        <div id="pr-backdrop" class="pr-backdrop" aria-hidden="true"></div>
         <section id="player-report-section">
             <div class="pr-header">
                 <h2 class="pr-title">🔍 선수 개별 분석</h2>
-                <div id="pr-year-filter" class="pr-year-filter"></div>
+                <div class="pr-header-right">
+                    <div id="pr-year-filter" class="pr-year-filter"></div>
+                    <button id="pr-expand-btn" class="pr-expand-btn" title="확장 보기 (Esc로 축소)" aria-expanded="false">
+                        <span class="pr-expand-icon">⛶</span>
+                    </button>
+                </div>
             </div>
             <div id="pr-body">
                 <div class="pr-empty">전술판에서 선수를 더블클릭 후 <strong>📋 분석</strong> 버튼을 누르세요</div>
@@ -389,6 +396,26 @@
         </div>
     </div>
 
+    <!-- 경기 라인업 불러오기 모달 -->
+    <div id="match-load-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content load-modal-content match-load-modal-content">
+            <h2>📅 경기 라인업 불러오기</h2>
+            <p class="match-load-hint">날짜를 선택하면 해당일 K1/K2 경기가 나열됩니다. 클릭 시 실제 포메이션과 선발 선수가 전술판에 적용됩니다.</p>
+            <div class="match-load-toolbar">
+                <label for="match-load-date">경기 날짜</label>
+                <input type="date" id="match-load-date" />
+                <label class="match-load-check"><input type="checkbox" id="match-load-has-lineup" checked /> 라인업 있음만</label>
+            </div>
+            <div id="match-load-list" class="saves-list">
+                <p class="empty-msg">날짜를 선택하세요.</p>
+            </div>
+            <div class="modal-actions">
+                <button id="match-load-close" class="modal-btn cancel">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 팀 선택 모달 -->
     <div id="team-modal" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -471,13 +498,13 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=9"></script>
+    <script src="/static/js/app.js?v=15"></script>
 
-    <script src="/static/js/info.js?v=6"></script>
+    <script src="/static/js/info.js?v=7"></script>
     <script src="/static/js/k2heatmap.js?v=1"></script>
-    <script src="/static/js/banner_stats.js?v=1"></script>
+    <script src="/static/js/banner_stats.js?v=2"></script>
     <script src="/static/js/analytics.js?v=1"></script>
-    <script src="/static/js/prediction.js?v=4"></script>
+    <script src="/static/js/prediction.js?v=5"></script>
 
     <!-- 선수 분석 모달 -->
     <div id="player-analytics-modal" class="pa-modal hidden">
@@ -513,7 +540,7 @@
     </div>
 
     <script src="/static/js/player_analytics.js?v=1"></script>
-    <script src="/static/js/player_report.js?v=2"></script>
+    <script src="/static/js/player_report.js?v=3"></script>
     <script src="/static/js/insights.js?v=2"></script>
 </body>
 </html>

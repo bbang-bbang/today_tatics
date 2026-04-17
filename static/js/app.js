@@ -56,10 +56,13 @@
         const container = document.getElementById("canvas-container");
         const toolbar = document.getElementById("left-toolbar");
         const bench = document.getElementById("bench-panel");
+        const hud = document.getElementById("formation-hud");
         const toolbarW = toolbar ? toolbar.offsetWidth : 0;
         const benchW = bench ? bench.offsetWidth : 0;
+        // HUD + gap(10px) 만큼 캔버스 세로 공간 축소
+        const hudH = hud ? hud.offsetHeight + 10 : 0;
         const maxW = container.clientWidth - 32 - toolbarW - benchW;
-        const maxH = container.clientHeight - 32;
+        const maxH = container.clientHeight - 32 - hudH;
         let w = maxW, h = w / PITCH_RATIO;
         if (h > maxH) { h = maxH; w = h * PITCH_RATIO; }
         canvas.width = Math.floor(w);
@@ -620,6 +623,15 @@
         drawLines(); drawPlayers(); drawBalls();
     }
 
+    // 슬롯 라벨 -> 역할(GK/DF/MF/FW) 분류
+    function roleOfLabel(label) {
+        if (label === "GK" || label === "G") return "GK";
+        if (["LB","RB","CB","LWB","RWB","D","D1","D2","D3","D4","D5"].includes(label)) return "DF";
+        if (["LM","RM","CM","CDM","AM","M","M1","M2","M3","M4","M5"].includes(label)) return "MF";
+        if (["ST","LW","RW","F","F1","F2","F3","A1","A2","A3"].includes(label)) return "FW";
+        return null;
+    }
+
     // ── Formation loading ──────────────────────────────────
     function loadFormationSide(side, name) {
         const f = state.formations[name];
@@ -629,15 +641,58 @@
         const positions = side === "A" ? f.teamA : f.teamB;
         const labels = side === "A" ? f.labelsA : f.labelsB;
 
-        // 슬롯 업데이트 (선수는 그대로)
+        // 슬롯 재구성
         state.slots[side] = positions.map((pos, i) => ({ idx: i, team: side, x: pos.x, y: pos.y, label: labels[i] || "" }));
 
-        // 포메이션 슬롯 수보다 많은 on-field 선수는 벤치로
+        // 역할 기반 재배치: 선수(GK/DF/MF/FW)를 슬롯 역할에 매칭하여 x/y 갱신
+        const slotsByRole = { GK: [], DF: [], MF: [], FW: [] };
+        const leftoverSlots = [];
+        for (const s of state.slots[side]) {
+            const r = roleOfLabel(s.label);
+            if (r && slotsByRole[r]) slotsByRole[r].push(s);
+            else leftoverSlots.push(s);
+        }
+
         const onField = state.players.filter(p => p.team === side && p.onField !== false);
-        onField.forEach((p, i) => {
-            if (i >= positions.length) { p.onField = false; p.slotIdx = null; }
-            else if (p.slotIdx == null) { p.slotIdx = i; }
+        const playersByRole = { GK: [], DF: [], MF: [], FW: [] };
+        const unknownPlayers = [];
+        for (const p of onField) {
+            if (playersByRole[p.position]) playersByRole[p.position].push(p);
+            else unknownPlayers.push(p);
+        }
+
+        const placedIds = new Set();
+        function placeGroup(plist, slist) {
+            for (let i = 0; i < plist.length && i < slist.length; i++) {
+                const p = plist[i], s = slist[i];
+                p.x = s.x; p.y = s.y; p.slotIdx = s.idx; p.onField = true;
+                placedIds.add(p.id);
+            }
+        }
+        ["GK","DF","MF","FW"].forEach(r => placeGroup(playersByRole[r], slotsByRole[r]));
+
+        // 역할 불일치(예: 4-4-2→4-3-3 시 MF 1명 여유, FW 1명 부족) 보정:
+        // 아직 배치되지 않은 선수를 남은 슬롯에 순서대로 투입
+        const usedSlotIdxs = new Set(
+            onField.filter(p => placedIds.has(p.id)).map(p => p.slotIdx)
+        );
+        const openSlots = state.slots[side].filter(s => !usedSlotIdxs.has(s.idx));
+        const orphanPlayers = [];
+        ["GK","DF","MF","FW"].forEach(r => {
+            const overflow = playersByRole[r].slice(slotsByRole[r].length);
+            orphanPlayers.push(...overflow);
         });
+        orphanPlayers.push(...unknownPlayers);
+        for (let i = 0; i < orphanPlayers.length; i++) {
+            const p = orphanPlayers[i];
+            const s = openSlots[i];
+            if (s) {
+                p.x = s.x; p.y = s.y; p.slotIdx = s.idx; p.onField = true;
+            } else {
+                // 슬롯 부족: 벤치로
+                p.onField = false; p.slotIdx = null;
+            }
+        }
 
         render();
         renderBench();
@@ -1227,7 +1282,10 @@
     // ── 커스텀 포메이션 저장 ──────────────────────────────
     function refreshFormationSelects() {
         const builtIn = ["4-4-2","4-3-3","3-5-2","4-2-3-1","4-1-4-1","3-4-3","5-3-2","5-4-1"];
-        const customs = Object.keys(state.formations).filter(k => !builtIn.includes(k)).sort();
+        // _fromMatch 플래그가 붙은 포메이션(경기에서 로드된 임시 포메이션)은 "내 포메이션" 그룹에서 제외
+        const customs = Object.keys(state.formations)
+            .filter(k => !builtIn.includes(k) && !state.formations[k]?._fromMatch)
+            .sort();
         document.querySelectorAll(".formation-select-team").forEach(sel => {
             const cur = sel.value;
             // 기존 커스텀 옵션 제거
@@ -1834,6 +1892,209 @@
     }
     document.getElementById("btn-load").addEventListener("click", openLoadModal);
 
+    // ── 경기 라인업 불러오기 (SofaScore) ─────────────────
+    const matchLoadModal  = document.getElementById("match-load-modal");
+    const matchLoadList   = document.getElementById("match-load-list");
+    const matchLoadDate   = document.getElementById("match-load-date");
+    const matchLoadClose  = document.getElementById("match-load-close");
+    const matchLoadCheck  = document.getElementById("match-load-has-lineup");
+    function closeMatchLoadModal() { matchLoadModal.classList.add("hidden"); }
+    matchLoadModal.querySelector(".modal-backdrop").addEventListener("click", closeMatchLoadModal);
+    matchLoadClose.addEventListener("click", closeMatchLoadModal);
+
+    async function openMatchLoadModal() {
+        matchLoadModal.classList.remove("hidden");
+        if (!matchLoadDate.value) {
+            // 기본: 라인업이 있는 가장 최근 경기일
+            try {
+                const r = await fetch("/api/matches-latest-lineup-date");
+                const d = await r.json();
+                if (d && d.date) {
+                    matchLoadDate.value = d.date;
+                } else {
+                    const t = new Date(); const p = n => String(n).padStart(2, "0");
+                    matchLoadDate.value = `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}`;
+                }
+            } catch (e) {
+                const t = new Date(); const p = n => String(n).padStart(2, "0");
+                matchLoadDate.value = `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}`;
+            }
+        }
+        refreshMatchList();
+    }
+
+    async function refreshMatchList() {
+        const date = matchLoadDate.value;
+        const onlyLineup = matchLoadCheck.checked ? "&has_lineup=1" : "";
+        matchLoadList.innerHTML = '<p class="empty-msg">불러오는 중...</p>';
+        if (!date) { matchLoadList.innerHTML = '<p class="empty-msg">날짜를 선택하세요.</p>'; return; }
+        try {
+            const r = await fetch(`/api/matches-by-date?date=${date}${onlyLineup}`);
+            const matches = await r.json();
+            if (!Array.isArray(matches) || matches.length === 0) {
+                matchLoadList.innerHTML = '<p class="empty-msg">해당 날짜에 경기가 없습니다.</p>';
+                return;
+            }
+            matchLoadList.innerHTML = "";
+            for (const m of matches) {
+                const item = document.createElement("div");
+                item.className = "match-item" + (m.has_lineup ? "" : " no-lineup");
+                item.dataset.eventId = m.event_id;
+                item.dataset.hasLineup = m.has_lineup ? "1" : "0";
+
+                const emblem = (slug, emblem) => emblem ? `<img src="/static/img/emblems/${emblem}" alt="${escapeHtml(slug||'')}" onerror="this.style.display='none'">` : "";
+                const homeScore = (m.home_score != null) ? m.home_score : "-";
+                const awayScore = (m.away_score != null) ? m.away_score : "-";
+                const scoreCls = (m.home_score == null) ? "no-score" : "";
+
+                item.innerHTML = `
+                    <div>
+                        <div class="match-item-kickoff">${m.kickoff || ""}</div>
+                        <div class="match-item-league">${m.league}</div>
+                    </div>
+                    <div class="match-item-team home">
+                        ${emblem(m.home.slug, m.home.emblem)}
+                        <span class="match-item-team-name">${escapeHtml(m.home.short || m.home.name || "")}</span>
+                    </div>
+                    <div class="match-item-team away">
+                        <span class="match-item-team-name">${escapeHtml(m.away.short || m.away.name || "")}</span>
+                        ${emblem(m.away.slug, m.away.emblem)}
+                    </div>
+                    <div class="match-item-score ${scoreCls}">${homeScore} : ${awayScore}</div>
+                    ${m.has_lineup ? "" : '<div class="match-item-nolu">라인업 데이터 없음</div>'}
+                `;
+                matchLoadList.appendChild(item);
+            }
+        } catch (e) {
+            matchLoadList.innerHTML = '<p class="empty-msg">조회 중 오류가 발생했습니다.</p>';
+        }
+    }
+
+    matchLoadDate.addEventListener("change", refreshMatchList);
+    matchLoadCheck.addEventListener("change", refreshMatchList);
+    matchLoadList.addEventListener("click", async (e) => {
+        const item = e.target.closest(".match-item");
+        if (!item) return;
+        if (item.dataset.hasLineup !== "1") { showToast("이 경기는 라인업 데이터가 없습니다."); return; }
+        const eid = item.dataset.eventId;
+        matchLoadList.style.opacity = "0.5";
+        try {
+            const r = await fetch(`/api/match-lineup?event_id=${eid}`);
+            const data = await r.json();
+            if (!data.ready) { showToast("라인업을 불러올 수 없습니다: " + (data.reason || "")); return; }
+            applyMatchLineup(data);
+            closeMatchLoadModal();
+            showToast(`${data.home.short} vs ${data.away.short} (${data.date}) 적용 완료`);
+        } catch (err) {
+            showToast("라인업 적용 실패");
+        } finally {
+            matchLoadList.style.opacity = "";
+        }
+    });
+
+    function applyMatchLineup(data) {
+        // 1) 팀 세팅 (TEAMS 리스트에서 slug 매칭; 없으면 최소 객체)
+        function resolveTeam(sideData) {
+            if (!sideData) return null;
+            if (sideData.slug && state.teams.length) {
+                const t = state.teams.find(x => x.id === sideData.slug);
+                if (t) return t;
+            }
+            // fallback: K3 등 TEAMS에 없는 팀
+            return {
+                id: sideData.slug || `ss_${sideData.team_id}`,
+                name: sideData.name, short: sideData.short,
+                league: "", primary: "#888", secondary: "#ccc", accent: "#fff",
+                emblem: sideData.emblem || "",
+            };
+        }
+        state.teamA = resolveTeam(data.home);
+        state.teamB = resolveTeam(data.away);
+        state.kitA = "home"; state.kitB = "away";
+        document.querySelectorAll('.kit-toggle-btn').forEach(b => {
+            b.classList.toggle("active",
+                (b.dataset.side === "A" && b.dataset.kit === "home") ||
+                (b.dataset.side === "B" && b.dataset.kit === "away"));
+        });
+
+        // 2) 포메이션 세팅 (슬롯 좌표는 서버가 준 것을 그대로)
+        state.formationA = data.home.formation;
+        state.formationB = data.away.formation;
+        state.slots.A = data.home.slots.map(s => ({ idx: s.slot_order, team: "A", x: s.x, y: s.y, label: s.label || "" }));
+        state.slots.B = data.away.slots.map(s => ({ idx: s.slot_order, team: "B", x: s.x, y: s.y, label: s.label || "" }));
+
+        // 포메이션 드롭다운에도 동기화 (미지 포메이션이면 옵션 동적 추가)
+        document.querySelectorAll(".formation-select-team").forEach(sel => {
+            const side = sel.dataset.side;
+            const name = side === "A" ? state.formationA : state.formationB;
+            if (name && !Array.from(sel.options).some(o => o.value === name)) {
+                const opt = document.createElement("option");
+                opt.value = name; opt.textContent = name;
+                sel.appendChild(opt);
+            }
+            sel.value = name;
+        });
+        // state.formations 에 런타임 추가 (후속 로드 재사용용).
+        // _fromMatch 플래그로 표시하여 "내 포메이션" 그룹에 섞이지 않게 한다.
+        [["A", data.home], ["B", data.away]].forEach(([side, sd]) => {
+            if (!sd.formation) return;
+            if (!state.formations[sd.formation]) {
+                state.formations[sd.formation] = { teamA: [], teamB: [], labelsA: [], labelsB: [], _fromMatch: true };
+            }
+            const f = state.formations[sd.formation];
+            if (side === "A") {
+                f.teamA  = sd.slots.map(s => ({ x: s.x, y: s.y }));
+                f.labelsA = sd.slots.map(s => s.label || "");
+            } else {
+                f.teamB  = sd.slots.map(s => ({ x: s.x, y: s.y }));
+                f.labelsB = sd.slots.map(s => s.label || "");
+            }
+        });
+
+        // 3) 선수 목록 구성 (선발 → 슬롯 배치, 교체 → 벤치)
+        const POS_SS_TO_APP = { G: "GK", D: "DF", M: "MF", F: "FW" };
+        state.players = [];
+        function pushSide(side, sd) {
+            for (const p of (sd.starters || [])) {
+                const slot = state.slots[side].find(s => s.idx === p.slot_order) || state.slots[side][0];
+                state.players.push({
+                    id: state.nextId++, team: side,
+                    x: slot.x, y: slot.y, onField: true, slotIdx: slot.idx,
+                    name: p.name || p.name_raw || "", number: p.shirt_number || null,
+                    position: POS_SS_TO_APP[p.position] || "",
+                    height: p.height || null, weight: null, dob: "",
+                    playerId: p.player_id,
+                });
+            }
+            for (const p of (sd.subs || [])) {
+                state.players.push({
+                    id: state.nextId++, team: side,
+                    x: 0, y: 0, onField: false, slotIdx: null,
+                    name: p.name || p.name_raw || "", number: p.shirt_number || null,
+                    position: POS_SS_TO_APP[p.position] || "",
+                    height: p.height || null, weight: null, dob: "",
+                    playerId: p.player_id,
+                });
+            }
+        }
+        pushSide("A", data.home);
+        pushSide("B", data.away);
+
+        // 4) 이전 그리기/애니메이션/공 제거 (깨끗한 보드로)
+        state.lines = []; state.animations = []; state.balls = [];
+
+        updateBanner(); updateLegend(); render(); renderBench();
+    }
+
+    document.getElementById("btn-match-load").addEventListener("click", openMatchLoadModal);
+
+    // 외부(prediction.js 등)에서 경기 라인업 적용 요청 수신
+    document.addEventListener("matchLineupLoaded", (e) => {
+        if (!e.detail || !e.detail.ready) return;
+        applyMatchLineup(e.detail);
+        showToast(`${e.detail.home.short} vs ${e.detail.away.short} (${e.detail.date}) 전술판 적용`);
+    });
+
     // ── Team selection ────────────────────────────────────
     const teamModal = document.getElementById("team-modal");
     const teamModalTitle = document.getElementById("team-modal-title");
@@ -1927,57 +2188,40 @@
         render(); renderBench();
     }
 
-    function setBannerBadge(badgeEl, team, fallbackColor, fallbackLetter) {
+    // HUD의 팀 칩(엠블럼 + 이름)도 동기화
+    function setHudChip(side, team, fallbackLetter) {
+        const badgeEl = document.getElementById("fhud-badge-" + side.toLowerCase());
+        const nameEl  = document.getElementById("fhud-name-"  + side.toLowerCase());
+        if (!badgeEl || !nameEl) return;
         badgeEl.innerHTML = "";
         if (team) {
-            badgeEl.style.background = "#1a1a2e"; badgeEl.style.borderColor = team.secondary;
             if (team.emblem) {
-                const img = document.createElement("img"); img.src = `/static/img/emblems/${team.emblem}`; img.alt = team.short;
-                Object.assign(img.style, { width: "85%", height: "85%", objectFit: "contain" });
+                const img = document.createElement("img");
+                img.src = `/static/img/emblems/${team.emblem}`;
+                img.alt = team.short || "";
+                img.onerror = () => {
+                    img.remove();
+                    badgeEl.style.background = `linear-gradient(135deg,${team.primary || "#333"} 60%,${team.accent || "#888"} 100%)`;
+                    badgeEl.innerHTML = `<span class="fhud-chip-letter">${(team.short || "?")[0]}</span>`;
+                };
                 badgeEl.appendChild(img);
+                badgeEl.style.background = "#1a1a2e";
             } else {
-                const txt = document.createElement("span"); txt.className = "badge-letter"; txt.textContent = team.short; txt.style.fontSize = "0.85rem";
-                badgeEl.style.background = `linear-gradient(135deg,${team.primary} 60%,${team.accent} 100%)`;
-                badgeEl.appendChild(txt);
+                badgeEl.style.background = `linear-gradient(135deg,${team.primary || "#333"} 60%,${team.accent || "#888"} 100%)`;
+                badgeEl.innerHTML = `<span class="fhud-chip-letter">${(team.short || "?")[0]}</span>`;
             }
+            nameEl.textContent = team.short || team.name || "";
         } else {
-            badgeEl.style.background = fallbackColor; badgeEl.style.borderColor = "rgba(255,255,255,0.2)";
-            badgeEl.innerHTML = `<span class="badge-letter">${fallbackLetter}</span>`;
+            // 미선택: 기본 색상 복귀 (CSS의 :not-selected 스타일)
+            badgeEl.style.background = "";  // CSS 기본값 사용
+            badgeEl.innerHTML = `<span class="fhud-chip-letter">${fallbackLetter}</span>`;
+            nameEl.textContent = side === "A" ? "HOME" : "AWAY";
         }
     }
 
     function updateBanner() {
-        setBannerBadge(document.getElementById("badge-a"), state.teamA, DEFAULT_A_COLOR, "H");
-        document.getElementById("name-a").textContent = state.teamA ? state.teamA.name : "HOME";
-        setBannerBadge(document.getElementById("badge-b"), state.teamB, DEFAULT_B_COLOR, "A");
-        document.getElementById("name-b").textContent = state.teamB ? state.teamB.name : "AWAY";
-        updateTeamSub("A", state.teamA);
-        updateTeamSub("B", state.teamB);
-    }
-
-    // ── 팀 배너 부가 정보 (시즌 + 최근 폼) ─────────────
-    function updateTeamSub(side, team) {
-        const el = document.getElementById("sub-" + side.toLowerCase());
-        if (!el) return;
-        if (!team) { el.innerHTML = ""; return; }
-
-        // 시즌 연도 + 리그 배지
-        const year = new Date().getFullYear();
-        el.innerHTML = `<span class="sub-league">${team.league}</span><span class="sub-season">${year}</span><span class="sub-form" id="form-${side.toLowerCase()}"></span>`;
-
-        // 최근 폼 비동기 로드
-        fetch(`/api/results?teamId=${team.id}`)
-            .then(r => r.json())
-            .then(results => {
-                const formEl = document.getElementById("form-" + side.toLowerCase());
-                if (!formEl || !results.length) return;
-                const recent = results.slice(0, 5);
-                formEl.innerHTML = recent.map(r => {
-                    const cls = r.result === "W" ? "fb-w" : r.result === "D" ? "fb-d" : "fb-l";
-                    return `<span class="fb ${cls}" title="${r.home ? '홈' : '원정'} vs ${r.opponent} ${r.score}">${r.result}</span>`;
-                }).join("");
-            })
-            .catch(() => {});
+        setHudChip("A", state.teamA, "H");
+        setHudChip("B", state.teamB, "A");
     }
 
     function updateLegend() {
@@ -1995,8 +2239,6 @@
     teamModalClose.addEventListener("click", closeTeamModal);
     leagueTabs.forEach((tab) => tab.addEventListener("click", () => { leagueTabs.forEach((t) => t.classList.remove("active")); tab.classList.add("active"); currentLeague = tab.dataset.league; renderTeamGrid(); }));
     document.querySelectorAll(".team-pick-btn").forEach((btn) => btn.addEventListener("click", () => openTeamModal(btn.dataset.side)));
-    document.getElementById("slot-a").addEventListener("click", (e) => { if (!e.target.closest(".team-pick-btn") && !e.target.closest(".formation-select-team") && !e.target.closest(".kit-toggle-btn")) openTeamModal("A"); });
-    document.getElementById("slot-b").addEventListener("click", (e) => { if (!e.target.closest(".team-pick-btn") && !e.target.closest(".formation-select-team") && !e.target.closest(".kit-toggle-btn")) openTeamModal("B"); });
 
     // ── HOME / AWAY kit toggle ──────────────────────────
     document.querySelectorAll(".kit-toggle-btn").forEach((btn) => {
