@@ -4,6 +4,240 @@
 
 ---
 
+## 2026-04-21 | JSON → SQLite events 동기화 (`sync_results_to_events.py`)
+
+### 배경
+- `events` 테이블: SofaScore 크롤러 기반, 마지막 수집 4/12 → 4/18-19 결과 미반영
+- 예측 모델(avg_gf, avg_ga, 최근 5경기 폼) 전부 events 테이블 기반 → 오래된 데이터로 계산
+- `kleague_results_2026.json`은 K리그 공식 API 파이프라인으로 events 테이블과 별개
+
+### 해결: `crawlers/sync_results_to_events.py` 신규 작성
+- 29팀 슬러그 → (sofascore_id, tournament_id) 매핑
+- 날짜+홈/어웨이 조합으로 중복 체크 (±12시간)
+- synthetic ID: `90000000 + hash % 1000000` (실제 SofaScore ID와 충돌 없음)
+- `INSERT OR IGNORE`: 기존 SofaScore 데이터 보호
+
+### 실행 결과
+삽입 **16경기** / 중복 스킵 97경기 / 전체 113경기 (4/18-19 14경기 포함)
+
+---
+
+## 2026-04-21 21:00 | K2 탭 클릭 시 빈 화면 버그 수정
+
+### 변경 파일
+- `static/js/prediction.js` — K2 lazy loading 추가 (`k2Loaded` 플래그), 탭 클릭 시 K2 미로드 상태면 `loadSchedule()` 재시도
+
+### 원인
+- K1은 탭 클릭 시 `loadScheduleK1()` lazy loading → 항상 동작
+- K2는 페이지 로드 시 `loadSchedule()` 1회만 시도 → 실패 시 탭 전환해도 재로드 없음
+- `.catch(() => {})` 가 에러를 삼켜 빈 화면으로 조용히 실패
+
+### 수정
+- `k2Loaded` 플래그 추가, 실패 시 `false` 복원
+- 탭 클릭 핸들러에 `if (league === "k2" && !k2Loaded) loadSchedule()` 추가
+
+---
+
+## 2026-04-21 20:30 | 팀 선택 시 화면 점프 버그 수정
+
+### 변경 파일
+- `static/js/prediction.js` — `teamsSelected` 이벤트 핸들러 및 경기 카드 클릭 핸들러에서 `scrollIntoView` 2곳 제거
+
+### 원인
+- `info.js`가 HOME/AWAY 팀 선택 시 `teamsSelected` 이벤트 발생 → `prediction.js`에서 `section.scrollIntoView({ behavior: "smooth", block: "start" })` 호출로 강제 스크롤
+- 예측 섹션이 전술판 바로 위로 이동한 이후 scrollIntoView가 불필요해짐
+
+---
+
+## 2026-04-21 20:00 | 레이아웃 구조 최종 재설계
+
+### 변경 파일
+- `templates/index.html` — canvas-col 제거, main-row 추가, prediction-section을 board-report-wrap 최상단으로
+- `static/css/style.css` — board-report-wrap을 flex-column으로 변경, main-row(flex-row) 추가
+
+### 구조
+```
+board-report-wrap (flex-column)
+├── prediction-section  ← 전체 너비, 예측 시 노출
+└── main-row (flex-row)
+    ├── main-area       ← 전술판
+    └── player-report-section ← 선수 개별 분석 (전술판 오른쪽)
+```
+
+---
+
+## 2026-04-21 19:30 | 예측 보고서 레이아웃 구조 수정
+
+### 변경 파일
+- `templates/index.html` — `#canvas-col` 래퍼 추가, prediction-section을 canvas-col 내 main-area 위로 배치
+- `static/css/style.css` — `#canvas-col { flex:1; flex-direction:column }` 추가
+
+### 내용
+- `#main-area`가 `flex-row`라 prediction-section이 캔버스 옆으로 밀리던 레이아웃 깨짐 수정
+- `#canvas-col`(flex-column) 래퍼로 prediction-section + main-area를 수직 배치
+- board-report-wrap의 row 구조(canvas-col + player-report-section) 유지
+
+---
+
+## 2026-04-21 19:00 | 예측 보고서 섹션 위치 이동
+
+### 변경 파일
+- `templates/index.html` — `#prediction-section`을 `#board-report-wrap` 외부에서 `#main-area` 내부, `#canvas-container` 바로 위로 이동
+
+### 내용
+- 예측 보고서가 전술판과 분리된 위치(헤더 아래)에 렌더링되던 문제 해결
+- `#main-area` 내부로 이동하여 전술판 바로 위에 표시되도록 구조 변경
+
+---
+
+## 2026-04-21 | B. 경기 배너 카드화 구현
+
+### 변경 파일
+- `static/js/prediction.js` — `SLUG_COLOR` 맵(29팀) 추가, `renderRoundGames()` 카드 HTML로 교체
+- `static/css/style.css` — `.kmc` 카드 시스템 추가 (v12), `.ksb-list` flex-wrap 전환
+- `templates/index.html` — CSS 캐시 v11 → v12
+
+### 카드 구조
+- 홈/어웨이 양측 팀 컬러 그라디언트 배경 (primary 색상 33% 투명도)
+- 팀 엠블럼 이미지 + 팀 short 이름
+- 중앙: 스코어(결과) / 시간(예정) + 날짜 + 태그(예측→/결과)
+- hover: translateY(-2px) + shadow / active: scale(0.98)
+- 모바일(≤640px): 1열 전환
+
+### E와의 시너지
+- 배너 카드 팀 컬러가 `--team-a/b` CSS 변수와 동일한 색상 체계 사용
+
+---
+
+## 2026-04-21 | E. 팀컬러 다이나믹 — 실 앱 구현
+
+### 변경 파일
+- `static/js/app.js` — `updateTeamColors()` 함수 추가, `updateBanner()` 내부에서 자동 호출
+- `static/css/style.css` — `#toolbar` 트랜지션, `#toolbar-team-strip` 스트립 스타일 추가 (v11)
+- `templates/index.html` — CSS 캐시 버전 v10 → v11
+
+### 동작
+- 팀 선택 시 `--team-a` / `--team-b` CSS 변수 자동 갱신
+- `#toolbar` 배경이 홈/어웨이 팀 컬러 그라디언트(투명도 25%)로 전환 (0.4s ease)
+- `#toolbar-team-strip` — 툴바 하단 3px 팀 컬러 스트립 (홈 left 50% / 어웨이 right 50%)
+- 세이브 불러오기·라인업 자동 적용 시에도 동일하게 반영 (모든 경로가 `updateBanner()` 경유)
+
+---
+
+## 2026-04-21 | UI 디자인 프리뷰 생성 (`design_preview.html`)
+
+### 내용
+- `static/design_preview.html` 신규 생성 (서버 직접 서빙)
+- 5개 디자인 컨셉 탭 네비게이션 (A: 헤더 그라디언트, B: 경기 배너, C: 툴바, D: 사이드시트, E: 팀컬러 다이나믹)
+- E탭 인터랙티브: 홈 6팀 × 원정 6팀 버튼 클릭 시 헤더/배지/버튼 색상 실시간 변경
+- CSS variable 시스템 + Pretendard 폰트 동일 적용
+- 접속 URL: `http://127.0.0.1:5000/static/design_preview.html`
+- 추천 구현 순서: E → B → C → A → D
+
+---
+
+## 2026-04-21 | 예측 모델 가중치 재튜닝 (실측 기반)
+
+### 배경
+- 4/18-19 경기 결과 수집 후 예측 vs 실제 비교 → 1X2 적중률 29%(4/14)
+- 구조적 문제 3가지 발견: 홈어드밴티지 과대/방향 오류, 무승부 과소, xg 혼용 왜곡
+
+### 변경 내용 (`main.py` `_LEAGUE_CONSTANTS`)
+| 항목 | 수정 전 | 수정 후 | 근거 |
+|------|--------|--------|------|
+| K1 `home_adv` | 1.15 | **1.07** | 실측 홈득점/원정득점 = 1.07x |
+| K2 `home_adv` | 1.15 | **0.93** | 실측 K2 원정 우위 (홈 34% vs 원정 38%) |
+| K1 `draw_boost` | 0.20 | **0.35** | K1 실제 무승부율 39% 반영 |
+| K2 `draw_boost` | 0.00 | 유지 | K2 실측 29% — 현행 유지 |
+
+### 검증 결과
+| 지표 | 수정 전 | 수정 후 |
+|------|--------|--------|
+| 1X2 적중 | 4/14 (29%) | **6/14 (43%)** |
+| TOP1 정확 스코어 | 4/14 (29%) | 3/14 (21%) |
+| TOP3 포함 | 7/14 (50%) | **8/14 (57%)** |
+| K1 1X2 | 2/6 (33%) | **3/6 (50%)** |
+| K2 TOP3 | 5/8 (62%) | **6/8 (75%)** |
+
+---
+
+## 2026-04-21 | 4/18-19 경기 데이터 수집 및 예측 정확도 분석
+
+### 변경 내용
+- `crawlers/update_results_2026.py` 실행 → 30경기 추가 (총 226건)
+- K리그 공식 API 기반, 4/18-19 경기 결과 포함
+
+### 분석 결과 요약
+- 4/18-19 K1 6경기 + K2 8경기 = 14경기 예측 비교
+- 수정 전 1X2: 29%, TOP3: 50%
+- 발견된 버그: K2 홈어드밴티지 방향 역전, 포항 λ 2.88 왜곡(xg/actual 혼용)
+
+---
+
+## 2026-04-20 | UI 슈퍼파워 전면 적용 (H1~H3 + M1~M3)
+
+### 배경
+- P6 UI전문가 관점 도입 후 PM 컨펌 A (전체 적용)
+
+### 변경 내용
+- **H1 — CSS 변수 시스템** (`style.css`)
+  - `:root` 블록 신규: `--bg-dark/surface/elevated/deep/card`, `--accent/dim/glow`, `--text-primary/secondary/muted/faint`, `--border-default/subtle`, `--team-a/b`, `--color-win/draw/loss`, `--font-base`, `--trans-fast/base/slow`
+  - replace_all 7회: `#1a1a2e`, `#16213e`, `#0f3460`, `#e94560`, `#e0e0e0`, `#c0c0d0`, `#a0a0b0` → 전부 CSS 변수로 대체
+  - 순환 참조 버그 즉시 수정 (`:root` 내부 hex 리터럴 복원)
+- **H2 — 버튼 active/hover 구분** (`style.css`)
+  - hover: `rgba(233,69,96,0.1)` 배경 + accent 보더
+  - active: `rgba(233,69,96,0.18)` 배경 + `inset 3px 0 0 var(--accent)` 왼쪽 바 + `font-weight:700`
+  - `:active` 클릭 피드백: `scale(0.97)` 추가
+- **H3 — 로딩 피드백** (`style.css`)
+  - `.skeleton` shimmer 애니메이션 (200% gradient sweep)
+  - `.loading-pulse` opacity 펄스
+  - `.spinner` 인라인 스피너 (16px, accent border-top)
+- **M1 — 글로벌 focus 링** (`style.css`)
+  - `:focus { outline: none }` + `:focus-visible { outline: 2px solid var(--accent) }` 전역 적용
+- **M2 — 줄간격** (`style.css`)
+  - `body { line-height: 1.5 }` 추가
+- **M3 — 한국어 폰트** (`index.html`, `style.css`)
+  - Pretendard CDN 추가 (`orioncactus/pretendard@v1.3.9`)
+  - `--font-base: 'Pretendard', 'Noto Sans KR', 'Segoe UI', ...` 변수화
+  - `body { font-family: var(--font-base); -webkit-font-smoothing: antialiased }` 적용
+  - CSS 버전 v9 → v10 캐시 버스팅
+
+---
+
+## 2026-04-20 | CLAUDE.md — UI 전문가(P6) 슈퍼파워 추가
+
+### 배경
+- 멀티 페르소나 5인 프레임워크에 UI/UX 전문가 관점이 누락되어 있었음
+- 웹 UI 디자인 역할을 슈퍼파워 수준으로 공식화 요청
+
+### 변경 내용 (`CLAUDE.md`)
+- **페르소나 Superpower**: "프로급 UI 디자인 감각 × UI 아키텍트" 추가
+- **Superpower 원칙 6번 신규**: UI 슈퍼파워 원칙 (시각 계층/컬러/타이포/인터랙션)
+- **5인 → 6인 프레임워크**: P6 UI/UX 전문가 관점 추가 (핵심 질문: "디자인이 기능을 아름답게 전달하는가?")
+- **Ralph Loop**: P6 디자인 품질 체크 추가, "6인 전원 PASS" 조건으로 강화
+- **@ui 커맨드**: 시각 계층·컬러 시스템·WCAG AA·접근성 포함 슈퍼파워 모드로 확장
+- **UI 슈퍼파워 프레임워크 섹션 신규**: U1~U7 원칙, 8항목 체크리스트, P6 핵심 질문
+- **자율 판단 원칙**: P6 컬러 시스템/전역 CSS 변경 Yellow → Red 오버라이드 추가
+- **코드 리뷰**: 항목 9 "6인 관점 체크(P6 포함)"로 업데이트
+- **절대 금지**: CSS 변수 없는 팀 컬러 하드코딩·WCAG AA 위반·인터랙션 미정의·크로스 브라우저 미확인 추가
+
+---
+
+## 2026-04-18 | 부상정보 제거 (예측 UI + 예측 계산)
+
+### 배경
+- 부상 데이터(player_status.json)가 정확하지 않다는 판단 → 예측 섹션에서 전면 제거
+
+### 변경 내용
+- `main.py`: `injury_impact()` 함수 삭제, 부상 보정 공격계수 제거(`h_atk_adj = h_atk`), 예측 응답에서 `injuries` 필드 제거, 예상 라인업 API에서 결장 선수 cross-ref 로직 제거
+- `prediction.js`: `loadPlayerStatus()`, `statusBadgeHtml()`, `injuryCardHtml()` 삭제, 라인업 카드 부상 아이콘/취소선/결장목록 제거, Promise.all에서 playerStatus fetch 제거
+- `style.css`: `.pred-status*`, `.pii-*`, `.pred-injury-impact`, `.lu-injured`, `.lu-inj-icon`, `.lu-out*` 관련 CSS 전체 제거
+
+### 유지된 것
+- `app.js` 전술판 수동 상태 토글(부상/정지/의문 표시)은 사용자 직접 입력이므로 유지
+
+---
+
 ## 2026-04-15 | 팀 인사이트 다양화 (notes 확장)
 
 ### 배경

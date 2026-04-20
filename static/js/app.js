@@ -2222,6 +2222,39 @@
     function updateBanner() {
         setHudChip("A", state.teamA, "H");
         setHudChip("B", state.teamB, "A");
+        updateTeamColors();
+    }
+
+    function updateTeamColors() {
+        const root = document.documentElement;
+        const colorA = state.teamA ? (state.teamA.primary || "#2563eb") : "#2563eb";
+        const colorB = state.teamB ? (state.teamB.primary || "#dc2626") : "#dc2626";
+        root.style.setProperty("--team-a", colorA);
+        root.style.setProperty("--team-b", colorB);
+
+        const toolbar = document.getElementById("toolbar");
+        if (!toolbar) return;
+
+        if (state.teamA || state.teamB) {
+            const gradA = colorA + "40";
+            const gradB = colorB + "40";
+            toolbar.style.background = `linear-gradient(135deg, ${gradA} 0%, var(--bg-surface) 40%, var(--bg-surface) 60%, ${gradB} 100%)`;
+        } else {
+            toolbar.style.background = "";
+        }
+
+        let strip = document.getElementById("toolbar-team-strip");
+        if (!strip) {
+            strip = document.createElement("div");
+            strip.id = "toolbar-team-strip";
+            toolbar.appendChild(strip);
+        }
+        if (state.teamA || state.teamB) {
+            strip.style.background = `linear-gradient(90deg, ${colorA} 50%, ${colorB} 50%)`;
+            strip.style.display = "";
+        } else {
+            strip.style.display = "none";
+        }
     }
 
     function updateLegend() {

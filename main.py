@@ -873,20 +873,20 @@ def get_team_analytics():
 
 _POISSON_MAX_GOALS = 5  # 스코어 매트릭스 최대 (0~5골)
 
-# 리그별 포아송 모델 상수 (2026 백테스트 그리드 서치로 튜닝)
-# - K2: xG 커버 86%, 홈 약간 우위, 무승부 30% → draw_boost 불필요
-# - K1: xG 자체 모델(shotmap lookup) 커버 100%, 무승부 37% → draw_boost 0.20
+# 리그별 포아송 모델 상수 (2026 실측 기반 재튜닝 — 2026-04-21)
+# 실측 (41경기 K1 / 56경기 K2):
+#   K1: 홈승 29% / 무 39% / 원정 32%  →  home_adv 1.07x, draw_boost 0.35
+#   K2: 홈승 34% / 무 29% / 원정 38%  →  home_adv 0.93x (원정 우위), draw_boost 0.00
 # draw_boost = argmax outcome 결정 시 draw 확률에 더해 줄 오프셋 (0~1 스케일)
 _LEAGUE_CONSTANTS = {
-    410: {"home_adv": 1.15, "away_adj": 0.90, "draw_boost": 0.20},  # K1 (xG 재튜닝)
-    777: {"home_adv": 1.15, "away_adj": 0.90, "draw_boost": 0.00},  # K2
+    410: {"home_adv": 1.07, "away_adj": 0.90, "draw_boost": 0.35},  # K1 실측 재튜닝
+    777: {"home_adv": 0.93, "away_adj": 0.90, "draw_boost": 0.00},  # K2 원정 우위 반영
 }
-_DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.15, "away_adj": 0.90, "draw_boost": 0.10}
+_DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0.10}
 
 # 레거시 상수 (기존 코드 호환용, 내부에서는 _LEAGUE_CONSTANTS 사용)
 _HOME_ADVANTAGE    = 1.15
 _AWAY_ADJUSTMENT   = 0.90
-_INJURY_LOSS_CAP   = 0.20  # 부상자로 인한 팀 득점력 감소 최대치
 
 
 def _league_coefs(tid_filter):
@@ -1558,78 +1558,8 @@ def get_match_prediction():
     a_atk = (away_xg["xg_for"]    / league_avg) if league_avg else 1.0
     a_def = (away_xg["xg_against"] / league_avg) if league_avg else 1.0
 
-    # 부상자 영향: 해당 팀 부상 선수들의 시즌 xG/골 합 → 공격력 감소
-    def injury_impact(ss_id, app_team_id):
-        """부상 선수들의 시즌 득점 기여분을 팀 공격력에서 차감 (max 20%)"""
-        try:
-            status_path = os.path.join(BASE_DIR, "data", "player_status.json")
-            if not os.path.exists(status_path):
-                return {"players": [], "xg_loss_pct": 0.0}
-            with open(status_path, "r", encoding="utf-8") as f:
-                statuses = json.load(f)
-        except Exception:
-            return {"players": [], "xg_loss_pct": 0.0}
-
-        # 해당 팀의 결장 예정(부상/정지/의문) 선수만
-        out_entries = [
-            s for s in statuses.values()
-            if s.get("teamId") == app_team_id
-            and s.get("status") in ("injured", "suspended", "doubtful")
-        ]
-        if not out_entries:
-            return {"players": [], "xg_loss_pct": 0.0}
-
-        # 시즌 팀 총 xG(=attack 분모)
-        team_season_xg = home_xg["xg_for"] if ss_id == hid else away_xg["xg_for"]
-        team_games     = home_xg["games"]  if ss_id == hid else away_xg["games"]
-        team_total_xg  = team_season_xg * team_games or 1.0
-
-        impacted = []
-        total_lost_xg = 0.0
-        for s in out_entries:
-            pid = s.get("playerId")
-            if not pid:
-                continue
-            try:
-                pid_int = int(pid)
-            except (ValueError, TypeError):
-                continue
-            cur.execute("""
-                SELECT COALESCE(SUM(mps.expected_goals), 0), COALESCE(SUM(mps.goals), 0),
-                       COALESCE(SUM(mps.assists), 0), COUNT(*)
-                FROM match_player_stats mps JOIN events e ON mps.event_id=e.id
-                WHERE mps.player_id=? AND e.tournament_id=?
-                  AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
-            """, (pid_int, tid_filter, now_year))
-            r = cur.fetchone()
-            xg, g, a, gms = (float(r[0] or 0), r[1] or 0, r[2] or 0, r[3] or 0) if r else (0, 0, 0, 0)
-            # xG 데이터 없으면 실제 골로 대체
-            lost = xg if xg > 0 else float(g)
-            if lost <= 0 and gms == 0:
-                continue
-            total_lost_xg += lost
-            impacted.append({
-                "name": s.get("name", ""),
-                "status": s.get("status"),
-                "goals": int(g),
-                "assists": int(a),
-                "xg": round(xg, 2),
-                "return_date": s.get("returnDate", ""),
-            })
-
-        loss_pct = min(_INJURY_LOSS_CAP, total_lost_xg / team_total_xg) if team_total_xg else 0.0
-        return {
-            "players": impacted,
-            "xg_loss_pct": round(loss_pct * 100, 1),
-            "xg_loss_ratio": loss_pct,
-        }
-
-    home_inj = injury_impact(hid, home_id)
-    away_inj = injury_impact(aid, away_id)
-
-    # 부상 반영된 공격 계수
-    h_atk_adj = h_atk * (1.0 - home_inj.get("xg_loss_ratio", 0.0))
-    a_atk_adj = a_atk * (1.0 - away_inj.get("xg_loss_ratio", 0.0))
+    h_atk_adj = h_atk
+    a_atk_adj = a_atk
 
     # 최종 람다
     _coefs   = _league_coefs(tid_filter)
@@ -1814,10 +1744,6 @@ def get_match_prediction():
             "level": conf_level,
             "h2h_games": h2h_games_cnt,
             "season_games": season_games,
-        },
-        "injuries": {
-            "home": home_inj,
-            "away": away_inj,
         },
         "referee": referee_info,
     })
@@ -4262,7 +4188,7 @@ def season_simulation():
 def get_predicted_lineup():
     """
     팀 예상 출전 라인업 (가장 최근 완료 경기 + 출전시간 TOP11 기반).
-    부상자 정보를 player_status.json과 cross-ref 해서 결장 표시.
+    팀 예상 출전 라인업 (가장 최근 완료 경기 + 출전시간 TOP11 기반).
     """
     team_id = request.args.get("teamId", "")
     team_info = next((t for t in TEAMS if t["id"] == team_id), None)
@@ -4313,45 +4239,21 @@ def get_predicted_lineup():
         conn.close()
         return jsonify({"ready": False, "reason": "insufficient_lineup_data"})
 
-    statuses = _load_status()
-    team_injured = {
-        str(s.get("playerId")): s for s in statuses.values()
-        if s.get("teamId") == team_id and s.get("status") in ("injured", "suspended", "doubtful")
-    }
-
     starters = []
     pos_counts = {"G": 0, "D": 0, "M": 0, "F": 0}
     for r in rows:
-        pid = r["player_id"]
         pos = r["position"] or "?"
         s = {
-            "player_id":    pid,
+            "player_id":    r["player_id"],
             "name":         r["name"],
             "position":     pos,
             "shirt_number": r["shirt_number"],
             "minutes":      r["minutes_played"],
             "rating":       round(r["rating"], 2) if r["rating"] is not None else None,
         }
-        st = team_injured.get(str(pid))
-        if st:
-            s["injury_status"] = st.get("status")
-            s["injury_note"]   = st.get("note", "")
-            s["return_date"]   = st.get("returnDate", "")
         starters.append(s)
         if pos in pos_counts:
             pos_counts[pos] += 1
-
-    in_lineup_ids = {str(s["player_id"]) for s in starters}
-    out_players = []
-    for sid, st in team_injured.items():
-        if sid not in in_lineup_ids:
-            out_players.append({
-                "player_id":   sid,
-                "name":        st.get("name", ""),
-                "status":      st.get("status"),
-                "note":        st.get("note", ""),
-                "return_date": st.get("returnDate", ""),
-            })
 
     if pos_counts["G"] == 1 and (pos_counts["D"] + pos_counts["M"] + pos_counts["F"]) == 10:
         formation = f'{pos_counts["D"]}-{pos_counts["M"]}-{pos_counts["F"]}'
@@ -4368,7 +4270,6 @@ def get_predicted_lineup():
         "based_on_date":  datetime.fromtimestamp(last_ts).strftime("%Y-%m-%d"),
         "formation":      formation,
         "starters":       starters,
-        "out_players":    out_players,
     })
 
 

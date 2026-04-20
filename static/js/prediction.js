@@ -1,6 +1,40 @@
 // prediction.js — 경기 예측 보고서 + 다음 경기 일정
 
 (function () {
+    // 팀 슬러그 → { p: primary, a: accent, e: emblem }
+    const SLUG_COLOR = {
+        "ulsan":    { p:"#1d5fa5", a:"#f2a900", e:"emblem_K01.png" },
+        "pohang":   { p:"#d41123", a:"#ffffff", e:"emblem_K03.png" },
+        "jeju":     { p:"#f47920", a:"#ffffff", e:"emblem_K04.png" },
+        "jeonbuk":  { p:"#0a4436", a:"#ffd700", e:"emblem_K05.png" },
+        "fcseoul":  { p:"#ef3744", a:"#ffd700", e:"emblem_K09.png" },
+        "daejeon":  { p:"#059a86", a:"#ffffff", e:"emblem_K10.png" },
+        "incheon":  { p:"#01a0fc", a:"#ffffff", e:"emblem_K18.png" },
+        "gangwon":  { p:"#f55947", a:"#f47920", e:"emblem_K21.png" },
+        "gwangju":  { p:"#f3ad02", a:"#000000", e:"emblem_K22.png" },
+        "bucheon":  { p:"#8e272b", a:"#ffffff", e:"emblem_K26.png" },
+        "anyang":   { p:"#501b85", a:"#ffd700", e:"emblem_K27.png" },
+        "gimcheon": { p:"#df242b", a:"#ffffff", e:"emblem_K35.png" },
+        "suwon":    { p:"#2553a5", a:"#c8102e", e:"emblem_K02.png" },
+        "busan":    { p:"#b4050f", a:"#ffffff", e:"emblem_K06.png" },
+        "jeonnam":  { p:"#fbea09", a:"#000000", e:"emblem_K07.png" },
+        "seongnam": { p:"#0e131b", a:"#ffffff", e:"emblem_K08.png" },
+        "daegu":    { p:"#86c5e8", a:"#ffffff", e:"emblem_K17.png" },
+        "gyeongnam":{ p:"#ac101b", a:"#ffffff", e:"emblem_K20.png" },
+        "suwon_fc": { p:"#07306a", a:"#ffffff", e:"emblem_K29.png" },
+        "seouland": { p:"#030a1b", a:"#1e3a8a", e:"emblem_K31.png" },
+        "ansan":    { p:"#0087a7", a:"#ffd700", e:"emblem_K32.png" },
+        "asan":     { p:"#12122c", a:"#e30613", e:"emblem_K34.png" },
+        "gimpo":    { p:"#78bc36", a:"#ffffff", e:"emblem_K36.png" },
+        "cheongju": { p:"#0d1026", a:"#ffffff", e:"emblem_K37.png" },
+        "cheonan":  { p:"#3e8fb3", a:"#e30613", e:"emblem_K38.png" },
+        "hwaseong": { p:"#d45820", a:"#ffffff", e:"emblem_K39.png" },
+        "paju":     { p:"#042ba0", a:"#c8102e", e:"emblem_K40.png" },
+        "gimhae":   { p:"#ac0d0e", a:"#ffd700", e:"emblem_K41.png" },
+        "yongin":   { p:"#910c26", a:"#ffd700", e:"emblem_K42.png" },
+    };
+    function tc(slug) { return SLUG_COLOR[slug] || { p:"#334", a:"#aaa", e:"" }; }
+
     const section   = document.getElementById("prediction-section");
     const report    = document.getElementById("prediction-report");
     const closeBtn  = document.getElementById("prediction-close");
@@ -17,6 +51,7 @@
             const league = btn.dataset.league;
             document.getElementById(`${league}-schedule-banner-wrap`).classList.add("active");
             if (league === "k1" && !k1Loaded) loadScheduleK1();
+            if (league === "k2" && !k2Loaded) loadSchedule();
         });
     });
 
@@ -24,6 +59,7 @@
     let scheduleCache = null;
     let roundsCache   = null;
     let activeRound   = null;
+    let k2Loaded      = false;
 
     let k1ScheduleCache = null;
     let k1RoundsCache   = null;
@@ -31,6 +67,7 @@
     let k1Loaded        = false;
 
     function loadSchedule() {
+        k2Loaded = true;
         Promise.all([
             fetch("/api/k2/schedule").then(r => r.json()),
             fetch("/api/k2/rounds").then(r => r.json()),
@@ -39,7 +76,7 @@
             roundsCache   = rounds;
             activeRound   = rounds.current_round;
             renderRoundsBanner(rounds, sched, "k2");
-        }).catch(() => {});
+        }).catch(() => { k2Loaded = false; });
     }
 
     function loadScheduleK1() {
@@ -169,40 +206,52 @@
         if (!rndData) return;
 
         list.innerHTML = rndData.games.map(g => {
-            const finished = g.finished;
-            const scoreHtml = finished
-                ? `<span class="ksb-score">${g.home_score} - ${g.away_score}</span>`
-                : `<span class="ksb-time">${g.time}</span>`;
+            const finished  = g.finished;
             const canPredict = !finished && g.home_id && g.away_id && g.home_id !== "null" && g.away_id !== "null";
-            const finishedCls = finished ? " ksb-item-done" : (canPredict ? " ksb-item-upcoming" : "");
+            const hc = tc(g.home_id), ac = tc(g.away_id);
+            const dateShort = g.date.replace(/\./g,"/").slice(5);
+
+            const centerContent = finished
+                ? `<div class="kmc-score">${g.home_score} <span class="kmc-score-sep">:</span> ${g.away_score}</div>
+                   <div class="kmc-meta">${dateShort}</div>
+                   <div class="kmc-tag kmc-tag-done">결과</div>`
+                : canPredict
+                    ? `<div class="kmc-time">${g.time || "-"}</div>
+                       <div class="kmc-meta">${dateShort}</div>
+                       <div class="kmc-tag kmc-tag-pred">예측 →</div>`
+                    : `<div class="kmc-time">-</div>
+                       <div class="kmc-meta">${dateShort}</div>`;
+
+            const homeEmb  = hc.e ? `<img class="kmc-emb" src="/static/img/emblems/${hc.e}" alt="" onerror="this.style.display='none'">` : "";
+            const awayEmb  = ac.e ? `<img class="kmc-emb" src="/static/img/emblems/${ac.e}" alt="" onerror="this.style.display='none'">` : "";
+
             return `
-            <div class="ksb-item${finishedCls}"
+            <div class="kmc${finished ? " kmc-done" : canPredict ? " kmc-upcoming" : ""}"
                  data-home="${g.home_id}" data-away="${g.away_id}"
                  data-finished="${finished}"
                  data-full-date="${g.date}">
-                <span class="ksb-date" data-full-date="${g.date}">${g.date.replace(/\./g,"/").slice(5)}</span>
-                <span class="ksb-match">
-                    <span class="ksb-team ksb-home">${g.home_short}</span>
-                    ${scoreHtml}
-                    <span class="ksb-team ksb-away">${g.away_short}</span>
-                </span>
-                <span class="ksb-venue">${g.venue}</span>
-                ${!finished && canPredict ? `<span class="ksb-pred-hint">예측 →</span>` : ""}
+                <div class="kmc-side kmc-home" style="background:linear-gradient(135deg,${hc.p}55 0%,${hc.p}22 100%)">
+                    ${homeEmb}
+                    <span class="kmc-name">${g.home_short}</span>
+                </div>
+                <div class="kmc-mid">${centerContent}</div>
+                <div class="kmc-side kmc-away" style="background:linear-gradient(225deg,${ac.p}55 0%,${ac.p}22 100%)">
+                    <span class="kmc-name">${g.away_short}</span>
+                    ${awayEmb}
+                </div>
             </div>`;
         }).join("");
 
-        list.querySelectorAll(".ksb-item").forEach(item => {
+        list.querySelectorAll(".kmc").forEach(item => {
             item.addEventListener("click", () => {
                 const homeId = item.dataset.home;
                 const awayId = item.dataset.away;
                 if (!homeId || !awayId || homeId === "null" || awayId === "null") return;
                 section.classList.remove("hidden");
                 loadPrediction(homeId, awayId);
-                section.scrollIntoView({ behavior: "smooth", block: "start" });
 
-                // 종료된 경기라면 전술판에도 실제 라인업 적용 시도
                 const isFinished = item.dataset.finished === "true";
-                const gameDate = item.dataset.fullDate || null;
+                const gameDate   = item.dataset.fullDate || null;
                 if (isFinished && gameDate) {
                     fetch(`/api/match-lineup?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
                         .then(r => r.json())
@@ -225,14 +274,8 @@
         }
         section.classList.remove("hidden");
         loadPrediction(e.detail.home.id, e.detail.away.id);
-        section.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
-    let _playerStatusCache = null;
-    function loadPlayerStatus() {
-        if (_playerStatusCache) return Promise.resolve(_playerStatusCache);
-        return fetch("/api/player-status").then(r => r.json()).then(d => { _playerStatusCache = d; return d; }).catch(() => ({}));
-    }
 
     // 백테스트 정확도 — 리그별 캐시
     const _backtestCache = {};
@@ -324,23 +367,6 @@
             </div>
         </div>`;
     }
-    function statusBadgeHtml(teamId) {
-        if (!_playerStatusCache) return "";
-        const entries = Object.values(_playerStatusCache).filter(s => s.teamId === teamId && s.status !== "available");
-        if (!entries.length) return "";
-        const icons = { injured: "🏥", suspended: "🟥", doubtful: "🔶" };
-        const labels = { injured: "부상", suspended: "출전정지", doubtful: "출전 의문" };
-        return `<div class="pred-status">
-            <div class="pred-status-title">부상/결장</div>
-            ${entries.map(s => `<div class="pred-status-row">
-                <span class="ps-icon">${icons[s.status] || "❓"}</span>
-                <span class="ps-name">${s.name}</span>
-                <span class="ps-label">${labels[s.status] || s.status}</span>
-                ${s.returnDate ? `<span class="ps-return">~${s.returnDate}</span>` : ""}
-                ${s.note ? `<span class="ps-note">${s.note}</span>` : ""}
-            </div>`).join("")}
-        </div>`;
-    }
 
     function _inferLeague(homeId, awayId) {
         // teamId → league 매핑: K1 스케줄 캐시에 있으면 k1, 아니면 k2
@@ -356,12 +382,11 @@
         const league = _inferLeague(homeId, awayId);
         Promise.all([
             fetch(`/api/match-prediction?homeTeam=${homeId}&awayTeam=${awayId}`).then(r => r.json()),
-            loadPlayerStatus(),
             loadBacktest(league),
             fetch(`/api/predicted-lineup?teamId=${homeId}`).then(r => r.json()).catch(() => null),
             fetch(`/api/predicted-lineup?teamId=${awayId}`).then(r => r.json()).catch(() => null),
         ])
-            .then(([data, _ps, bt, hLineup, aLineup]) => render(data, homeId, awayId, bt, hLineup, aLineup))
+            .then(([data, bt, hLineup, aLineup]) => render(data, homeId, awayId, bt, hLineup, aLineup))
             .catch(() => { report.innerHTML = ""; });
     }
 
@@ -373,21 +398,14 @@
         const grouped = { G: [], D: [], M: [], F: [], "?": [] };
         for (const s of d.starters) (grouped[s.position] || grouped["?"]).push(s);
         const renderRow = (s) => {
-            const inj = s.injury_status;
-            const injIcon = inj === "injured" ? "🏥" : inj === "suspended" ? "🟥" : inj === "doubtful" ? "🔶" : "";
-            return `<div class="lu-player${inj ? " lu-injured" : ""}">
+            return `<div class="lu-player">
                 <span class="lu-pos" style="background:${POS_COLORS[s.position] || "#666"}33;color:${POS_COLORS[s.position] || "#aaa"}">${POS_LABEL[s.position] || "?"}</span>
                 <span class="lu-num">#${s.shirt_number || "-"}</span>
-                <span class="lu-name">${s.name}${injIcon ? ` <span class="lu-inj-icon">${injIcon}</span>` : ""}</span>
+                <span class="lu-name">${s.name}</span>
                 ${s.rating ? `<span class="lu-rating">${s.rating}</span>` : ""}
             </div>`;
         };
         const formationStr = d.formation ? `<span class="lu-formation">${d.formation}</span>` : "";
-        const outHtml = (d.out_players && d.out_players.length) ? `
-            <div class="lu-out">
-                <div class="lu-out-title">⚠️ 결장 예정 (${d.out_players.length}명)</div>
-                ${d.out_players.map(o => `<div class="lu-out-row">${o.name} (${o.status}${o.return_date ? ` ~${o.return_date}` : ""})</div>`).join("")}
-            </div>` : "";
         return `<div class="pred-lineup ${colorClass || ""}">
             <div class="lu-header">
                 <span class="lu-label">예상 라인업 — ${label}</span>
@@ -398,7 +416,6 @@
             <div class="lu-section"><div class="lu-section-title">MF</div>${grouped.M.map(renderRow).join("")}</div>
             <div class="lu-section"><div class="lu-section-title">FW</div>${grouped.F.map(renderRow).join("")}</div>
             <div class="lu-based">기준: ${d.based_on_date} 경기</div>
-            ${outHtml}
         </div>`;
     }
 
@@ -529,30 +546,6 @@
         </div>`;
     }
 
-    // ── 부상자 영향 카드 ───────────────────────────────────
-    function injuryCardHtml(inj, teamName, colorClass) {
-        if (!inj || !inj.players || !inj.players.length) return "";
-        const labels = { injured: "부상", suspended: "정지", doubtful: "의문" };
-        const icons  = { injured: "🏥", suspended: "🟥", doubtful: "🔶" };
-        return `
-        <div class="pred-injury-impact ${colorClass || ""}">
-            <div class="pii-header">
-                <span class="pii-icon">🩹</span>
-                <span class="pii-title">${teamName} 전력 손실</span>
-                <span class="pii-loss">공격력 -${inj.xg_loss_pct || 0}%</span>
-            </div>
-            <div class="pii-list">
-                ${inj.players.map(p => `
-                <div class="pii-row">
-                    <span class="pii-p-icon">${icons[p.status] || "❓"}</span>
-                    <span class="pii-p-name">${p.name}</span>
-                    <span class="pii-p-tag">${labels[p.status] || p.status}</span>
-                    <span class="pii-p-stat">${p.goals}골 ${p.assists}A</span>
-                    ${p.return_date ? `<span class="pii-p-ret">~${p.return_date}</span>` : ""}
-                </div>`).join("")}
-            </div>
-        </div>`;
-    }
 
     // ── 폼 트렌드 라인 (최근 10경기 누적 승점 SVG) ──────────
     function trendLineSvg(points, color) {
@@ -721,9 +714,6 @@
             if (nextInfo) break;
         }
 
-        const homeInj = (d.injuries || {}).home;
-        const awayInj = (d.injuries || {}).away;
-
         report.innerHTML = `
         ${nextInfo ? `
         <div class="pred-match-header">
@@ -756,8 +746,6 @@
                     <div class="pred-scorers-title">이번 시즌 득점</div>
                     ${home.top_scorers.map(s => `<div class="pred-scorer-row"><span class="scorer-name scorer-link" data-player-id="${s.id}">${s.name}</span><span class="scorer-g">${s.goals}골</span></div>`).join("")}
                 </div>` : ""}
-                ${injuryCardHtml(homeInj, home.name, "pii-home")}
-                ${statusBadgeHtml(homeId)}
             </div>
 
             <!-- 중앙 예측 -->
@@ -820,8 +808,6 @@
                     <div class="pred-scorers-title">이번 시즌 득점</div>
                     ${away.top_scorers.map(s => `<div class="pred-scorer-row"><span class="scorer-name scorer-link" data-player-id="${s.id}">${s.name}</span><span class="scorer-g">${s.goals}골</span></div>`).join("")}
                 </div>` : ""}
-                ${injuryCardHtml(awayInj, away.name, "pii-away")}
-                ${statusBadgeHtml(awayId)}
             </div>
 
         </div>
