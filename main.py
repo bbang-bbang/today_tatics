@@ -392,6 +392,10 @@ def get_h2h_matches():
     """두 팀 간 최근 맞대결 경기 목록 + 득점 선수 (events DB 기반)"""
     team_a = request.args.get("teamA")
     team_b = request.args.get("teamB")
+    year   = request.args.get("year")            # optional: "2026" 등
+    limit  = request.args.get("limit", type=int) # optional: default 10
+    if limit is None or limit <= 0 or limit > 100:
+        limit = 10
     if not team_a or not team_b:
         return jsonify([])
     info_a = next((t for t in TEAMS if t["id"] == team_a), None)
@@ -399,6 +403,10 @@ def get_h2h_matches():
     if not info_a or not info_b:
         return jsonify([])
     ss_a, ss_b = info_a["sofascore_id"], info_b["sofascore_id"]
+
+    # 팀 리그 기반 tournament_id 결정 (기존 K2 하드코딩 → K1 대응)
+    # 두 팀 리그가 다르면 team_a 리그를 기준으로 함 (교차 리그는 맞대결 없음)
+    tid = 410 if info_a.get("league") == "K1" else 777
 
     db_path = os.path.join(BASE_DIR, "players.db")
     if not os.path.exists(db_path):
@@ -408,16 +416,20 @@ def get_h2h_matches():
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
-    cur.execute("""
+    year_clause = "AND strftime('%Y', datetime(date_ts,'unixepoch','localtime')) = ?" if year else ""
+    yp = [year] if year else []
+
+    cur.execute(f"""
         SELECT id, date_ts, home_team_id, away_team_id, home_team_name, away_team_name,
                home_score, away_score
         FROM events
-        WHERE tournament_id = 777
+        WHERE tournament_id = ?
           AND home_score IS NOT NULL
           AND ((home_team_id=? AND away_team_id=?) OR (home_team_id=? AND away_team_id=?))
+          {year_clause}
         ORDER BY date_ts DESC
-        LIMIT 10
-    """, (ss_a, ss_b, ss_b, ss_a))
+        LIMIT ?
+    """, (tid, ss_a, ss_b, ss_b, ss_a, *yp, limit))
     rows = cur.fetchall()
 
     result = []
@@ -867,6 +879,203 @@ def get_team_analytics():
             "by_temp": by_temp,
             "by_hum": by_hum,
             "by_wind": by_wind,
+        },
+    })
+
+
+@app.route("/api/team-compare")
+def get_team_compare():
+    """두 팀의 주요 스탯을 동일 기준으로 병렬 집계 (팀 비교용)."""
+    team_a = request.args.get("teamA")
+    team_b = request.args.get("teamB")
+    year   = request.args.get("year")  # optional
+
+    info_a = next((t for t in TEAMS if t["id"] == team_a), None)
+    info_b = next((t for t in TEAMS if t["id"] == team_b), None)
+    if not info_a or not info_b:
+        return jsonify({"error": "teamA/teamB required"}), 400
+
+    db_path = os.path.join(BASE_DIR, "players.db")
+    if not os.path.exists(db_path):
+        return jsonify({"error": "db not found"}), 500
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    def _tid_for(info):
+        # league → tournament_id (K1=410, 그 외 K2=777)
+        return 410 if info.get("league") == "K1" else 777
+
+    def _compute(info):
+        ss_id = info["sofascore_id"]
+        tid   = _tid_for(info)
+        year_clause = "AND strftime('%Y', datetime(date_ts,'unixepoch','localtime')) = ?" if year else ""
+        yp = [year] if year else []
+
+        # 전체 누적 (홈+원정)
+        cur.execute(f"""
+            SELECT
+              COUNT(*) AS games,
+              SUM(CASE WHEN (home_team_id=? AND home_score > away_score)
+                        OR (away_team_id=? AND away_score > home_score) THEN 1 ELSE 0 END) w,
+              SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) d,
+              SUM(CASE WHEN (home_team_id=? AND home_score < away_score)
+                        OR (away_team_id=? AND away_score < home_score) THEN 1 ELSE 0 END) l,
+              SUM(CASE WHEN home_team_id=? THEN home_score ELSE away_score END) gf,
+              SUM(CASE WHEN home_team_id=? THEN away_score ELSE home_score END) ga
+            FROM events
+            WHERE tournament_id=?
+              AND home_score IS NOT NULL
+              AND (home_team_id=? OR away_team_id=?)
+              {year_clause}
+        """, (ss_id, ss_id, ss_id, ss_id, ss_id, ss_id, tid, ss_id, ss_id, *yp))
+        games, w, d, l, gf, ga = cur.fetchone()
+        games = games or 0
+        w = w or 0; d = d or 0; l = l or 0
+        gf = gf or 0; ga = ga or 0
+
+        # 홈/원정 분할
+        cur.execute(f"""
+            SELECT 'home', COUNT(*),
+                   SUM(CASE WHEN home_score > away_score THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN home_score < away_score THEN 1 ELSE 0 END),
+                   SUM(home_score), SUM(away_score)
+            FROM events
+            WHERE tournament_id=? AND home_team_id=? AND home_score IS NOT NULL
+              {year_clause}
+            UNION ALL
+            SELECT 'away', COUNT(*),
+                   SUM(CASE WHEN away_score > home_score THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN away_score < home_score THEN 1 ELSE 0 END),
+                   SUM(away_score), SUM(home_score)
+            FROM events
+            WHERE tournament_id=? AND away_team_id=? AND home_score IS NOT NULL
+              {year_clause}
+        """, (tid, ss_id, *yp, tid, ss_id, *yp))
+        ha = {"home": {}, "away": {}}
+        for side, g, ww, dd, ll, gf_, ga_ in cur.fetchall():
+            ha[side] = {"games": g or 0, "w": ww or 0, "d": dd or 0, "l": ll or 0,
+                        "gf": gf_ or 0, "ga": ga_ or 0}
+
+        # 최근 5경기 폼
+        cur.execute(f"""
+            SELECT
+              CASE WHEN home_team_id=? THEN
+                CASE WHEN home_score > away_score THEN 'W'
+                     WHEN home_score = away_score THEN 'D' ELSE 'L' END
+              ELSE
+                CASE WHEN away_score > home_score THEN 'W'
+                     WHEN home_score = away_score THEN 'D' ELSE 'L' END
+              END
+            FROM events
+            WHERE tournament_id=? AND home_score IS NOT NULL
+              AND (home_team_id=? OR away_team_id=?)
+              {year_clause}
+            ORDER BY date_ts DESC
+            LIMIT 5
+        """, (ss_id, tid, ss_id, ss_id, *yp))
+        form = [r[0] for r in cur.fetchall()]
+
+        # 경기당 xG (최근 연도 내 평균, fallback = 실제 득실)
+        cur.execute(f"""
+            SELECT
+              AVG(CASE WHEN mps.is_home=1 THEN mps.expected_goals END) xg_home,
+              AVG(CASE WHEN mps.is_home=0 THEN mps.expected_goals END) xg_away
+            FROM match_player_stats mps
+            JOIN events e ON e.id = mps.event_id
+            WHERE mps.team_id=? AND mps.expected_goals IS NOT NULL
+              AND e.tournament_id=?
+              {year_clause.replace('date_ts', 'e.date_ts') if year else ''}
+        """, (ss_id, tid, *yp))
+        row = cur.fetchone()
+        xg_home = row[0] if row and row[0] is not None else None
+        xg_away = row[1] if row and row[1] is not None else None
+
+        def _pct(n, total): return round(n / total * 100, 1) if total else 0.0
+
+        return {
+            "id": info["id"],
+            "name": info["name"],
+            "short": info.get("short"),
+            "league": info.get("league"),
+            "emblem": info.get("emblem"),
+            "primary": info.get("primary"),
+            "accent": info.get("accent"),
+            "games": games, "w": w, "d": d, "l": l,
+            "gf": gf, "ga": ga, "gd": gf - ga,
+            "pts": w * 3 + d,
+            "win_pct": _pct(w, games),
+            "draw_pct": _pct(d, games),
+            "loss_pct": _pct(l, games),
+            "avg_gf": round(gf / games, 2) if games else 0,
+            "avg_ga": round(ga / games, 2) if games else 0,
+            "ppg":    round((w * 3 + d) / games, 2) if games else 0,
+            "clean_sheet_pct": None,  # 자리만 확보, 추후 확장
+            "form": form,
+            "home": ha["home"],
+            "away": ha["away"],
+            "xg_home": round(xg_home, 2) if xg_home is not None else None,
+            "xg_away": round(xg_away, 2) if xg_away is not None else None,
+        }
+
+    result_a = _compute(info_a)
+    result_b = _compute(info_b)
+
+    # 두 팀 공통 사용 가능 연도
+    ss_a, ss_b = info_a["sofascore_id"], info_b["sofascore_id"]
+    cur.execute("""
+        SELECT DISTINCT strftime('%Y', datetime(date_ts,'unixepoch','localtime'))
+        FROM events
+        WHERE home_team_id IN (?,?) OR away_team_id IN (?,?)
+        ORDER BY 1
+    """, (ss_a, ss_b, ss_a, ss_b))
+    available_years = [r[0] for r in cur.fetchall() if r[0]]
+
+    # H2H (A 기준 승/무/패, 득실)
+    h2h_yc = "AND strftime('%Y', datetime(date_ts,'unixepoch','localtime')) = ?" if year else ""
+    h2h_params = [ss_a, ss_a, ss_a, ss_a, ss_b, ss_b, ss_a]
+    if year:
+        h2h_params.append(year)
+    cur.execute(f"""
+        SELECT COUNT(*),
+               SUM(CASE WHEN home_team_id=? THEN
+                     CASE WHEN home_score>away_score THEN 1 ELSE 0 END
+                   ELSE
+                     CASE WHEN away_score>home_score THEN 1 ELSE 0 END
+                   END),
+               SUM(CASE WHEN home_score=away_score THEN 1 ELSE 0 END),
+               SUM(CASE WHEN home_team_id=? THEN home_score ELSE away_score END),
+               SUM(CASE WHEN home_team_id=? THEN away_score ELSE home_score END)
+        FROM events
+        WHERE home_score IS NOT NULL
+          AND ((home_team_id=? AND away_team_id=?) OR (home_team_id=? AND away_team_id=?))
+          {h2h_yc}
+    """, h2h_params)
+    h2h_row = cur.fetchone()
+    h2h_g       = h2h_row[0] or 0
+    h2h_a_wins  = h2h_row[1] or 0
+    h2h_draws   = h2h_row[2] or 0
+    h2h_a_gf    = h2h_row[3] or 0
+    h2h_a_ga    = h2h_row[4] or 0
+    h2h_b_wins  = max(0, h2h_g - h2h_a_wins - h2h_draws)
+
+    conn.close()
+
+    return jsonify({
+        "teamA": result_a,
+        "teamB": result_b,
+        "available_years": available_years,
+        "year": year or "전체",
+        "same_league": info_a.get("league") == info_b.get("league"),
+        "h2h": {
+            "games": h2h_g,
+            "a_wins": h2h_a_wins,
+            "draws":  h2h_draws,
+            "b_wins": h2h_b_wins,
+            "a_gf":   h2h_a_gf,
+            "a_ga":   h2h_a_ga,
         },
     })
 

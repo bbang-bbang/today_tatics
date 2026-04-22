@@ -1214,3 +1214,24 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 날씨 수집 대상 0경기 (기존 데이터 유지)
 
 ---
+- 2026-04-22 10:51:12 | cd foo / make / ls
+- 2026-04-22 10:52:02 | echo HOOK_TEST
+- 2026-04-22 10:55:03 | curl -s -o /dev/null -w "status=%{http_code}\n" http://127.0.0.1:5000/ && curl -s -o /dev/null -w "compare_api=%{http_code}\n" "http://127.0.0.1:5000/api/team-compare?teamA=suwon&teamB=busan" && curl -s -o /dev/null -w "tc_js=%{http_code}\n" "http://127.0.0.1:5000/static/js/team_compare.js?v=1"
+- 2026-04-22 10:55:08 | tail -25 "C:/Users/ehban/AppData/Local/Temp/claude/C--Users-ehban-OneDrive-------today-tatics/db299a64-4196-451b-8eea-6b81604875ac/tasks/b2zcy7km0.output" 2>&1
+- 2026-04-22 10:55:16 | curl -s "http://127.0.0.1:5000/api/team-compare?teamA=ulsan&teamB=suwon" | python -c "import sys,json; d=json.load(sys.stdin); print('A:',d['teamA']['name'],d['teamA']['league'],'ppg=',d['teamA']['ppg']); print('B:',d['teamB']['name'],d['teamB']['league'],'ppg=',d['teamB']['ppg']); print('same_league:',d['same_league']); print('h2h:',d['h2h'])"
+- 2026-04-22 10:55:24 | curl -s http://127.0.0.1:5000/ | python -c " / import sys / html = sys.stdin.read() / checks = { /     'team-compare modal':  'id=\"team-compare-modal\"' in html, /     'btn-team-compare':    'id=\"btn-team-compare\"' in html, /     'team_compare.js':     'team_compare.js' in html, /     'tc-radar canvas':     'id=\"tc-radar\"' in html, /     'tc-bars host':        'id=\"tc-bars\"' in html, / } / for k,v in checks.items(): /     print(f'{\"OK\" if v else \"FAIL\"}: {k}') / "
+- 2026-04-22 11:14:54 | curl -s -o /dev/null -w "page=%{http_code}\n" http://127.0.0.1:5000/ && curl -s -o /dev/null -w "css=%{http_code} size=%{size_download}\n" "http://127.0.0.1:5000/static/css/style.css?v=10"
+- 2026-04-22 11:21:07 | sleep 2 && curl -s "http://127.0.0.1:5000/api/h2h-matches?teamA=ulsan&teamB=pohang" | python -c "import sys,json; d=json.load(sys.stdin); print('K1 match count:',len(d)); [print('  ',m['date'],m['home_score'],'-',m['away_score']) for m in d[:3]]" && echo "--- year filter 2026 ---" && curl -s "http://127.0.0.1:5000/api/h2h-matches?teamA=ulsan&teamB=pohang&year=2026" | python -c "import sys,json; d=json.load(sys.stdin); print('2026 count:',len(d))"
+- 2026-04-22 11:23:31 | curl -s "http://127.0.0.1:5000/api/team-compare?teamA=ulsan&teamB=pohang&year=2025" | python -c "import sys,json; d=json.load(sys.stdin); print('[year=2025] A games:',d['teamA']['games'],'B games:',d['teamB']['games'],'| h2h:',d['h2h']['games'],'寃쎄린')" && curl -s "http://127.0.0.1:5000/api/h2h-matches?teamA=ulsan&teamB=pohang&year=2025&limit=20" | python -c "import sys,json; d=json.load(sys.stdin); print('[matches year=2025]',len(d),'寃쎄린'); [print(f'  {m[\"date\"]} {m[\"home_score\"]}-{m[\"away_score\"]} result_a={m[\"result_a\"]} scorers_home={len(m[\"scorers_home\"])} scorers_away={len(m[\"scorers_away\"])}') for m in d[:3]]"
+- 2026-04-22 11:29:33 | git status
+- 2026-04-22 11:29:34 | git diff --stat
+- 2026-04-22 11:29:34 | git log --oneline -10
+- 2026-04-22 11:29:46 | git submodule status 2>&1 | head -5
+- 2026-04-22 11:30:03 | git diff today_tatics | head -5 && echo "---" && git -C today_tatics log --oneline -3 2>&1 | head -5 && echo "---" && git -C today_tatics status 2>&1 | head -20
+- 2026-04-22 11:30:26 | git check-ignore -v .claude/settings.json 2>&1; echo "---"; ls -la .claude/
+- 2026-04-22 11:31:35 | git status --short
+- 2026-04-22 11:31:50 | grep -c "^<<<<<<<\|^=======\|^>>>>>>>" templates/index.html main.py static/css/style.css 2>&1 | grep -v ":0$" ; echo "---preserved check---" ; grep -c "btn-team-compare\|team-compare-modal\|team_compare.js" templates/index.html
+- 2026-04-22 11:32:02 | grep -n "^<<<<<<\|^>>>>>>\|^=======" templates/index.html
+- 2026-04-22 11:32:15 | grep -cE "^<<<<<<<|^=======$|^>>>>>>>" templates/index.html main.py static/css/style.css static/js/team_compare.js 2>&1
+- 2026-04-22 11:32:20 | git add templates/index.html && git rebase --continue 2>&1 | head -10
+- 2026-04-22 11:32:24 | git status --short
