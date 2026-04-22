@@ -1235,3 +1235,8 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-22 11:32:15 | grep -cE "^<<<<<<<|^=======$|^>>>>>>>" templates/index.html main.py static/css/style.css static/js/team_compare.js 2>&1
 - 2026-04-22 11:32:20 | git add templates/index.html && git rebase --continue 2>&1 | head -10
 - 2026-04-22 11:32:24 | git status --short
+- 2026-04-22 11:32:30 | git add checklist/history.md && GIT_EDITOR=true git rebase --continue 2>&1
+- 2026-04-22 11:32:38 | git log --oneline -5 && echo "---" && git push origin main 2>&1
+- 2026-04-22 12:56:47 | git diff --stat
+- 2026-04-22 12:56:47 | git status
+- 2026-04-22 12:56:54 | git diff checklist/history.md
