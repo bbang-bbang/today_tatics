@@ -476,7 +476,7 @@
     }
 
     // ── 신뢰도 배지 ─────────────────────────────────────────
-    function confidenceBadge(conf) {
+    function confidenceBadge(conf, isK1) {
         if (!conf) return "";
         const meta = {
             high: { icon: "🟢", label: "신뢰도 높음", color: "#7bed9f" },
@@ -484,10 +484,18 @@
             low:  { icon: "🔴", label: "신뢰도 낮음", color: "#f87171" },
         };
         const m = meta[conf.level] || meta.low;
-        return `<div class="pred-confidence" style="border-color:${m.color}55">
+        const badge = `<div class="pred-confidence" style="border-color:${m.color}55">
             <span class="pc-icon">${m.icon}</span>
             <span class="pc-label" style="color:${m.color}">${m.label}</span>
             <span class="pc-sub">H2H ${conf.h2h_games}경기 · 시즌 ${conf.season_games}경기</span>
+        </div>`;
+        if (!isK1 || conf.level === "high") return badge;
+        const warn = conf.level === "low"
+            ? { bg: "rgba(239,68,68,0.12)", border: "#ef4444", icon: "⚠️", text: "K1 예측 신뢰도 매우 낮음 — 참고 불가" }
+            : { bg: "rgba(251,191,36,0.10)", border: "#f59e0b", icon: "📊", text: "K1 데이터 부족 — 참고용으로만 활용" };
+        return `${badge}<div class="pred-uncertainty-warn" style="background:${warn.bg};border-color:${warn.border}">
+            <span class="puw-icon">${warn.icon}</span>
+            <span class="puw-text">${warn.text}</span>
         </div>`;
     }
 
@@ -704,6 +712,8 @@
         const nowMonth = new Date().getMonth();
         const score = predictedScore(home, away, prediction.home, d.poisson);
         const matchups = keyMatchups(home, away);
+        const isK1 = _inferLeague(homeId, awayId) === "k1";
+        const isUncertain = isK1 && d.confidence && d.confidence.level !== "high";
 
         // 다음 경기 배너에서 이 매치의 정보 가져오기 (K1/K2 모두 참조)
         let nextInfo = null;
@@ -750,10 +760,10 @@
             </div>
 
             <!-- 중앙 예측 -->
-            <div class="pred-center">
-                ${confidenceBadge(d.confidence)}
+            <div class="pred-center${isUncertain ? " pred-center--uncertain" : ""}">
+                ${confidenceBadge(d.confidence, isK1)}
                 <div class="pred-center-title">예상 결과</div>
-                <div class="pred-prob-bar">
+                <div class="pred-prob-bar${isUncertain ? " pred-prob-bar--uncertain" : ""}">
                     <div class="ppb-home" style="width:${prediction.home}%">${prediction.home}%</div>
                     <div class="ppb-draw" style="width:${prediction.draw}%">${prediction.draw}%</div>
                     <div class="ppb-away" style="width:${prediction.away}%">${prediction.away}%</div>

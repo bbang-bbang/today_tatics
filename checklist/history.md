@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-04-23 | K1 xG 크롤링 시도 + 예측 불확실성 경고 UI 추가
+
+### 배경
+- K1 백테스트 37.0% vs K2 49.4% 격차 원인 분석 → K1 xG 커버리지 0%
+- `crawl_match_stats.py --league K1` 실행 (12팀, 1787경기)
+
+### K1 xG 수집 결과
+- SofaScore 정책상 K1(tournament_id=410) lineups API에 `expectedGoals` 미제공
+- K2는 40% xG 커버리지 확인, K1 raw_json에 해당 필드 자체 없음
+- 슈팅 프록시(total_shots × 0.093) 검토 → 스케일 미스매치(0.45 vs league_avg 1.1) + 52% 커버리지로 기각
+
+### K1 예측 불확실성 분석
+- K1 2026 실제 결과 분포: 홈35.2% / 무37.0% / 원정27.8% → 균등 분포
+- high 신뢰 47.8% (11/23), med 33.3% (9/27), low 0% (0/4)
+- med/low를 정상 표시하는 것이 사용자 신뢰 훼손 → 경고 UI 결정
+
+### 구현: 예측 불확실성 경고 UI (`static/js/prediction.js`, `static/css/style.css`)
+- `confidenceBadge(conf, isK1)` — K1 + med: 주황 경고, K1 + low: 빨강 경고 배너
+- `.pred-prob-bar--uncertain` — 확률 바 흐림 처리(opacity 0.45, grayscale 40%)
+- `.pred-center--uncertain .pred-score-est` — 예상 스코어 흐림
+- K1 high / K2 전 구간은 기존과 동일
+
+---
+
 ## 2026-04-21 | JSON → SQLite events 동기화 (`sync_results_to_events.py`)
 
 ### 배경
@@ -1401,3 +1425,13 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-23 16:13:44 | curl -s "http://127.0.0.1:5000/api/prediction-backtest?league=k2&year=2026" | python -c "import json,sys; d=json.load(sys.stdin); print(f'K2 hit: {d[\"hit_1x2_pct\"]}%, brier: {d[\"brier_score\"]}, predicted:{d[\"predicted_outcomes\"]}')"
 - 2026-04-23 16:14:03 | python qa_check.py 2>&1
 - 2026-04-23 16:17:09 | python -c " / import sqlite3 / conn = sqlite3.connect('players.db') / cur = conn.cursor() / cur.execute('PRAGMA table_info(events)') / cols = [r[1] for r in cur.fetchall()] / print('events 而щ읆:', cols) / conn.close() / "
+- 2026-04-23 23:06:35 | cat /tmp/k1_crawl.log | tail -30
+- 2026-04-23 23:14:04 | curl -v "http://localhost:5000/api/backtest?league=K1&season=2026" 2>&1 | tail -20
+- 2026-04-23 23:14:07 | grep -n "backtest" main.py | grep "route\|def " | head -10
+- 2026-04-23 23:14:14 | curl -s "http://localhost:5000/api/prediction-backtest?league=K1&season=2026" | python -c " / import sys, json / d = json.load(sys.stdin) / print(f'K1 2026: {d.get(\"accuracy\")}% ({d.get(\"correct\")}/{d.get(\"total\")})') / for k,v in d.get('by_confidence',{}).items(): /     print(f'  {k}: {v.get(\"accuracy\")}% ({v.get(\"correct\")}/{v.get(\"total\")})') / "
+- 2026-04-23 23:14:17 | curl -s "http://localhost:5000/api/prediction-backtest?league=K1&season=2026" | python -m json.tool | head -40
+- 2026-04-23 23:18:05 | curl -s "http://localhost:5000/api/match-prediction?homeTeam=7653&awayTeam=7650" | python -m json.tool | head -20
+- 2026-04-23 23:18:08 | grep -n "sofascore_id\|ss_id\|7653\|7650\|TEAMS" main.py | head -20
+- 2026-04-23 23:18:11 | grep -n "match-prediction\|get_match_prediction\|homeTeam" main.py | head -10
+- 2026-04-23 23:18:21 | curl -s "http://localhost:5000/api/match-prediction?homeTeam=ulsan&awayTeam=pohang" | python -c " / import sys, json / d = json.load(sys.stdin) / conf = d.get('confidence', {}) / print(f'confidence: level={conf.get(\"level\")}, h2h={conf.get(\"h2h_games\")}, season={conf.get(\"season_games\")}') / pred = d.get('prediction', {}) / print(f'prediction: home={pred.get(\"home\")}%, draw={pred.get(\"draw\")}%, away={pred.get(\"away\")}%') / print(f'league (home_info): {d.get(\"home\", {}).get(\"name\",\"?\")} vs {d.get(\"away\", {}).get(\"name\",\"?\")}') / "
+- 2026-04-23 23:18:28 | curl -s "http://localhost:5000/api/match-prediction?homeTeam=bucheon&awayTeam=anyang" | python -c " / import sys, json / d = json.load(sys.stdin) / conf = d.get('confidence', {}) / print(f'confidence: level={conf.get(\"level\")}, h2h={conf.get(\"h2h_games\")}, season={conf.get(\"season_games\")}') / "
