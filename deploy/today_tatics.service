@@ -1,0 +1,22 @@
+[Unit]
+Description=Today Tactics — K리그 전술 분석
+After=network.target
+
+[Service]
+User=tactics
+Group=tactics
+WorkingDirectory=/opt/today_tatics
+Environment="PATH=/opt/today_tatics/.venv/bin"
+Environment="FLASK_DEBUG=0"
+ExecStart=/opt/today_tatics/.venv/bin/gunicorn \
+    --workers 2 \
+    --bind 127.0.0.1:5000 \
+    --timeout 120 \
+    --access-logfile /var/log/today_tatics/access.log \
+    --error-logfile /var/log/today_tatics/error.log \
+    main:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

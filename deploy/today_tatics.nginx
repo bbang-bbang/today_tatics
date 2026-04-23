@@ -1,0 +1,20 @@
+server {
+    listen 80;
+    server_name _;   # IP 직접 접근 허용 (도메인 있으면 여기에 입력)
+
+    # 정적 파일은 Nginx가 직접 서빙 (Flask 우회 → 빠름)
+    location /static/ {
+        alias /opt/today_tatics/static/;
+        expires 1h;
+        add_header Cache-Control "public";
+    }
+
+    # 나머지는 Gunicorn(Flask)으로 프록시
+    location / {
+        proxy_pass         http://127.0.0.1:5000;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+    }
+}
