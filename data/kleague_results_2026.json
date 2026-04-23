@@ -73,6 +73,13 @@
   ],
   "daejeon": [
     {
+      "date": "2026-04-22",
+      "home": true,
+      "opponent": "jeju",
+      "score": "0-1",
+      "result": "L"
+    },
+    {
       "date": "2026-04-18",
       "home": false,
       "opponent": "fcseoul",
@@ -268,6 +275,13 @@
   ],
   "ulsan": [
     {
+      "date": "2026-04-22",
+      "home": false,
+      "opponent": "anyang",
+      "score": "1-1",
+      "result": "D"
+    },
+    {
       "date": "2026-04-19",
       "home": true,
       "opponent": "gwangju",
@@ -456,6 +470,13 @@
   ],
   "pohang": [
     {
+      "date": "2026-04-22",
+      "home": true,
+      "opponent": "gwangju",
+      "score": "1-0",
+      "result": "W"
+    },
+    {
       "date": "2026-04-19",
       "home": true,
       "opponent": "anyang",
@@ -579,6 +600,13 @@
   ],
   "jeju": [
     {
+      "date": "2026-04-22",
+      "home": false,
+      "opponent": "daejeon",
+      "score": "0-1",
+      "result": "W"
+    },
+    {
       "date": "2026-04-18",
       "home": true,
       "opponent": "gimcheon",
@@ -637,6 +665,13 @@
   ],
   "gwangju": [
     {
+      "date": "2026-04-22",
+      "home": false,
+      "opponent": "pohang",
+      "score": "1-0",
+      "result": "L"
+    },
+    {
       "date": "2026-04-19",
       "home": false,
       "opponent": "ulsan",
@@ -694,6 +729,13 @@
     }
   ],
   "anyang": [
+    {
+      "date": "2026-04-22",
+      "home": true,
+      "opponent": "ulsan",
+      "score": "1-1",
+      "result": "D"
+    },
     {
       "date": "2026-04-19",
       "home": false,
