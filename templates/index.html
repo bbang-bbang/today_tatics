@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Today Tactics - 축구 전술판</title>
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=13">
+    <link rel="stylesheet" href="/static/css/style.css?v=16">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
     // 전역 에러 핸들링 + fetch 래퍼
@@ -53,6 +53,7 @@
             <div id="prediction-report">
                 <!-- JS로 렌더링 -->
             </div>
+            <div id="pred-model-panel"></div>
         </section>
         <div id="main-row">
         <div id="main-area">
@@ -549,22 +550,54 @@
                         <p class="tc-hint">※ 평균 실점은 낮을수록 좋음 → 역수화 반영</p>
                     </div>
                     <div class="tc-panel">
-                        <p class="tc-panel-label">🔥 최근 5경기 폼</p>
-                        <div class="tc-form-row">
-                            <div class="tc-form-team" id="tc-form-a"></div>
-                        </div>
-                        <div class="tc-form-row">
-                            <div class="tc-form-team" id="tc-form-b"></div>
-                        </div>
+                        <p class="tc-panel-label">🔥 폼 & 스파크라인 (최근 10경기 PPG)</p>
+                        <div class="tc-form-team-row" id="tc-form-row-a"></div>
+                        <div class="tc-form-team-row" id="tc-form-row-b"></div>
                         <p class="tc-panel-label" style="margin-top:14px">🏟 홈/원정 승률</p>
                         <table class="tc-ha-table" id="tc-ha-table"></table>
                     </div>
+                </div>
+
+                <!-- 시즌 득/실 트렌드 라인 (A) -->
+                <div class="tc-panel">
+                    <div class="tc-rank-header">
+                        <p class="tc-panel-label" style="margin:0">📈 시즌 득/실 트렌드</p>
+                        <span id="tc-trend-scope" class="tc-rank-scope"></span>
+                    </div>
+                    <div class="chart-wrap" style="height:240px"><canvas id="tc-trend"></canvas></div>
+                    <p class="tc-hint">실선 = 경기별 득점 · 점선 = 경기별 실점 (팀 컬러 = 팀 A/B)</p>
+                </div>
+
+                <!-- 선제득점/실점 후 성적 (D) -->
+                <div class="tc-panel tc-first-goal-panel">
+                    <p class="tc-panel-label">⚡ 선제득점 / 선제실점 후 성적</p>
+                    <div class="tc-first-goal-grid" id="tc-first-goal-grid"></div>
+                </div>
+
+                <!-- 공수 밸런스 산점도 (H) -->
+                <div class="tc-panel">
+                    <div class="tc-rank-header">
+                        <p class="tc-panel-label" style="margin:0">🎯 공수 밸런스 (리그 내 포지셔닝)</p>
+                        <span id="tc-balance-scope" class="tc-rank-scope"></span>
+                    </div>
+                    <div class="chart-wrap" style="height:320px"><canvas id="tc-balance"></canvas></div>
+                    <p class="tc-hint">X=경기당 득점 · Y=경기당 실점 (위로 갈수록 수비↑) · 회색점=리그 전 팀</p>
                 </div>
 
                 <!-- 스탯 바 비교 -->
                 <div class="tc-panel">
                     <p class="tc-panel-label">📊 주요 스탯 비교</p>
                     <div class="tc-bars" id="tc-bars"></div>
+                </div>
+
+                <!-- 리그 순위 비교 (7개 고급 지표) -->
+                <div class="tc-panel tc-rank-panel">
+                    <div class="tc-rank-header">
+                        <p class="tc-panel-label" style="margin:0">🏆 리그 순위 비교</p>
+                        <span id="tc-rank-scope" class="tc-rank-scope"></span>
+                    </div>
+                    <div id="tc-rank-rows" class="tc-rank-rows"></div>
+                    <p class="tc-hint">※ 샘플 경기수 5 미만은 순위 집계 제외 (회색)</p>
                 </div>
 
                 <!-- 경기별 맞대결 기록 -->
@@ -587,7 +620,7 @@
     <script src="/static/js/k2heatmap.js?v=1"></script>
     <script src="/static/js/banner_stats.js?v=2"></script>
     <script src="/static/js/analytics.js?v=1"></script>
-    <script src="/static/js/team_compare.js?v=4"></script>
+    <script src="/static/js/team_compare.js?v=6"></script>
     <script src="/static/js/prediction.js?v=6"></script>
 
     <!-- 선수 분석 모달 -->

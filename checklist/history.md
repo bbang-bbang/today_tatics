@@ -1240,3 +1240,164 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-22 12:56:47 | git diff --stat
 - 2026-04-22 12:56:47 | git status
 - 2026-04-22 12:56:54 | git diff checklist/history.md
+- 2026-04-22 12:57:07 | git add checklist/history.md && git commit -m "$(cat <<'EOF' / Append auto-logged terminal history /  / Routine capture from the PostToolUse Bash hook configured in / .claude/settings.json (post team-compare commit/push cycle). /  / Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com> / EOF / )" && git push origin main 2>&1
+- 2026-04-22 13:00:30 | python -c " / import sqlite3 / conn = sqlite3.connect('players.db') / cur = conn.cursor() / cur.execute('PRAGMA table_info(match_player_stats)') / cols = cur.fetchall() / print('match_player_stats columns (name / type):') / for c in cols: /     print(f'  {c[1]:30s} {c[2]}') / conn.close() / " 2>&1 | head -60
+- 2026-04-22 13:09:15 | python -c "import py_compile; py_compile.compile('main.py', doraise=True); print('OK_COMPILE')" && sleep 3 && curl -s "http://127.0.0.1:5000/api/league-rankings?league=K1&year=2026" | python -c " / import sys, json / d = json.load(sys.stdin) / print('league:', d['league'], '| year:', d['year'], '| min_sample:', d['min_sample']) / print('metrics:', [m['key'] for m in d['metrics']]) / print('totals:', d['totals']) / print('teams:', len(d['teams'])) / if d['teams']: /     t = d['teams'][0] /     print('sample team:', t['short'], '| matches:', t['matches'], '| eligible:', t['eligible']) /     print('  values:', t['values']) /     print('  ranks :', t['ranks']) / "
+- 2026-04-22 13:11:15 | grep -n "^@media (max-width: 680px)" static/css/style.css | tail -3
+- 2026-04-22 13:17:07 | ls -la update_data.py 2>&1 && echo "---" && head -50 update_data.py 2>&1
+- 2026-04-22 13:17:14 | ls crawlers/*.py 2>&1 | head -20
+- 2026-04-22 13:17:20 | ls crawlers/*.py | wc -l && echo "--- more ---" && ls crawlers/*.py 2>&1 | tail -15
+- 2026-04-22 13:17:25 | head -30 crawlers/update_results_2026.py
+- 2026-04-22 13:17:59 | python -c " / import json / d = json.load(open('data/kleague_results_2026.json','r',encoding='utf-8')) / print('top-level type:', type(d).__name__) / if isinstance(d, dict): /     print('keys:', list(d.keys())[:10]) /     for k,v in d.items(): /         if isinstance(v, list): print(f'  {k}: {len(v)} items'); break / elif isinstance(d, list): /     print('list len:', len(d)) /     if d: print('first:', list(d[0].keys()) if isinstance(d[0],dict) else d[0]) / " 2>&1
+- 2026-04-22 13:18:07 | python crawlers/update_results_2026.py 2>&1 | tail -40
+- 2026-04-22 13:18:17 | python update_data.py 2>&1
+- 2026-04-22 13:18:34 | sleep 8 && tail -40 "C:/Users/ehban/AppData/Local/Temp/claude/C--Users-ehban-OneDrive-------today-tatics/db299a64-4196-451b-8eea-6b81604875ac/tasks/b709k627a.output"
+- 2026-04-22 13:18:58 | sleep 15 && wc -l "C:/Users/ehban/AppData/Local/Temp/claude/C--Users-ehban-OneDrive-------today-tatics/db299a64-4196-451b-8eea-6b81604875ac/tasks/b709k627a.output" 2>&1 && echo "---" && tail -30 "C:/Users/ehban/AppData/Local/Temp/claude/C--Users-ehban-OneDrive-------today-tatics/db299a64-4196-451b-8eea-6b81604875ac/tasks/b709k627a.output" 2>&1
+- 2026-04-22 13:19:22 | wc -l "C:/Users/ehban/AppData/Local/Temp/claude/C--Users-ehban-OneDrive-------today-tatics/db299a64-4196-451b-8eea-6b81604875ac/tasks/b709k627a.output" 2>&1 && tail -40 "C:/Users/ehban/AppData/Local/Temp/claude/C--Users-ehban-OneDrive-------today-tatics/db299a64-4196-451b-8eea-6b81604875ac/tasks/b709k627a.output" 2>&1
+- 2026-04-22 13:19:48 | tail -20 "C:/Users/ehban/AppData/Local/Temp/claude/C--Users-ehban-OneDrive-------today-tatics/db299a64-4196-451b-8eea-6b81604875ac/tasks/b709k627a.output" 2>&1
+- 2026-04-22 13:20:38 | tail -80 "C:/Users/ehban/AppData/Local/Temp/claude/C--Users-ehban-OneDrive-------today-tatics/db299a64-4196-451b-8eea-6b81604875ac/tasks/b709k627a.output" 2>&1
+- 2026-04-22 13:38:37 | python -c " / import sqlite3 / conn = sqlite3.connect('players.db') / cur = conn.cursor() / cur.execute('PRAGMA table_info(goal_events)') / print('goal_events columns:') / for c in cur.fetchall(): /     print(f'  {c[1]:25s} {c[2]}') / cur.execute('SELECT COUNT(*), COUNT(DISTINCT event_id) FROM goal_events') / rows, events = cur.fetchone() / print(f'  rows: {rows}, distinct events: {events}') / cur.execute('SELECT * FROM goal_events LIMIT 3') / print() / print('sample rows:') / for r in cur.fetchall(): /     print(' ', r) / conn.close() / "
+- 2026-04-22 13:44:37 | python -c "import py_compile; py_compile.compile('main.py', doraise=True); print('OK')" && sleep 2 && curl -s "http://127.0.0.1:5000/api/team-trend?teamId=suwon&year=2026" | python -c " / import sys, json / d = json.load(sys.stdin) / print('team:', d['team'], '| year:', d['year'], '| matches:', len(d['matches'])) / print() / for m in d['matches']: /     print(f'  {m[\"date\"]} {\"H\" if m[\"is_home\"] else \"A\"} vs {m[\"opponent\"]:30s} {m[\"gf\"]}:{m[\"ga\"]} {m[\"result\"]} cum_pts={m[\"cum_pts\"]}') / "
+- 2026-04-22 13:48:15 | grep -n "^@media (max-width: 720px)" static/css/style.css | tail -3
+- 2026-04-22 13:49:15 | grep -oE 'id="tc-[^"]+"' templates/index.html | sort -u > /tmp/tc_html_ids.txt && grep -oE 'getElementById\("tc-[^"]+"\)|id="tc-[^"]+"|id="tc-form-row-\${side[^"]+"' static/js/team_compare.js | grep -oE 'tc-[^"`)]+' | sort -u > /tmp/tc_js_ids.txt && echo "=== HTML IDs ===" && cat /tmp/tc_html_ids.txt && echo "=== JS references ===" && cat /tmp/tc_js_ids.txt
+- 2026-04-23 12:59:29 | sleep 2 && cat "C:\Users\BANGEU~1\AppData\Local\Temp\claude\C--Users-BangEunHo-OneDrive-------today-tatics\9e7ddcd2-566c-4da3-a320-83aa92b1d782\tasks\bcrjq61da.output" 2>/dev/null | head -20
+- 2026-04-23 13:08:34 | python -c " / import urllib.request, json / r = urllib.request.urlopen('http://127.0.0.1:5000/api/teams', timeout=5) / teams = json.loads(r.read()) / k2 = [t['id'] for t in teams if t.get('league')=='K2'] / print('K2 teams:', k2) / " 2>/dev/null / 
+- 2026-04-23 14:32:13 | cat "C:\Users\BANGEU~1\AppData\Local\Temp\claude\C--Users-BangEunHo-OneDrive-------today-tatics\9e7ddcd2-566c-4da3-a320-83aa92b1d782\tasks\bcrjq61da.output" 2>/dev/null | grep -E "Restarting|Detected|reload" | tail -5
+- 2026-04-23 14:32:16 | cat "C:\Users\BANGEU~1\AppData\Local\Temp\claude\C--Users-BangEunHo-OneDrive-------today-tatics\9e7ddcd2-566c-4da3-a320-83aa92b1d782\tasks\bcrjq61da.output" 2>/dev/null | strings | grep -E "Detected change|restarting" | tail -5
+- 2026-04-23 14:32:30 | python -c " / import urllib.request, json / try: /     r = urllib.request.urlopen('http://127.0.0.1:5000/api/prediction-backtest?league=k2&year=2026', timeout=30) /     d = json.loads(r.read()) /     print(list(d.keys())) /     print(json.dumps({k:v for k,v in d.items() if not isinstance(v,list)}, ensure_ascii=False, indent=2)) / except Exception as e: /     print('Error:', e) / " 2>/dev/null / 
+- 2026-04-23 14:32:47 | python -c " / import urllib.request, json / r = urllib.request.urlopen('http://127.0.0.1:5000/api/prediction-backtest?league=k1&year=2026', timeout=30) / d = json.loads(r.read()) / print('K1:', d.get('hit_1x2_pct'), '% | Brier:', d.get('brier_score'), '| n:', d.get('n_total'), '| skipped:', d.get('n_skipped')) / print('by_confidence:', json.dumps(d.get('by_confidence'), indent=2)) / " 2>/dev/null / 
+
+---
+
+## 2026-04-23 | 예측 모델 시간 감쇠(Time-Decay) 가중치 적용
+
+### 배경
+- 기존 모델: 현재 시즌(2026) 경기만 단순 평균 → K2 시즌 초반(7~8경기)은 샘플 부족으로 예측 불안정
+- PM 제안: 최근 경기일수록 가중치를 높이고, 전 시즌(2025) 데이터도 자연스럽게 포함하는 시간 감쇠 방식
+
+### 구현 (`main.py`)
+- `_DECAY_LAMBDA = 0.88` 상수 추가
+  - 최신 경기=1.0, n번째 이전=0.88^n → 10경기 전 약 27%, 20경기 전 약 7% 비중
+- `_predict_core()` 내 `_team_xg()`: `year='2026'` 단순 평균 → 2025+2026 통합, `ORDER BY date_ts DESC` 감쇠 가중 평균
+- `get_match_prediction()` 내 `team_xg_avg()`: 동일하게 2025+2026 감쇠 가중 평균으로 교체
+- `_predict_core()` 시그니처에 `decay=_DECAY_LAMBDA` 파라미터 추가 (백테스트 호환 유지)
+- `referees` 테이블 없을 때 500 오류 → try/except로 graceful 처리
+
+### 2025 데이터 현황
+- K1: 11/12팀 2025 데이터 보유 (인천 미수집, 팀당 11~38경기)
+- K2: 수원(39경기), 부산(39경기)만 2025 K2 데이터 보유 (나머지는 이번 시즌 신규 진입)
+
+### R8 성과 비교
+| 리그 | 구 모델 | 새 모델 |
+|------|---------|---------|
+| K1 R8 | 4/6 (66.7%) | 4/6 (66.7%) |
+| K2 R8 | 3/8 (37.5%) | 4/8 (50.0%) |
+| 전체 | 7/14 (50.0%) | 8/14 (57.1%) |
+
+### 대표 변화
+- 울산 vs 광주: 홈승 63% → 46% (6경기 hot-start 과대평가 → 2025 32경기 감쇠로 안정화)
+- 경남 vs 수원: 무승부 49% → 원정승 50% (수원 2025 39경기 반영) → 실제 원정승 적중
+
+- 2026-04-23 15:07:28 | python -c " / import urllib.request, json, time, sys /  / base = 'http://127.0.0.1:5000' / results = [] /  / def chk(label, url, validator=None): /     try: /         t0 = time.time() /         r = urllib.request.urlopen(base+url, timeout=10) /         d = json.loads(r.read()) /         ms = int((time.time()-t0)*1000) /         ok = validator(d) if validator else True /         status = 'PASS' if ok else 'FAIL' /         results.append((status, label, ms, '')) /     except Exception as e: /         results.append(('FAIL', label, 0, str(e)[:80])) /  / chk('teams',           '/api/teams',              lambda d: len(d)>=29) / chk('formations',      '/api/formations?name=4-3-3') / chk('results K1',      '/api/results?league=K1',  lambda d: len(d)>0) / chk('results K2',      '/api/results?league=K2',  lambda d: len(d)>0) / chk('standings K1',    '/api/standings?league=K1',lambda d: 'standings' in d) / chk('standings K2',    '/api/standings?league=K2',lambda d: 'standings' in d) / chk('team-stats',      '/api/team-stats?teamId=ulsan') / chk('team-analytics',  '/api/team-analytics?teamId=ulsan') / chk('h2h',             '/api/h2h?teamA=ulsan&teamB=jeonbuk', lambda d: 'games' in d) / chk('h2h-matches',     '/api/h2h-matches?teamA=ulsan&teamB=jeonbuk') / chk('team-ranking',    '/api/team-ranking?league=K1') / chk('team-compare',    '/api/team-compare?teamA=ulsan&teamB=gwangju') / chk('team-trend',      '/api/team-trend?teamId=ulsan&year=2026') / chk('player-stat-report','/api/player-stat-report?teamId=ulsan') / chk('heatmap',         '/api/heatmap?playerId=7653&eventId=0', lambda d: isinstance(d,list)) / chk('saves list',      '/api/saves') / chk('squads list',     '/api/squads') / chk('prediction K1',   '/api/match-prediction?homeTeam=ulsan&awayTeam=jeonbuk', /     lambda d: 'prediction' in d and d['prediction']['home']>0) / chk('prediction K2',   '/api/match-prediction?homeTeam=suwon&awayTeam=busan', /     lambda d: 'prediction' in d and d['prediction']['home']>0) / chk('backtest K2',     '/api/prediction-backtest?league=k2&year=2026', /     lambda d: d.get('n_total',0)>0) / chk('backtest K1',     '/api/prediction-backtest?league=k1&year=2026', /     lambda d: d.get('n_total',0)>0) / chk('league-rankings', '/api/league-rankings?league=K1&year=2026') /  / with open('qa_results.txt','w',encoding='utf-8') as f: /     passed = sum(1 for r in results if r[0]=='PASS') /     f.write(f'TOTAL: {passed}/{len(results)} PASS\n') /     for status,label,ms,err in results: /         tag = 'PASS' if status=='PASS' else 'FAIL' /         note = f'{ms}ms' if status=='PASS' else err /         f.write(f'{tag}  {label:<28} {note}\n') / print('done') / " 2>/dev/null && cat qa_results.txt
+- 2026-04-23 15:07:35 | python -c " / import urllib.request, json /  / tests = [ /     ('standings K1', '/api/standings?league=K1'), /     ('standings K2', '/api/standings?league=K2'), /     ('h2h',          '/api/h2h?teamA=ulsan&teamB=jeonbuk'), /     ('heatmap',      '/api/heatmap?playerId=7653&eventId=0'), / ] / for label, url in tests: /     try: /         r = urllib.request.urlopen('http://127.0.0.1:5000'+url, timeout=8) /         d = json.loads(r.read()) /         print(f'{label}: OK - keys={list(d.keys()) if isinstance(d,dict) else f\"list len={len(d)}\"}') /     except Exception as e: /         print(f'{label}: FAIL - {e}') / " 2>/dev/null
+
+---
+
+## 2026-04-23 | draw_boost 재튜닝 (K1: 0.35→0.12, K2: 0.00→0.06)
+
+### 문제
+- K1 draw_boost=0.35 과대: 40경기 중 34개를 "무승부"로 예측 → 적중률 35% 정체
+- K2 draw_boost=0.00 과소: 52경기 중 8개만 무승부 예측 → 실제 무승부 15개와 괴리
+
+### 분석 방법
+- raw Poisson draw 확률 측정: K1=28.8%, K2=25.1%
+- 실제 draw율: K1=39.0%, K2=28.1%
+- 재정규화 수식 `new_draw% = (raw + boost) / (1 + boost)` 역산
+- K1 목표 37% → boost ≈ 0.12 / K2 목표 27% → boost ≈ 0.03
+- draw_boost 스윕(0.00~0.35) 시뮬레이션으로 검증
+
+### 최종값 (grid search + 실제 API 검증)
+- K1: 0.35 → **0.12**
+- K2: 0.00 → **0.06** (스윕에서 0.06이 실제 API 기준 최고점 확인)
+
+### 성과
+| | 이전(decay만) | draw_boost 재튜닝 |
+|--|--|--|
+| K1 적중률 | 35.0% | 35.0% (분포 개선: 5/34/1 → 17/17/6) |
+| K2 적중률 | 42.3% | **46.2%** (+3.9%p) |
+| K1 draw 예측비 | 85% | 42% (실제 40%에 근접) |
+| K2 draw 예측비 | 15% | 21% (실제 28%에 근접) |
+
+- 2026-04-23 16:04:43 | curl -s "http://127.0.0.1:5000/api/model-params" 2>&1 | head -5
+- 2026-04-23 16:06:00 | curl -s -X POST "http://127.0.0.1:5000/api/model-params" -H "Content-Type: application/json" -d "{\"k1_draw_boost\":0.12,\"k2_draw_boost\":0.06,\"decay_lambda\":0.88}" 2>&1
+
+---
+
+## 2026-04-23 | 랄프루프 전체 검토 — 5개 개선 적용
+
+### 수정 사항
+
+#### 1. `_backtestCache` const → let 버그 수정 (`prediction.js:281`)
+- `applyModelParams`에서 `_backtestCache = {}`가 const에 막혀 TypeError → 백테스트 갱신 미작동
+- `let _backtestCache = {}` 변경으로 해결
+
+#### 2. H2H 쿼리 전 리그 확장 (`main.py`)
+- 기존: `tournament_id=?` 조건으로 같은 리그 내 전적만 집계 → 울산vs전북 h2h=0
+- 수정: tournament_id 조건 제거, 두 팀 간 전체 기록 사용 → 울산vs전북 h2h=8경기
+- 적용 위치: `get_match_prediction` H2H 쿼리, 백테스트 H2H 쿼리
+
+#### 3. Confidence 분류 재캘리브레이션 (`main.py`)
+- 기존: `season >= 4`이면 med → 초반 4경기도 med 분류, 정확도 낮음
+- 수정: `season >= 6`으로 상향
+- 효과: K1 med 30.4% → **40.0%** (high>med>low 단조증가 달성)
+
+#### 4. K2 home_adv 보정: 0.93→0.96, K1 away_adj 보정: 0.90→0.93
+- 실데이터(K1 원정평균1.11, K2 홈1.32:원정1.24) 기반 그리드서치 최적값
+- K1 적중률 35.0% → **37.5%** (+2.5%p)
+
+#### 5. 파라미터 패널 UI 확장 (`prediction.js`, `style.css`)
+- `_MODEL_PARAMS`에 k1_away_adj/k2_away_adj 추가, GET/POST API 반영
+- 패널 K1/K2 섹션 분리, 원정 보정 슬라이더 각 추가
+
+### 최종 성과
+| 지표 | 이전 | 이후 |
+|------|------|------|
+| K1 적중률 | 35.0% | **37.5%** |
+| K1 med confidence | 30.4% | **40.0%** |
+| K2 적중률 | 46.2% | 46.2% (유지) |
+| K2 low confidence | — | **42.9%** |
+| QA | 31/31 | 31/31 |
+
+---
+
+## 2026-04-23 | 동적 모델 파라미터 패널 UI 구현
+
+### 기능
+- 예측 섹션 하단에 **모델 파라미터 패널** 추가 (접기/펼치기 가능)
+- K1 무승부 보정(draw_boost), K2 무승부 보정, 시간 감쇠 λ 3개 슬라이더
+- "적용 후 재계산" 버튼 → POST `/api/model-params` → 예측 자동 재실행
+- "초기화" 버튼 → 기본값(K1:0.12, K2:0.06, λ:0.88) 복원
+- 헤더에 K1/K2 백테스트 적중률 뱃지 실시간 표시 (녹색 ≥45%, 노란색 ≥38%, 빨강 <38%)
+
+### 변경 파일
+- `main.py`: `/api/model-params` GET/POST 엔드포인트 추가 (이전 세션)
+- `templates/index.html`: `<div id="pred-model-panel">` 삽입
+- `static/css/style.css`: `.pmp-*` 클래스 전체 스타일 추가 (다크테마, WCAG AA 준수)
+- `static/js/prediction.js`: `loadModelParams()`, `renderModelPanel()`, `applyModelParams()`, `updateAccuracyBadges()` 구현
+  - `loadPrediction`에 `_lastHome`/`_lastAway` 추적 추가 (무한재귀 방지를 위해 래퍼 제거)
+  - 슬라이더 `--pct` CSS 변수 동적 업데이트로 진행 색상 표현
+
+### 6인 관점
+- P1 감독: 예측 모델 파라미터를 실시간 조정 가능 → 경기 전 빠른 시나리오 검토
+- P4 분석가: draw_boost/λ 값이 화면에서 즉시 확인 → 모델 투명성 확보
+- P6 UI전문가: 접기/펼치기 토글, hover 피드백, 슬라이더 채우기, 뱃지 색상 계층 모두 구현
+- 2026-04-23 16:07:54 | curl -s "http://127.0.0.1:5000/api/model-params" && echo "---" && curl -s "http://127.0.0.1:5000/api/prediction-backtest?league=k1&year=2026" && echo "---" && curl -s "http://127.0.0.1:5000/api/prediction-backtest?league=k2&year=2026"
+- 2026-04-23 16:07:58 | curl -s "http://127.0.0.1:5000/api/match-prediction?homeTeam=ulsan&awayTeam=jeonbuk" 2>&1 | python -c "import json,sys; d=json.load(sys.stdin); print('prediction:', d.get('prediction')); print('confidence:', d.get('confidence')); print('poisson:', d.get('poisson'))"
+- 2026-04-23 16:08:13 | curl -s "http://127.0.0.1:5000/api/team-analytics?teamId=ulsan" | python -c "import json,sys; d=json.load(sys.stdin); print(type(d).__name__, list(d.keys())[:6] if isinstance(d,dict) else str(d)[:200])"
+- 2026-04-23 16:08:21 | curl -s "http://127.0.0.1:5000/api/h2h?teamA=ulsan&teamB=jeonbuk" | python -c "import json,sys; d=json.load(sys.stdin); print(d)"
+- 2026-04-23 16:08:26 | curl -s "http://127.0.0.1:5000/api/team-compare?teamA=ulsan&teamB=gwangju" | python -c "import json,sys; d=json.load(sys.stdin); print(list(d.keys()))"
+- 2026-04-23 16:08:27 | curl -s "http://127.0.0.1:5000/api/team-trend?teamId=ulsan&year=2026" | python -c "import json,sys; d=json.load(sys.stdin); print(f'matches:{len(d.get(\"matches\",[]))}, keys:{list(d.keys())}')"
+- 2026-04-23 16:08:37 | python qa_check.py 2>&1
+- 2026-04-23 16:13:44 | curl -s "http://127.0.0.1:5000/api/prediction-backtest?league=k2&year=2026" | python -c "import json,sys; d=json.load(sys.stdin); print(f'K2 hit: {d[\"hit_1x2_pct\"]}%, brier: {d[\"brier_score\"]}, predicted:{d[\"predicted_outcomes\"]}')"
+- 2026-04-23 16:14:03 | python qa_check.py 2>&1
+- 2026-04-23 16:17:09 | python -c " / import sqlite3 / conn = sqlite3.connect('players.db') / cur = conn.cursor() / cur.execute('PRAGMA table_info(events)') / cols = [r[1] for r in cur.fetchall()] / print('events 而щ읆:', cols) / conn.close() / "

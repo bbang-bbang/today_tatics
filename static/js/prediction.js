@@ -278,7 +278,7 @@
 
 
     // 백테스트 정확도 — 리그별 캐시
-    const _backtestCache = {};
+    let _backtestCache = {};
     function loadBacktest(league) {
         const key = (league || "k2").toLowerCase();
         if (_backtestCache[key]) return Promise.resolve(_backtestCache[key]);
@@ -378,6 +378,7 @@
     }
 
     function loadPrediction(homeId, awayId) {
+        _lastHome = homeId; _lastAway = awayId;
         report.innerHTML = `<div class="pred-loading">분석 중...</div>`;
         const league = _inferLeague(homeId, awayId);
         Promise.all([
@@ -857,6 +858,189 @@
         return "#c8d8f0";
     }
 
+    // ── 모델 파라미터 패널 ──────────────────────────────────────────────
+    let _modelParams = null;
+    let _lastHome = null, _lastAway = null;
+
+    async function loadModelParams() {
+        try {
+            const r = await fetch("/api/model-params");
+            _modelParams = await r.json();
+            renderModelPanel();
+        } catch (e) { console.warn("model-params load fail", e); }
+    }
+
+    function renderModelPanel() {
+        const panel = document.getElementById("pred-model-panel");
+        if (!panel || !_modelParams) return;
+        const p = _modelParams;
+        panel.innerHTML = `
+        <div class="pmp-wrap" id="pmp-wrap">
+            <div class="pmp-header" id="pmp-toggle">
+                <div class="pmp-title-row">
+                    <span class="pmp-icon">⚙</span>
+                    <span class="pmp-title">모델 파라미터</span>
+                </div>
+                <div class="pmp-accuracy" id="pmp-accuracy-row"></div>
+                <span class="pmp-chevron">▼</span>
+            </div>
+            <div class="pmp-body" id="pmp-body">
+                <div class="pmp-section-label">K1 리그</div>
+                <div class="pmp-row">
+                    <div class="pmp-label-row">
+                        <label class="pmp-label">K1 무승부 보정</label>
+                        <span class="pmp-val" id="pmp-k1-boost-val">${p.k1_draw_boost.toFixed(2)}</span>
+                    </div>
+                    <input type="range" class="pmp-slider" id="pmp-k1-boost"
+                        min="0" max="0.4" step="0.01" value="${p.k1_draw_boost}">
+                </div>
+                <div class="pmp-row">
+                    <div class="pmp-label-row">
+                        <label class="pmp-label">K1 원정 보정</label>
+                        <span class="pmp-val" id="pmp-k1-away-val">${(p.k1_away_adj||0.93).toFixed(2)}</span>
+                    </div>
+                    <input type="range" class="pmp-slider" id="pmp-k1-away"
+                        min="0.7" max="1.2" step="0.01" value="${p.k1_away_adj||0.93}">
+                </div>
+                <div class="pmp-section-label">K2 리그</div>
+                <div class="pmp-row">
+                    <div class="pmp-label-row">
+                        <label class="pmp-label">K2 무승부 보정</label>
+                        <span class="pmp-val" id="pmp-k2-boost-val">${p.k2_draw_boost.toFixed(2)}</span>
+                    </div>
+                    <input type="range" class="pmp-slider" id="pmp-k2-boost"
+                        min="0" max="0.4" step="0.01" value="${p.k2_draw_boost}">
+                </div>
+                <div class="pmp-row">
+                    <div class="pmp-label-row">
+                        <label class="pmp-label">K2 원정 보정</label>
+                        <span class="pmp-val" id="pmp-k2-away-val">${(p.k2_away_adj||0.90).toFixed(2)}</span>
+                    </div>
+                    <input type="range" class="pmp-slider" id="pmp-k2-away"
+                        min="0.7" max="1.2" step="0.01" value="${p.k2_away_adj||0.90}">
+                </div>
+                <div class="pmp-section-label">공통</div>
+                <div class="pmp-row">
+                    <div class="pmp-label-row">
+                        <label class="pmp-label">시간 감쇠 (λ)</label>
+                        <span class="pmp-val" id="pmp-decay-val">${p.decay_lambda.toFixed(2)}</span>
+                    </div>
+                    <input type="range" class="pmp-slider" id="pmp-decay"
+                        min="0.6" max="1.0" step="0.01" value="${p.decay_lambda}">
+                </div>
+                <div class="pmp-footer">
+                    <button class="pmp-btn-reset" id="pmp-reset">초기화</button>
+                    <button class="pmp-btn-apply" id="pmp-apply">적용 후 재계산</button>
+                </div>
+                <div class="pmp-hint">서버 재시작 시 기본값으로 복원됩니다</div>
+            </div>
+        </div>`;
+
+        // 토글 (pmp-wrap.open 클래스로 CSS 연동)
+        document.getElementById("pmp-toggle").addEventListener("click", () => {
+            document.getElementById("pmp-wrap").classList.toggle("open");
+        });
+
+        // 슬라이더 채우기 퍼센트 업데이트 헬퍼
+        function syncSlider(el) {
+            const min = parseFloat(el.min), max = parseFloat(el.max), val = parseFloat(el.value);
+            el.style.setProperty("--pct", `${((val - min) / (max - min) * 100).toFixed(1)}%`);
+        }
+
+        // 슬라이더 실시간 값 표시
+        ["k1-boost","k1-away","k2-boost","k2-away","decay"].forEach(id => {
+            const el = document.getElementById(`pmp-${id}`);
+            const vl = document.getElementById(`pmp-${id}-val`);
+            if (!el || !vl) return;
+            syncSlider(el);
+            el.addEventListener("input", () => {
+                vl.textContent = parseFloat(el.value).toFixed(2);
+                syncSlider(el);
+            });
+        });
+
+        // 초기화
+        document.getElementById("pmp-reset").addEventListener("click", () => {
+            const def = _modelParams.defaults;
+            const fields = [
+                ["pmp-k1-boost", def.k1_draw_boost, "pmp-k1-boost-val"],
+                ["pmp-k1-away",  def.k1_away_adj || 0.93, "pmp-k1-away-val"],
+                ["pmp-k2-boost", def.k2_draw_boost, "pmp-k2-boost-val"],
+                ["pmp-k2-away",  def.k2_away_adj || 0.90, "pmp-k2-away-val"],
+                ["pmp-decay",    def.decay_lambda,  "pmp-decay-val"],
+            ];
+            fields.forEach(([elId, val, vlId]) => {
+                const el = document.getElementById(elId);
+                const vl = document.getElementById(vlId);
+                if (!el || !vl) return;
+                el.value = val; syncSlider(el);
+                vl.textContent = parseFloat(val).toFixed(2);
+            });
+        });
+
+        // 적용
+        document.getElementById("pmp-apply").addEventListener("click", applyModelParams);
+
+        // 정확도 뱃지 로드
+        updateAccuracyBadges();
+    }
+
+    async function applyModelParams() {
+        const btn = document.getElementById("pmp-apply");
+        if (!btn) return;
+        btn.textContent = "계산 중…";
+        btn.disabled = true;
+        const params = {
+            k1_draw_boost: parseFloat(document.getElementById("pmp-k1-boost").value),
+            k1_away_adj:   parseFloat(document.getElementById("pmp-k1-away").value),
+            k2_draw_boost: parseFloat(document.getElementById("pmp-k2-boost").value),
+            k2_away_adj:   parseFloat(document.getElementById("pmp-k2-away").value),
+            decay_lambda:  parseFloat(document.getElementById("pmp-decay").value),
+        };
+        try {
+            const r = await fetch("/api/model-params", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(params),
+            });
+            _modelParams = await r.json().then(d => ({ ...d.params, defaults: _modelParams.defaults }));
+            // 현재 예측 재계산
+            if (_lastHome && _lastAway) loadPrediction(_lastHome, _lastAway);
+            // 백테스트 갱신
+            _backtestCache = {};
+            const league = document.querySelector(".pred-tab-btn.active")?.dataset?.league || "k2";
+            loadBacktest(league).then(d => {
+                const banner = document.getElementById("pred-backtest-banner");
+                if (banner) banner.innerHTML = backtestBannerHtml(d);
+            });
+            updateAccuracyBadges();
+        } catch (e) { console.warn("apply params fail", e); }
+        finally {
+            btn.textContent = "적용 후 재계산";
+            btn.disabled = false;
+        }
+    }
+
+    async function updateAccuracyBadges() {
+        const row = document.getElementById("pmp-accuracy-row");
+        if (!row) return;
+        row.innerHTML = "";
+        for (const lg of ["k1","k2"]) {
+            try {
+                const d = await loadBacktest(lg);
+                if (d && d.hit_1x2_pct != null) {
+                    const pct = d.hit_1x2_pct;
+                    const cls = pct >= 45 ? "good" : pct >= 38 ? "mid" : "low";
+                    const badge = document.createElement("span");
+                    badge.className = `pmp-badge ${cls}`;
+                    badge.textContent = `${lg.toUpperCase()} ${pct}%`;
+                    row.appendChild(badge);
+                }
+            } catch (e) {}
+        }
+    }
+
     // 페이지 로드 시 K2 일정 불러오기
     loadSchedule();
+    loadModelParams();
 })();

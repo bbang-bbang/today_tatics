@@ -25,9 +25,17 @@
     // 조회 최적화 상태
     const _cache = new Map();           // key: `${teamA}|${teamB}|${year}` → data
     const _matchesCache = new Map();    // key: `${teamA}|${teamB}|${year}` → matches[]
-    let _inFlight = null;               // AbortController for team-compare
-    let _matchesInFlight = null;        // AbortController for h2h-matches
+    const _rankingsCache = new Map();   // key: `${league}|${year}` → rankings payload
+    const _trendCache = new Map();      // key: `${teamId}|${year}` → trend payload
+    let _inFlight = null;
+    let _matchesInFlight = null;
+    let _rankingsInFlight = { K1: null, K2: null };
+    const _trendInFlight = {};
     let _debounceTimer = null;
+    // Chart.js 인스턴스 캐시 (destroy 대신 update)
+    let trendChart   = null;
+    let balanceChart = null;
+    const _sparkCharts = {}; // key: "A"|"B" → Chart instance
 
     function populateSelects() {
         if (teamsLoaded) return;
@@ -162,9 +170,12 @@
         buildYearFilter(data.available_years || []);
         renderHeader(data);
         renderRadar(data);
-        renderForm(data);
         renderHA(data);
         renderBars(data);
+        // 리그 순위 (+ 공수 밸런스 H + 선제득점 D)
+        loadRankingsFor(data.teamA, data.teamB);
+        // 트렌드 (+ 스파크라인 B) — 병렬 fetch
+        loadTrendFor(data.teamA, data.teamB);
     }
 
     // hex → "r,g,b" 문자열
@@ -182,8 +193,18 @@
         document.getElementById("tc-league-b").textContent = b.league || "";
         const embA = document.getElementById("tc-emblem-a");
         const embB = document.getElementById("tc-emblem-b");
-        embA.src = a.emblem ? `/static/img/${a.emblem}` : "";
-        embB.src = b.emblem ? `/static/img/${b.emblem}` : "";
+        const setEmblem = (img, emblem) => {
+            if (emblem) {
+                img.src = `/static/img/emblems/${emblem}`;
+                img.style.display = "";
+                img.onerror = () => { img.style.display = "none"; };
+            } else {
+                img.removeAttribute("src");
+                img.style.display = "none";
+            }
+        };
+        setEmblem(embA, a.emblem);
+        setEmblem(embB, b.emblem);
 
         // 매치업 포스터 배경에 팀 컬러 라디얼 그라디언트 주입
         const titleRow = document.querySelector(".tc-title-row");
@@ -317,23 +338,6 @@
         });
     }
 
-    function renderForm(data) {
-        const render = (team, el) => {
-            el.innerHTML = `<span style="min-width:60px;font-weight:600">${team.short || team.name}</span>`;
-            (team.form || []).forEach(r => {
-                const span = document.createElement("span");
-                span.className = "tc-form-badge tc-form-" + r;
-                span.textContent = r;
-                el.appendChild(span);
-            });
-            if (!(team.form || []).length) {
-                el.innerHTML += '<span style="color:#6a7e98">경기 기록 없음</span>';
-            }
-        };
-        render(data.teamA, document.getElementById("tc-form-a"));
-        render(data.teamB, document.getElementById("tc-form-b"));
-    }
-
     function renderHA(data) {
         const a = data.teamA, b = data.teamB;
         const pct = (n, g) => g > 0 ? Math.round(n / g * 100) : 0;
@@ -398,18 +402,8 @@
 
         const host = document.getElementById("tc-bars");
         host.innerHTML = "";
-        const colorA = a.primary || "#4ea4f8";
-        const colorB = b.primary || "#b87ef8";
-        // 팀 컬러를 살짝 어둡게 (그라디언트 끝 쪽)
-        const darken = (hex) => {
-            const m = /^#?([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})$/i.exec(hex || "");
-            if (!m) return hex;
-            const r = Math.max(0, parseInt(m[1],16) - 40);
-            const g = Math.max(0, parseInt(m[2],16) - 40);
-            const b2 = Math.max(0, parseInt(m[3],16) - 40);
-            return `rgb(${r},${g},${b2})`;
-        };
-        const colorAD = darken(colorA), colorBD = darken(colorB);
+        const rgbA = hexRgb(a.primary, "74,130,199");
+        const rgbB = hexRgb(b.primary, "184,126,248");
 
         metrics.forEach(m => {
             const max = Math.max(Math.abs(m.va), Math.abs(m.vb), 0.0001);
@@ -423,20 +417,20 @@
                 winner = m.va < m.vb ? "A" : m.va > m.vb ? "B" : "none";
             }
 
-            const wDotA = winner === "A" ? '<span class="tc-bar-winner-indicator" title="우위"></span>' : '';
-            const wDotB = winner === "B" ? '<span class="tc-bar-winner-indicator" title="우위"></span>' : '';
+            const aWin = winner === "A" ? " tc-bar-side-winner" : "";
+            const bWin = winner === "B" ? " tc-bar-side-winner" : "";
 
             const row = document.createElement("div");
             row.className = "tc-bar-row";
             row.innerHTML = `
-                <div class="tc-bar-side tc-bar-side-a" style="--tc-fill-from:${colorA};--tc-fill-to:${colorAD}">
-                    ${wDotA}<span class="tc-bar-val ${winner==='A'?'tc-bar-winner':''}" data-target="${m.va}">0</span>
+                <div class="tc-bar-side tc-bar-side-a${aWin}" style="--tc-team-rgb:${rgbA}">
+                    <span class="tc-bar-val ${winner==='A'?'tc-bar-winner':''}" data-target="${m.va}">0</span>
                     <div class="tc-bar-fill" style="width:0"></div>
                 </div>
                 <div class="tc-bar-label">${m.label}</div>
-                <div class="tc-bar-side" style="--tc-fill-from:${colorB};--tc-fill-to:${colorBD}">
+                <div class="tc-bar-side${bWin}" style="--tc-team-rgb:${rgbB}">
                     <div class="tc-bar-fill" style="width:0"></div>
-                    <span class="tc-bar-val ${winner==='B'?'tc-bar-winner':''}" data-target="${m.vb}">0</span>${wDotB}
+                    <span class="tc-bar-val ${winner==='B'?'tc-bar-winner':''}" data-target="${m.vb}">0</span>
                 </div>`;
             host.appendChild(row);
 
@@ -517,5 +511,549 @@
         return String(s).replace(/[&<>"']/g, c => ({
             "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
         }[c]));
+    }
+
+    // ─── 리그 순위 비교 (고급 지표 7개) ───────────────────
+    function loadRankingsFor(teamA, teamB) {
+        const leagues = [...new Set([teamA.league, teamB.league])].filter(Boolean);
+        Promise.all(leagues.map(lg => fetchRankings(lg)))
+            .then(rs => renderRankings(rs, teamA, teamB))
+            .catch(() => renderRankings([], teamA, teamB));
+    }
+
+    function fetchRankings(league) {
+        const key = `${league}|${currentYear}`;
+        if (_rankingsCache.has(key)) {
+            return Promise.resolve(_rankingsCache.get(key));
+        }
+        // in-flight 취소
+        if (_rankingsInFlight[league]) _rankingsInFlight[league].abort();
+        _rankingsInFlight[league] = new AbortController();
+        const yp = currentYear !== "전체" ? `&year=${currentYear}` : "";
+        return fetch(`/api/league-rankings?league=${league}${yp}`, { signal: _rankingsInFlight[league].signal })
+            .then(r => r.json())
+            .then(data => {
+                _rankingsCache.set(key, data);
+                if (_rankingsCache.size > 20) _rankingsCache.delete(_rankingsCache.keys().next().value);
+                return data;
+            })
+            .catch(err => {
+                if (err.name !== "AbortError") console.warn("rankings fetch failed:", err);
+                return null;
+            });
+    }
+
+    function findTeamRank(rankings, teamId) {
+        if (!rankings || !rankings.teams) return null;
+        return rankings.teams.find(t => t.id === teamId) || null;
+    }
+
+    function fmtMetricValue(val, fmt) {
+        if (val == null) return "—";
+        if (fmt === "pct1")   return (+val).toFixed(1) + "%";
+        if (fmt === "ratio2") return (+val).toFixed(2);
+        if (fmt === "num2")   return (+val).toFixed(2);
+        if (fmt === "num1")   return (+val).toFixed(1);
+        return String(val);
+    }
+
+    // 순위를 색상 등급으로 — 상위 20% = 골드, 상위 50% = 민트, 하위 20% = 로즈, 중간 = 중립
+    function rankTone(rank, total) {
+        if (rank == null || !total) return "neutral";
+        const pct = rank / total;
+        if (pct <= 0.2) return "gold";
+        if (pct <= 0.5) return "mint";
+        if (pct >= 0.8) return "rose";
+        return "neutral";
+    }
+
+    function renderRankings(rankingsList, teamA, teamB) {
+        const host  = document.getElementById("tc-rank-rows");
+        const scope = document.getElementById("tc-rank-scope");
+        if (!host) return;
+
+        // 팀A, 팀B 각 리그에 맞는 rankings 찾기
+        const rankA = rankingsList.find(r => r && r.league === teamA.league);
+        const rankB = rankingsList.find(r => r && r.league === teamB.league);
+        // metrics 메타 (둘 중 먼저 있는 것)
+        const metrics = (rankA && rankA.metrics) || (rankB && rankB.metrics) || [];
+
+        // scope 문구
+        const scopeText = teamA.league === teamB.league
+            ? `${teamA.league} · ${currentYear}`
+            : `${teamA.league}/${teamB.league} · ${currentYear}`;
+        scope.textContent = scopeText;
+
+        if (!metrics.length) {
+            host.innerHTML = `<div class="tc-rank-empty">리그 순위 데이터를 불러오지 못했습니다.</div>`;
+            return;
+        }
+
+        const teamAInRank = rankA ? findTeamRank(rankA, teamA.id) : null;
+        const teamBInRank = rankB ? findTeamRank(rankB, teamB.id) : null;
+        const totalsA = (rankA && rankA.totals) || {};
+        const totalsB = (rankB && rankB.totals) || {};
+
+        host.innerHTML = "";
+        metrics.forEach((m, idx) => {
+            const vA    = teamAInRank && teamAInRank.values ? teamAInRank.values[m.key] : null;
+            const rA    = teamAInRank && teamAInRank.ranks  ? teamAInRank.ranks[m.key]  : null;
+            const totA  = totalsA[m.key] || 0;
+            const eligA = teamAInRank ? teamAInRank.eligible : false;
+
+            const vB    = teamBInRank && teamBInRank.values ? teamBInRank.values[m.key] : null;
+            const rB    = teamBInRank && teamBInRank.ranks  ? teamBInRank.ranks[m.key]  : null;
+            const totB  = totalsB[m.key] || 0;
+            const eligB = teamBInRank ? teamBInRank.eligible : false;
+
+            // 두 팀 중 더 잘한 쪽 (값 기준 — direction에 따라)
+            let winner = "none";
+            if (vA != null && vB != null) {
+                if (m.direction === "higher") winner = vA > vB ? "A" : vA < vB ? "B" : "none";
+                else                           winner = vA < vB ? "A" : vA > vB ? "B" : "none";
+            }
+
+            const toneA = rankTone(rA, totA);
+            const toneB = rankTone(rB, totB);
+
+            const rankBadge = (rank, total, elig, val, league) => {
+                if (rank != null && elig) {
+                    const tone = rankTone(rank, total);
+                    return `<span class="tc-rank-badge tc-rank-tone-${tone}">${league} ${rank}위/${total}</span>`;
+                }
+                if (!elig)       return `<span class="tc-rank-badge tc-rank-tone-na">샘플 부족</span>`;
+                if (val == null) return `<span class="tc-rank-badge tc-rank-tone-na">데이터 없음</span>`;
+                return `<span class="tc-rank-badge tc-rank-tone-na">순위 미집계</span>`;
+            };
+
+            const rowA = `
+                <div class="tc-rank-cell tc-rank-cell-a ${winner==='A'?'tc-rank-winner':''}">
+                    <span class="tc-rank-val">${fmtMetricValue(vA, m.format)}</span>
+                    ${rankBadge(rA, totA, eligA, vA, teamA.league)}
+                </div>`;
+            const rowB = `
+                <div class="tc-rank-cell tc-rank-cell-b ${winner==='B'?'tc-rank-winner':''}">
+                    <span class="tc-rank-val">${fmtMetricValue(vB, m.format)}</span>
+                    ${rankBadge(rB, totB, eligB, vB, teamB.league)}
+                </div>`;
+
+            const row = document.createElement("div");
+            row.className = "tc-rank-row";
+            row.style.animationDelay = (idx * 0.05) + "s";
+            const arrow = m.direction === "higher" ? "↑" : "↓";
+            row.innerHTML = `
+                ${rowA}
+                <div class="tc-rank-metric">
+                    <span class="tc-rank-metric-name">${escapeHtml(m.label)}</span>
+                    <span class="tc-rank-metric-dir" title="${m.direction === 'higher' ? '클수록 좋음' : '작을수록 좋음'}">${arrow}</span>
+                </div>
+                ${rowB}`;
+            host.appendChild(row);
+        });
+
+        // 선제득점 카드 (D) + 공수 밸런스 플롯 (H)는 동일 rankings 데이터 재사용
+        renderFirstGoal(rankingsList, teamA, teamB);
+        renderBalance(rankingsList, teamA, teamB);
+    }
+
+    // ─── D. 선제득점 / 선제실점 후 성적 카드 ─────────────
+    function renderFirstGoal(rankingsList, teamA, teamB) {
+        const host = document.getElementById("tc-first-goal-grid");
+        if (!host) return;
+        const rankA = rankingsList.find(r => r && r.league === teamA.league);
+        const rankB = rankingsList.find(r => r && r.league === teamB.league);
+        const tA = rankA ? rankA.teams.find(t => t.id === teamA.id) : null;
+        const tB = rankB ? rankB.teams.find(t => t.id === teamB.id) : null;
+        const totalsA = (rankA && rankA.totals) || {};
+        const totalsB = (rankB && rankB.totals) || {};
+
+        const card = (team, tData, totals, league) => {
+            if (!tData) return `<div class="tc-fg-card tc-fg-empty">
+                <div class="tc-fg-team">${escapeHtml(team.short || team.name)}</div>
+                <div class="tc-fg-na">데이터 없음</div>
+            </div>`;
+            const fgVal = tData.values.first_goal_win_pct;
+            const fcVal = tData.values.first_conceded_win_pct;
+            const fgRank = tData.ranks.first_goal_win_pct;
+            const fcRank = tData.ranks.first_conceded_win_pct;
+            const fgGames = (tData.extras && tData.extras.first_goal_games) || 0;
+            const fcGames = (tData.extras && tData.extras.first_conceded_games) || 0;
+            const avgMin  = (tData.extras && tData.extras.first_goal_avg_min);
+
+            const renderRow = (label, val, rank, total, sample) => {
+                if (val == null) {
+                    return `<div class="tc-fg-row">
+                        <div class="tc-fg-row-label">${label}</div>
+                        <div class="tc-fg-row-val tc-fg-na-text">— <span class="tc-fg-sample">(샘플 ${sample}경기)</span></div>
+                    </div>`;
+                }
+                const tone = rankTone(rank, total);
+                return `<div class="tc-fg-row">
+                    <div class="tc-fg-row-label">${label}</div>
+                    <div class="tc-fg-row-val">
+                        <span class="tc-fg-pct">${val.toFixed(1)}%</span>
+                        <span class="tc-fg-sub">${sample}경기</span>
+                        ${rank != null ? `<span class="tc-rank-badge tc-rank-tone-${tone}">${league} ${rank}위/${total}</span>` : ''}
+                    </div>
+                </div>`;
+            };
+
+            return `<div class="tc-fg-card" style="--tc-fg-color: ${team.primary || '#4a82c7'}">
+                <div class="tc-fg-team">${escapeHtml(team.short || team.name)}</div>
+                ${renderRow("선제득점 시 승률", fgVal, fgRank, totals.first_goal_win_pct || 0, fgGames)}
+                ${renderRow("선제실점 후 승률", fcVal, fcRank, totals.first_conceded_win_pct || 0, fcGames)}
+                <div class="tc-fg-meta">
+                    첫 득점 평균 시간: <strong>${avgMin != null ? avgMin.toFixed(1) + '분' : '—'}</strong>
+                </div>
+            </div>`;
+        };
+
+        host.innerHTML = card(teamA, tA, totalsA, teamA.league) + card(teamB, tB, totalsB, teamB.league);
+    }
+
+    // ─── H. 공수 밸런스 산점도 ──────────────────────────
+    function renderBalance(rankingsList, teamA, teamB) {
+        const el = document.getElementById("tc-balance");
+        const scope = document.getElementById("tc-balance-scope");
+        if (!el) return;
+
+        // 리그가 같으면 하나의 리그 전체 점, 다르면 양쪽 리그 전체 (라벨 구분)
+        const crossLeague = teamA.league !== teamB.league;
+        scope.textContent = crossLeague
+            ? `${teamA.league} + ${teamB.league} · ${currentYear}`
+            : `${teamA.league} · ${currentYear}`;
+
+        // 모든 팀 좌표 수집
+        const leaguePoints = {}; // league → [{x, y, name, id, primary}]
+        let leagueAvg = {};      // league → {x, y}
+
+        rankingsList.forEach(rk => {
+            if (!rk) return;
+            const pts = [];
+            let sumX = 0, sumY = 0, n = 0;
+            rk.teams.forEach(t => {
+                const x = t.values.gf_per_game;
+                const y = t.values.ga_per_game;
+                if (x == null || y == null) return;
+                pts.push({ x, y, name: t.short || t.name, id: t.id, primary: t.primary });
+                sumX += x; sumY += y; n++;
+            });
+            leaguePoints[rk.league] = pts;
+            if (n > 0) leagueAvg[rk.league] = { x: sumX / n, y: sumY / n };
+        });
+
+        // 두 팀 좌표
+        const findPt = (leagueCode, teamId) =>
+            (leaguePoints[leagueCode] || []).find(p => p.id === teamId);
+        const ptA = findPt(teamA.league, teamA.id);
+        const ptB = findPt(teamB.league, teamB.id);
+
+        const bgPoints = [];
+        Object.entries(leaguePoints).forEach(([lg, pts]) => {
+            pts.forEach(p => {
+                if (p.id !== teamA.id && p.id !== teamB.id) bgPoints.push(p);
+            });
+        });
+        // 평균선 (리그 통합 평균)
+        const avgs = Object.values(leagueAvg);
+        const avgX = avgs.length ? avgs.reduce((s,a)=>s+a.x,0)/avgs.length : 0;
+        const avgY = avgs.length ? avgs.reduce((s,a)=>s+a.y,0)/avgs.length : 0;
+
+        const datasets = [
+            {
+                label: "리그 전 팀",
+                data: bgPoints,
+                backgroundColor: "rgba(160, 170, 185, 0.45)",
+                borderColor: "rgba(160, 170, 185, 0.7)",
+                pointRadius: 4,
+                pointHoverRadius: 6,
+            },
+        ];
+        if (ptA) datasets.push({
+            label: teamA.short || teamA.name,
+            data: [ptA],
+            backgroundColor: teamA.primary || "#4a82c7",
+            borderColor: "#fff",
+            borderWidth: 2,
+            pointRadius: 10,
+            pointHoverRadius: 13,
+        });
+        if (ptB) datasets.push({
+            label: teamB.short || teamB.name,
+            data: [ptB],
+            backgroundColor: teamB.primary || "#e06d4f",
+            borderColor: "#fff",
+            borderWidth: 2,
+            pointRadius: 10,
+            pointHoverRadius: 13,
+            pointStyle: "triangle",
+        });
+
+        if (balanceChart) {
+            balanceChart.data.datasets = datasets;
+            balanceChart.options.plugins.annotation = quadrantAnno(avgX, avgY);
+            balanceChart.update();
+            return;
+        }
+
+        balanceChart = new Chart(el, {
+            type: "scatter",
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 500 },
+                scales: {
+                    x: {
+                        title: { display: true, text: "경기당 득점 →", color: "#4a5a75", font: { weight: 600 } },
+                        min: 0,
+                        ticks: { color: "#5a6c85", font: { weight: 600 } },
+                        grid: { color: "rgba(90,110,140,0.08)" },
+                    },
+                    y: {
+                        title: { display: true, text: "← 경기당 실점 (낮을수록 좋음)", color: "#4a5a75", font: { weight: 600 } },
+                        min: 0,
+                        reverse: true,
+                        ticks: { color: "#5a6c85", font: { weight: 600 } },
+                        grid: { color: "rgba(90,110,140,0.08)" },
+                    },
+                },
+                plugins: {
+                    legend: { labels: { color: "#1f2d47", font: { weight: 600 }, usePointStyle: true, padding: 12 } },
+                    tooltip: {
+                        backgroundColor: "#ffffff",
+                        borderColor: "rgba(74,130,199,0.35)",
+                        borderWidth: 1,
+                        titleColor: "#1f2d47",
+                        bodyColor: "#1f2d47",
+                        callbacks: {
+                            label: (c) => {
+                                const p = c.raw;
+                                return `${p.name}  득 ${p.x.toFixed(2)} / 실 ${p.y.toFixed(2)}`;
+                            }
+                        }
+                    }
+                },
+            }
+        });
+        // 사분면 평균선은 커스텀 플러그인 없이 Chart.js 내장으로는 annotation plugin 필요 → 텍스트 라벨은 생략
+        // (간소화: 배경점 + 하이라이트 2팀으로 "공격형/수비형" 위치 충분히 전달)
+    }
+
+    function quadrantAnno(avgX, avgY) { return {}; }
+
+    // ─── B. 폼 스파크라인 (최근 10경기 PPG 이동평균) ─────
+    function renderFormSparkline(side, trendData, teamInfo) {
+        const host = document.getElementById(`tc-form-row-${side.toLowerCase()}`);
+        if (!host) return;
+
+        const matches = (trendData && trendData.matches) || [];
+        const recent = matches.slice(-10);  // 최근 10경기
+        const recent5 = matches.slice(-5);  // 최근 5 W/D/L 뱃지
+
+        // 최근 5경기 PPG → 직전 5경기 PPG 비교로 상승/하락 판정
+        const avg = (arr) => arr.length ? arr.reduce((s,m)=>s+m.pts,0)/arr.length : 0;
+        const last5ppg = avg(recent5);
+        const prev5 = matches.slice(-10, -5);
+        const prev5ppg = avg(prev5);
+        let trend = "→";
+        let trendCls = "flat";
+        if (last5ppg > prev5ppg + 0.2) { trend = "↑"; trendCls = "up"; }
+        else if (last5ppg < prev5ppg - 0.2) { trend = "↓"; trendCls = "down"; }
+
+        // 이동평균 (3경기) 라인 차트용 데이터
+        const ppgSeries = [];
+        for (let i = 0; i < recent.length; i++) {
+            const win = recent.slice(Math.max(0, i - 2), i + 1);
+            ppgSeries.push(win.reduce((s,m)=>s+m.pts,0) / win.length);
+        }
+
+        // W/D/L 배지 (최근 5)
+        const badges = recent5.map(m => {
+            return `<span class="tc-form-badge tc-form-${m.result}">${m.result}</span>`;
+        }).join("");
+
+        host.innerHTML = `
+            <div class="tc-form-team-header">
+                <span class="tc-form-team-name" style="color:${teamInfo.primary || '#4a82c7'}">${escapeHtml(teamInfo.short || teamInfo.name || '')}</span>
+                <div class="tc-form-badges">${badges || '<span class="tc-scorer-empty">경기 없음</span>'}</div>
+            </div>
+            <div class="tc-form-spark-row">
+                <canvas class="tc-form-spark" id="tc-form-spark-${side}" width="160" height="38"></canvas>
+                <span class="tc-form-ppg">PPG <strong>${last5ppg.toFixed(2)}</strong></span>
+                <span class="tc-form-trend tc-form-trend-${trendCls}" title="직전 5경기 대비">${trend}</span>
+            </div>
+        `;
+
+        // mini line chart
+        const canvas = document.getElementById(`tc-form-spark-${side}`);
+        if (!canvas || !ppgSeries.length) return;
+
+        const color = teamInfo.primary || (side === "A" ? "#4a82c7" : "#e06d4f");
+        if (_sparkCharts[side]) {
+            _sparkCharts[side].data.labels = ppgSeries.map((_, i) => i + 1);
+            _sparkCharts[side].data.datasets[0].data = ppgSeries;
+            _sparkCharts[side].data.datasets[0].borderColor = color;
+            _sparkCharts[side].update();
+            return;
+        }
+        _sparkCharts[side] = new Chart(canvas, {
+            type: "line",
+            data: {
+                labels: ppgSeries.map((_, i) => i + 1),
+                datasets: [{
+                    data: ppgSeries,
+                    borderColor: color,
+                    backgroundColor: color + "33",
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: false,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: { x: { display: false }, y: { display: false, min: 0, max: 3 } }
+            }
+        });
+    }
+
+    // ─── A. 시즌 득/실 트렌드 라인차트 ──────────────────
+    function renderTrend(trendA, trendB, teamA, teamB) {
+        const el = document.getElementById("tc-trend");
+        const scope = document.getElementById("tc-trend-scope");
+        if (!el) return;
+
+        // 두 팀 경기 날짜를 통합해 x축으로
+        const matchesA = (trendA && trendA.matches) || [];
+        const matchesB = (trendB && trendB.matches) || [];
+        scope.textContent = `${currentYear} · A ${matchesA.length}경기 · B ${matchesB.length}경기`;
+
+        // 경기 번호(시퀀스)를 x축으로 사용 (날짜 통합 대신 각 팀의 경기 순서)
+        const maxN = Math.max(matchesA.length, matchesB.length);
+        const labels = Array.from({ length: maxN }, (_, i) => i + 1);
+
+        const colorA = teamA.primary || "#4a82c7";
+        const colorB = teamB.primary || "#e06d4f";
+
+        const datasets = [
+            {
+                label: `${teamA.short} 득점`,
+                data: matchesA.map(m => m.gf),
+                borderColor: colorA,
+                backgroundColor: colorA + "22",
+                borderWidth: 2.5,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+            },
+            {
+                label: `${teamA.short} 실점`,
+                data: matchesA.map(m => m.ga),
+                borderColor: colorA,
+                backgroundColor: "transparent",
+                borderWidth: 1.5,
+                borderDash: [5, 4],
+                tension: 0.35,
+                pointRadius: 2,
+                pointHoverRadius: 4,
+            },
+            {
+                label: `${teamB.short} 득점`,
+                data: matchesB.map(m => m.gf),
+                borderColor: colorB,
+                backgroundColor: colorB + "22",
+                borderWidth: 2.5,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+            },
+            {
+                label: `${teamB.short} 실점`,
+                data: matchesB.map(m => m.ga),
+                borderColor: colorB,
+                backgroundColor: "transparent",
+                borderWidth: 1.5,
+                borderDash: [5, 4],
+                tension: 0.35,
+                pointRadius: 2,
+                pointHoverRadius: 4,
+            },
+        ];
+
+        if (trendChart) {
+            trendChart.data.labels = labels;
+            trendChart.data.datasets = datasets;
+            trendChart.options.scales.x.title.text = "경기 순서 →";
+            trendChart.update();
+            return;
+        }
+
+        trendChart = new Chart(el, {
+            type: "line",
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 600 },
+                plugins: {
+                    legend: { labels: { color: "#1f2d47", font: { weight: 600 }, usePointStyle: true, padding: 12 } },
+                    tooltip: {
+                        backgroundColor: "#ffffff",
+                        borderColor: "rgba(74,130,199,0.35)",
+                        borderWidth: 1,
+                        titleColor: "#1f2d47",
+                        bodyColor: "#1f2d47",
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: "경기 순서 →", color: "#4a5a75", font: { weight: 600 } },
+                        ticks: { color: "#5a6c85", maxTicksLimit: 10, font: { weight: 600 } },
+                        grid: { color: "rgba(90,110,140,0.06)" },
+                    },
+                    y: {
+                        title: { display: true, text: "골", color: "#4a5a75", font: { weight: 600 } },
+                        beginAtZero: true,
+                        ticks: { color: "#5a6c85", stepSize: 1, font: { weight: 600 } },
+                        grid: { color: "rgba(90,110,140,0.08)" },
+                    },
+                }
+            }
+        });
+    }
+
+    // ─── 트렌드 데이터 병렬 로드 + 렌더 ─────────────────
+    function loadTrendFor(teamA, teamB) {
+        Promise.all([fetchTrend(teamA.id), fetchTrend(teamB.id)])
+            .then(([trA, trB]) => {
+                renderTrend(trA, trB, teamA, teamB);
+                renderFormSparkline("A", trA, teamA);
+                renderFormSparkline("B", trB, teamB);
+            })
+            .catch(() => {});
+    }
+
+    function fetchTrend(teamId) {
+        const key = `${teamId}|${currentYear}`;
+        if (_trendCache.has(key)) return Promise.resolve(_trendCache.get(key));
+
+        if (_trendInFlight[teamId]) _trendInFlight[teamId].abort();
+        _trendInFlight[teamId] = new AbortController();
+
+        const yp = currentYear !== "전체" ? `&year=${currentYear}` : "";
+        return fetch(`/api/team-trend?teamId=${teamId}${yp}`, { signal: _trendInFlight[teamId].signal })
+            .then(r => r.json())
+            .then(data => {
+                _trendCache.set(key, data);
+                if (_trendCache.size > 40) _trendCache.delete(_trendCache.keys().next().value);
+                return data;
+            })
+            .catch(err => {
+                if (err.name === "AbortError") return null;
+                return { matches: [] };
+            });
     }
 })();

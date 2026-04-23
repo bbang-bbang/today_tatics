@@ -1,6 +1,13 @@
 {
   "jeonbuk": [
     {
+      "date": "2026-04-21",
+      "home": true,
+      "opponent": "incheon",
+      "score": "1-2",
+      "result": "L"
+    },
+    {
       "date": "2026-04-18",
       "home": false,
       "opponent": "gangwon",
@@ -131,6 +138,13 @@
   ],
   "incheon": [
     {
+      "date": "2026-04-21",
+      "home": false,
+      "opponent": "jeonbuk",
+      "score": "1-2",
+      "result": "W"
+    },
+    {
       "date": "2026-04-18",
       "home": false,
       "opponent": "bucheon",
@@ -188,6 +202,13 @@
     }
   ],
   "fcseoul": [
+    {
+      "date": "2026-04-21",
+      "home": true,
+      "opponent": "bucheon",
+      "score": "3-0",
+      "result": "W"
+    },
     {
       "date": "2026-04-18",
       "home": true,
@@ -305,6 +326,13 @@
   ],
   "gangwon": [
     {
+      "date": "2026-04-21",
+      "home": false,
+      "opponent": "gimcheon",
+      "score": "0-3",
+      "result": "W"
+    },
+    {
       "date": "2026-04-18",
       "home": true,
       "opponent": "jeonbuk",
@@ -362,6 +390,13 @@
     }
   ],
   "gimcheon": [
+    {
+      "date": "2026-04-21",
+      "home": true,
+      "opponent": "gangwon",
+      "score": "0-3",
+      "result": "L"
+    },
     {
       "date": "2026-04-18",
       "home": false,
@@ -478,6 +513,13 @@
     }
   ],
   "bucheon": [
+    {
+      "date": "2026-04-21",
+      "home": false,
+      "opponent": "fcseoul",
+      "score": "3-0",
+      "result": "L"
+    },
     {
       "date": "2026-04-18",
       "home": true,
