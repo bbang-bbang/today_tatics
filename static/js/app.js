@@ -2455,3 +2455,68 @@
         resize(); loadFormation("4-4-2");
     });
 })();
+
+// ── 자동 업데이트 위젯 ─────────────────────────────────────────────────────
+(function () {
+    const dot   = document.getElementById("auw-status-dot");
+    const label = document.getElementById("auw-label");
+    const btn   = document.getElementById("auw-trigger-btn");
+    if (!dot || !label || !btn) return;
+
+    function setDot(state) {
+        dot.className = "auw-dot auw-" + state;
+    }
+
+    function renderStatus(d) {
+        if (d.running) {
+            setDot("running");
+            label.textContent = "업데이트 중...";
+            btn.classList.add("spinning");
+            return;
+        }
+        btn.classList.remove("spinning");
+        if (!d.last_run) {
+            setDot("idle");
+            label.textContent = d.next_run ? "다음: " + d.next_run.replace(" KST","") : "대기 중";
+            return;
+        }
+        if (d.last_result === "success") {
+            setDot("ok");
+            const added = d.added > 0 ? ` (+${d.added}경기)` : "";
+            label.textContent = d.last_run.replace(" KST","") + added;
+        } else {
+            setDot("error");
+            label.textContent = "오류: " + (d.last_msg || "").slice(0, 40);
+        }
+    }
+
+    function pollStatus() {
+        fetch("/api/update-status")
+            .then(r => r.json())
+            .then(d => {
+                renderStatus(d);
+                // 실행 중이면 2초마다 폴링, 평상시 60초
+                setTimeout(pollStatus, d.running ? 2000 : 60000);
+            })
+            .catch(() => setTimeout(pollStatus, 30000));
+    }
+
+    btn.addEventListener("click", () => {
+        if (btn.classList.contains("spinning")) return;
+        btn.classList.add("spinning");
+        label.textContent = "업데이트 요청 중...";
+        fetch("/api/trigger-update", { method: "POST" })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.ok) {
+                    btn.classList.remove("spinning");
+                    label.textContent = d.msg || "실패";
+                } else {
+                    setTimeout(pollStatus, 1000);
+                }
+            })
+            .catch(() => { btn.classList.remove("spinning"); });
+    });
+
+    pollStatus();
+})();

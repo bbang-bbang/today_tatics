@@ -3,8 +3,10 @@ import os
 import time
 import uuid
 import sqlite3
+import subprocess
+import threading
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from flask import Flask, render_template, jsonify, request
 
@@ -5219,6 +5221,98 @@ def match_lineup():
         "home":       home,
         "away":       away,
     })
+
+
+# ── 자동 업데이트 스케줄러 ───────────────────────────────────────────────────
+
+_KST = timezone(timedelta(hours=9))
+
+_UPDATE_STATUS = {
+    "last_run":    None,   # ISO 문자열 (KST)
+    "last_result": None,   # "success" | "error"
+    "last_msg":    "",
+    "added":       0,      # 마지막 업데이트 시 추가된 경기 수
+    "running":     False,
+    "next_run":    None,   # ISO 문자열 (KST)
+}
+
+
+def _run_update_pipeline(triggered_by="scheduler"):
+    """update_results_2026.py → sync_results_to_events.py 순차 실행"""
+    if _UPDATE_STATUS["running"]:
+        return {"ok": False, "msg": "이미 실행 중"}
+    _UPDATE_STATUS["running"] = True
+    _UPDATE_STATUS["last_run"] = datetime.now(_KST).strftime("%Y-%m-%d %H:%M KST")
+    try:
+        scripts = [
+            os.path.join(BASE_DIR, "crawlers", "update_results_2026.py"),
+            os.path.join(BASE_DIR, "crawlers", "sync_results_to_events.py"),
+        ]
+        output_lines = []
+        for script in scripts:
+            r = subprocess.run(
+                ["python", script],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=180, cwd=BASE_DIR,
+            )
+            output_lines.append(r.stdout.strip())
+            if r.returncode != 0:
+                raise RuntimeError(r.stderr[:300] or f"{script} 실패")
+
+        # 추가 경기 수 파싱 (sync 스크립트 출력에서)
+        added = 0
+        for line in "\n".join(output_lines).splitlines():
+            if "삽입" in line:
+                import re
+                m = re.search(r"(\d+)", line)
+                if m:
+                    added = int(m.group(1))
+                    break
+
+        _UPDATE_STATUS["last_result"] = "success"
+        _UPDATE_STATUS["last_msg"]    = f"경기 {added}건 추가 ({triggered_by})"
+        _UPDATE_STATUS["added"]       = added
+        # 백테스트 캐시 초기화 (새 데이터 반영)
+        _BACKTEST_CACHE.clear()
+        return {"ok": True, "added": added}
+    except Exception as e:
+        _UPDATE_STATUS["last_result"] = "error"
+        _UPDATE_STATUS["last_msg"]    = str(e)[:120]
+        return {"ok": False, "msg": str(e)[:120]}
+    finally:
+        _UPDATE_STATUS["running"] = False
+
+
+def _scheduler_loop():
+    """매일 23:00 KST 자동 실행 (K리그 최후 경기 종료 후)"""
+    while True:
+        now    = datetime.now(_KST)
+        target = now.replace(hour=23, minute=0, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(days=1)
+        _UPDATE_STATUS["next_run"] = target.strftime("%Y-%m-%d %H:%M KST")
+        time.sleep((target - now).total_seconds())
+        _run_update_pipeline(triggered_by="scheduler")
+
+
+# Flask debug reloader 환경에서 워커 프로세스에서만 스레드 시작
+if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not os.environ.get("FLASK_DEBUG"):
+    _sched_thread = threading.Thread(target=_scheduler_loop, daemon=True, name="auto-updater")
+    _sched_thread.start()
+
+
+@app.route("/api/update-status")
+def get_update_status():
+    return jsonify(_UPDATE_STATUS)
+
+
+@app.route("/api/trigger-update", methods=["POST"])
+def trigger_update():
+    if _UPDATE_STATUS["running"]:
+        return jsonify({"ok": False, "msg": "이미 실행 중입니다"})
+    t = threading.Thread(target=_run_update_pipeline, kwargs={"triggered_by": "manual"}, daemon=True)
+    t.start()
+    return jsonify({"ok": True, "msg": "업데이트를 시작했습니다"})
 
 
 if __name__ == "__main__":

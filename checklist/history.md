@@ -4,6 +4,34 @@
 
 ---
 
+## 2026-04-23 | 자동 데이터 업데이트 스케줄러 구현
+
+### 배경
+- 경기 결과 업데이트가 수동 스크립트 실행에 의존 → 실사용 마찰 큼
+- PM 결정: 자동 업데이트 스케줄러 최우선 구현
+
+### 구현 (`main.py`, `templates/index.html`, `static/css/style.css`, `static/js/app.js`)
+
+#### 백엔드 (`main.py`)
+- `_run_update_pipeline()` — `update_results_2026.py` → `sync_results_to_events.py` 순차 subprocess 실행
+  - 성공 시 `_BACKTEST_CACHE.clear()` (새 데이터 즉시 반영)
+- `_scheduler_loop()` — 매일 **23:00 KST** 자동 실행 (K리그 경기 종료 후)
+  - daemon 스레드, Werkzeug reloader 중복 방지
+- `/api/update-status` GET — last_run, last_result, added, next_run, running
+- `/api/trigger-update` POST — 수동 즉시 실행
+
+#### 프론트엔드 헤더 위젯
+- 상태 dot: 대기=회색, 성공=초록, 오류=빨강, 실행중=주황 맥박
+- 최근 업데이트 시각 + 추가 경기 수 표시
+- ↻ 버튼 수동 트리거 (스피닝 애니메이션)
+- 실행 중 2초 폴링, 평상시 60초 폴링
+
+### 검증
+- `next_run: 2026-04-24 23:00 KST` 정상 반환
+- 수동 트리거 성공, `last_result: success` 확인
+
+---
+
 ## 2026-04-23 | K1 xG 크롤링 시도 + 예측 불확실성 경고 UI 추가
 
 ### 배경
@@ -1435,3 +1463,4 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-23 23:18:11 | grep -n "match-prediction\|get_match_prediction\|homeTeam" main.py | head -10
 - 2026-04-23 23:18:21 | curl -s "http://localhost:5000/api/match-prediction?homeTeam=ulsan&awayTeam=pohang" | python -c " / import sys, json / d = json.load(sys.stdin) / conf = d.get('confidence', {}) / print(f'confidence: level={conf.get(\"level\")}, h2h={conf.get(\"h2h_games\")}, season={conf.get(\"season_games\")}') / pred = d.get('prediction', {}) / print(f'prediction: home={pred.get(\"home\")}%, draw={pred.get(\"draw\")}%, away={pred.get(\"away\")}%') / print(f'league (home_info): {d.get(\"home\", {}).get(\"name\",\"?\")} vs {d.get(\"away\", {}).get(\"name\",\"?\")}') / "
 - 2026-04-23 23:18:28 | curl -s "http://localhost:5000/api/match-prediction?homeTeam=bucheon&awayTeam=anyang" | python -c " / import sys, json / d = json.load(sys.stdin) / conf = d.get('confidence', {}) / print(f'confidence: level={conf.get(\"level\")}, h2h={conf.get(\"h2h_games\")}, season={conf.get(\"season_games\")}') / "
+- 2026-04-23 23:40:46 | curl -s -X POST http://localhost:5000/api/trigger-update | python -m json.tool / sleep 3 && curl -s http://localhost:5000/api/update-status | python -m json.tool
