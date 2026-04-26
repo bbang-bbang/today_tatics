@@ -5314,6 +5314,11 @@ def get_update_status():
 
 @app.route("/api/trigger-update", methods=["POST"])
 def trigger_update():
+    secret = os.environ.get("UPDATE_SECRET")
+    if secret:
+        token = request.headers.get("X-Update-Secret") or request.args.get("secret", "")
+        if token != secret:
+            return jsonify({"ok": False, "msg": "인증 실패"}), 403
     if _UPDATE_STATUS["running"]:
         return jsonify({"ok": False, "msg": "이미 실행 중입니다"})
     t = threading.Thread(target=_run_update_pipeline, kwargs={"triggered_by": "manual"}, daemon=True)
