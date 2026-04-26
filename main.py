@@ -17,9 +17,9 @@ BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 # Railway 배포 시 RAILWAY_DATA_DIR=/data 로 볼륨 경로 지정
 # 로컬 개발 시 BASE_DIR 그대로 사용
 DATA_DIR    = os.environ.get("RAILWAY_DATA_DIR", BASE_DIR)
-DB_PATH     = os.path.join(DATA_DIR, "players.db")
-SAVES_DIR   = os.path.join(DATA_DIR, "saves")
-SQUADS_DIR  = os.path.join(DATA_DIR, "squads")
+DB_PATH     = os.path.join(BASE_DIR, "players.db")   # Git LFS → 코드 디렉토리
+SAVES_DIR   = os.path.join(DATA_DIR, "saves")        # 볼륨 → 영구 보존
+SQUADS_DIR  = os.path.join(DATA_DIR, "squads")       # 볼륨 → 영구 보존
 STATUS_FILE = os.path.join(BASE_DIR, "data", "player_status.json")
 os.makedirs(SAVES_DIR,  exist_ok=True)
 os.makedirs(SQUADS_DIR, exist_ok=True)
