@@ -5326,5 +5326,15 @@ def trigger_update():
     return jsonify({"ok": True, "msg": "업데이트를 시작했습니다"})
 
 
+@app.route("/api/health")
+def health():
+    return jsonify({
+        "update_secret_set": bool(os.environ.get("UPDATE_SECRET")),
+        "disable_scheduler": bool(os.environ.get("DISABLE_SCHEDULER")),
+        "railway_data_dir": os.environ.get("RAILWAY_DATA_DIR", "not set"),
+        "build": "2026-04-27-v2",
+    })
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
