@@ -14,10 +14,14 @@ app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-SAVES_DIR   = os.path.join(BASE_DIR, "saves")
-SQUADS_DIR  = os.path.join(BASE_DIR, "squads")
+# Railway 배포 시 RAILWAY_DATA_DIR=/data 로 볼륨 경로 지정
+# 로컬 개발 시 BASE_DIR 그대로 사용
+DATA_DIR    = os.environ.get("RAILWAY_DATA_DIR", BASE_DIR)
+DB_PATH     = os.path.join(DATA_DIR, "players.db")
+SAVES_DIR   = os.path.join(DATA_DIR, "saves")
+SQUADS_DIR  = os.path.join(DATA_DIR, "squads")
 STATUS_FILE = os.path.join(BASE_DIR, "data", "player_status.json")
-os.makedirs(SAVES_DIR, exist_ok=True)
+os.makedirs(SAVES_DIR,  exist_ok=True)
 os.makedirs(SQUADS_DIR, exist_ok=True)
 
 def _init_default_squads():
@@ -362,9 +366,9 @@ def delete_squad(squad_id):
 
 
 # ── 경기 결과 / H2H / 팀 스탯 API ──────────────────────
-RESULTS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kleague_results_2026.json")
-H2H_FILE      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kleague_h2h.json")
-STATS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kleague_team_stats.json")
+RESULTS_FILE  = os.path.join(BASE_DIR, "data", "kleague_results_2026.json")
+H2H_FILE      = os.path.join(BASE_DIR, "data", "kleague_h2h.json")
+STATS_FILE    = os.path.join(BASE_DIR, "data", "kleague_team_stats.json")
 
 @app.route("/api/results")
 def get_results():
@@ -411,7 +415,7 @@ def get_h2h_matches():
     # 두 팀 리그가 다르면 team_a 리그를 기준으로 함 (교차 리그는 맞대결 없음)
     tid = 410 if info_a.get("league") == "K1" else 777
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     if not os.path.exists(db_path):
         return jsonify([])
 
@@ -500,7 +504,7 @@ def get_team_stats_by_year():
         return jsonify({})
     ss_id = team_info["sofascore_id"]
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     if not os.path.exists(db_path):
         return jsonify({})
 
@@ -555,7 +559,7 @@ def get_team_ranking():
         return jsonify({})
     ss_id = team_info["sofascore_id"]
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     if not os.path.exists(db_path):
         return jsonify({})
 
@@ -627,7 +631,7 @@ def get_team_top_players():
         return jsonify({})
     ss_id = team_info["sofascore_id"]
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     if not os.path.exists(db_path):
         return jsonify({})
 
@@ -707,7 +711,7 @@ def get_team_analytics():
         return jsonify({}), 404
 
     ss_id = team_info["sofascore_id"]
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
@@ -898,7 +902,7 @@ def get_team_compare():
     if not info_a or not info_b:
         return jsonify({"error": "teamA/teamB required"}), 400
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     if not os.path.exists(db_path):
         return jsonify({"error": "db not found"}), 500
 
@@ -1124,7 +1128,7 @@ def get_league_rankings():
     if cached and cached[1] > now:
         return jsonify(cached[0])
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     if not os.path.exists(db_path):
         return jsonify({"teams": [], "metrics": _lr_metrics_meta()})
 
@@ -1410,7 +1414,7 @@ def get_team_trend():
     ss_id = team_info["sofascore_id"]
     tid   = 410 if team_info.get("league") == "K1" else 777
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     if not os.path.exists(db_path):
         return jsonify({"team_id": team_id, "matches": []})
 
@@ -1775,7 +1779,7 @@ def get_match_prediction():
     league = home_info.get("league", "K2")
     tid_filter = 410 if league == "K1" else 777
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     conn = sqlite3.connect(db_path)
     cur  = conn.cursor()
 
@@ -2625,7 +2629,7 @@ def get_player_stat_report():
     player_id = request.args.get("playerId", type=int)
     year      = request.args.get("year")
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
@@ -3038,7 +3042,7 @@ def get_player_analytics():
     if not player_id:
         return jsonify({}), 400
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
@@ -3283,7 +3287,7 @@ def get_league_dashboard():
     if tournament_id is None:
         return jsonify({"error": "invalid league"}), 400
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
@@ -3487,7 +3491,7 @@ def get_team_goal_timing():
         return jsonify({"error": "team not found"}), 404
 
     ss_id   = team_info["sofascore_id"]
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     conn    = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cur     = conn.cursor()
@@ -4513,7 +4517,7 @@ def prediction_backtest():
     if cached and (_time.time() - cached["ts"] < _BACKTEST_TTL_SEC):
         return jsonify(cached["data"])
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     conn = sqlite3.connect(db_path)
     cur  = conn.cursor()
 
@@ -4688,7 +4692,7 @@ def season_simulation():
     if cached and (_time.time() - cached["ts"] < _SEASON_SIM_TTL_SEC):
         return jsonify(cached["data"])
 
-    db_path = os.path.join(BASE_DIR, "players.db")
+    db_path = DB_PATH
     conn = sqlite3.connect(db_path)
     cur  = conn.cursor()
 
@@ -5296,7 +5300,9 @@ def _scheduler_loop():
 
 
 # Flask debug reloader 환경에서 워커 프로세스에서만 스레드 시작
-if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not os.environ.get("FLASK_DEBUG"):
+if not os.environ.get("DISABLE_SCHEDULER") and (
+    os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not os.environ.get("FLASK_DEBUG")
+):
     _sched_thread = threading.Thread(target=_scheduler_loop, daemon=True, name="auto-updater")
     _sched_thread.start()
 

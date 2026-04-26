@@ -232,6 +232,61 @@ body {
     text-align: center;
 }
 
+.layer-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.layer-select-btn {
+    flex: 1;
+    padding: 4px 6px;
+    border-radius: 5px;
+    border: 1px solid var(--bg-elevated);
+    background: var(--bg-dark);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+}
+
+.layer-select-btn:hover {
+    border-color: #4a90d9;
+    color: #fff;
+}
+
+.layer-select-btn.active {
+    background: #1a3a5c;
+    border-color: #4a90d9;
+    color: #7ab8e8;
+    font-weight: 600;
+}
+
+.layer-vis-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 4px;
+    border: 1px solid var(--bg-elevated);
+    background: transparent;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.layer-vis-btn:hover {
+    background: var(--bg-elevated);
+}
+
+.layer-vis-btn.layer-hidden {
+    opacity: 0.4;
+}
+
 .ltb-speed {
     gap: 3px;
 }
@@ -1568,6 +1623,19 @@ body {
     color: #fff;
 }
 
+.save-item-actions .btn-link-item {
+    background: #0d2a3a;
+    color: #7ab8d4;
+    border-color: #1a4a63;
+    padding: 5px 9px;
+    font-size: 0.85rem;
+}
+
+.save-item-actions .btn-link-item:hover {
+    background: #1a4a63;
+    color: #fff;
+}
+
 /* 경기 라인업 불러오기 모달 */
 .match-load-modal-content {
     width: 560px;
@@ -1711,6 +1779,31 @@ body {
 
 .toast.show {
     opacity: 1;
+}
+
+.toast.toast-has-action {
+    pointer-events: auto;
+    padding: 8px 14px 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    white-space: nowrap;
+}
+
+.toast-link-btn {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 4px 11px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.toast-link-btn:hover {
+    background: #1d4ed8;
 }
 
 /* Slot Picker */
@@ -1928,6 +2021,59 @@ body {
     transition: background 0.2s;
 }
 .player-edit-confirm-btn:hover { background: #15a050; }
+
+/* 전술 노트 팝업 */
+#note-popup {
+    width: 224px;
+}
+
+.note-popup-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #ffd700;
+}
+
+.note-popup-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--bg-dark);
+    border: 1px solid var(--bg-elevated);
+    border-radius: 5px;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    padding: 6px 8px;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.note-popup-textarea:focus {
+    border-color: #4a90d9;
+}
+
+.note-popup-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.note-popup-delete-btn {
+    flex: 1;
+    padding: 6px;
+    border-radius: 5px;
+    border: 1px solid #7c1a1a;
+    background: #3d0d0d;
+    color: #e08080;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.note-popup-delete-btn:hover {
+    background: #7c1a1a;
+    color: #fff;
+}
 
 .player-edit-heatmap-btn {
     flex: 1;

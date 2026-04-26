@@ -4,6 +4,117 @@
 
 ---
 
+## 2026-04-26 19:00 | Railway 배포 준비
+
+### 변경 파일
+- `main.py` — `DATA_DIR` 환경변수 도입, `DB_PATH` 상수화, 스케줄러 `DISABLE_SCHEDULER` 플래그
+- `requirements.txt` — `gunicorn==21.2.0` 추가, playwright 주석 처리
+- `Procfile` — 신규 생성
+- `railway.toml` — 신규 생성
+
+### 핵심 설계
+- `RAILWAY_DATA_DIR=/data` 설정 시 DB/saves/squads를 볼륨 경로로 분리
+- 미설정 시 `BASE_DIR` 그대로 → 로컬 개발 무변경
+- JSON 데이터 파일(`data/*.json`)은 코드와 함께 유지 (git 관리)
+- `DISABLE_SCHEDULER=1` → Railway에서 스케줄러 비활성화
+
+---
+
+## 2026-04-26 18:00 | 전술 노트 UI 개선 (prompt → 인라인 팝업)
+
+### 배경
+- 전술판 완성도 방향(A) 3단계
+- 화살표 더블클릭 시 `prompt()` 팝업 → 인라인 팝업으로 교체
+
+### 구현 (`templates/index.html`, `static/js/app.js`, `static/css/style.css`)
+
+#### HTML
+- `#note-popup` 팝업 추가: 노란 "전술 노트" 타이틀, textarea(2줄/40자), 저장/삭제 버튼, × 닫기
+
+#### JS
+- `openNotePopup(line, cx, cy)` — 더블클릭 위치 근처 팝업 배치 (화면 경계 보정), 기존 노트 값 채움
+- `closeNotePopup()` — 팝업 숨김
+- `commitNote()` — trim 후 저장, 빈값이면 note 삭제
+- Enter(단독) → 저장, Shift+Enter → 개행, ESC → 닫기
+- 팝업 바깥 mousedown → 닫기
+- 삭제 버튼 → 즉시 노트 삭제 + 닫기
+
+#### CSS
+- `.note-popup-textarea` — dark 배경, focus 시 파란 테두리
+- `.note-popup-actions` — 저장/삭제 버튼 flex 행
+- `.note-popup-delete-btn` — 빨간 계열 삭제 버튼
+
+### 검증
+- prompt() 노트 코드 완전 제거 확인 (나머지 3개 prompt는 선수이름/포메이션명/클립보드 폴백 — 유지)
+- HTML/CSS 모든 요소 존재 확인
+
+---
+
+## 2026-04-26 17:00 | 레이어 시스템 구현
+
+### 배경
+- 전술판 완성도 방향(A) 2단계 — 코치진 협업 핵심 기능
+- 1압박/2커버/3전환 단계별 화살표 분리 + on/off 토글 필요
+
+### 구현 (`templates/index.html`, `static/js/app.js`, `static/css/style.css`)
+
+#### 설계
+- 레이어 3개 고정 (1 압박 / 2 커버 / 3 전환) — K리그 전술 코치 실사용 단계
+- 레이어 가시성은 저장 안 함 (열 때 항상 all-visible), 각 line의 `layer` 번호만 저장
+- 기존 저장 파일 backward-compatible (`layer` 없으면 1로 폴백)
+
+#### 데이터 구조
+- `state.activeLayer` (1|2|3) — 현재 그리기 레이어
+- `state.layerVisible` `{1:true, 2:true, 3:true}` — 레이어별 가시성
+- 모든 line 객체에 `layer` 필드 추가
+
+#### JS (`app.js`)
+- `drawLines()` — `l.layer || 1`로 레이어 판별, `layerVisible` false면 skip
+- 3개 `lines.push()` 모두 `layer: state.activeLayer` 추가
+- `getStateSnapshot()` / `applySnapshot()` — `layer` 필드 직렬화/역직렬화
+- `syncLayerUI()` — 활성 레이어 active 표시 + 눈 아이콘 ↔ 🚫 토글
+- `.layer-select-btn` 클릭 → `state.activeLayer` 변경
+- `.layer-vis-btn` 클릭 → `state.layerVisible[n]` 토글 + render
+
+#### HTML
+- 좌측 툴바 레이어 섹션: 레이어별 [이름 버튼 | 👁 토글] 3행
+
+#### CSS
+- `.layer-row`, `.layer-select-btn`, `.layer-vis-btn`, `.layer-hidden` 추가
+
+### 검증
+- HTML 렌더링 layer-select-btn, layer-vis-btn, 3개 레이어 텍스트 포함 확인
+- 모든 JS 변경점 코드 레벨 검증
+
+---
+
+## 2026-04-26 16:00 | 전술판 링크 공유 기능 구현
+
+### 배경
+- 전술판 완성도 방향(A) 선택 — 가장 공수 대비 임팩트가 높은 링크 공유부터 착수
+- 이미지 내보내기는 있었지만 URL 기반 공유가 없어 커뮤니티 공유 불가
+
+### 구현 (`static/js/app.js`, `static/css/style.css`)
+
+#### JS
+- `copyShareLink(id)` — `?share=<id>` URL을 클립보드에 복사 (navigator.clipboard 없으면 prompt fallback)
+- `showLinkToast(saveId)` — 저장 완료 후 "전술이 저장되었습니다. + 🔗 링크 복사 버튼" 토스트 (5초)
+- 저장 확인 핸들러 — POST `/api/saves` 응답에서 `id` 추출 후 `showLinkToast` 호출
+- 불러오기 목록 — 각 항목에 🔗 버튼 추가, 클릭 시 `copyShareLink(id)`
+- 초기화 — `URLSearchParams('share')` 감지 시 `/api/saves/<id>` 자동 로드 후 토스트
+
+#### CSS
+- `.btn-link-item` — 불러오기 목록 링크 버튼 (청록 계열)
+- `.toast.toast-has-action` — 액션 버튼 포함 토스트 (pointer-events: auto, flex)
+- `.toast-link-btn` — 토스트 내 파란 버튼
+
+### 검증
+- POST `/api/saves` → `save_id: 9e139aed` 반환 확인
+- GET `/api/saves/9e139aed` → 정상 응답 확인
+- `?share=<id>` 쿼리 파람 감지 로직 코드 레벨 검증
+
+---
+
 ## 2026-04-23 | 자동 데이터 업데이트 스케줄러 구현
 
 ### 배경
@@ -1464,3 +1575,6 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-23 23:18:21 | curl -s "http://localhost:5000/api/match-prediction?homeTeam=ulsan&awayTeam=pohang" | python -c " / import sys, json / d = json.load(sys.stdin) / conf = d.get('confidence', {}) / print(f'confidence: level={conf.get(\"level\")}, h2h={conf.get(\"h2h_games\")}, season={conf.get(\"season_games\")}') / pred = d.get('prediction', {}) / print(f'prediction: home={pred.get(\"home\")}%, draw={pred.get(\"draw\")}%, away={pred.get(\"away\")}%') / print(f'league (home_info): {d.get(\"home\", {}).get(\"name\",\"?\")} vs {d.get(\"away\", {}).get(\"name\",\"?\")}') / "
 - 2026-04-23 23:18:28 | curl -s "http://localhost:5000/api/match-prediction?homeTeam=bucheon&awayTeam=anyang" | python -c " / import sys, json / d = json.load(sys.stdin) / conf = d.get('confidence', {}) / print(f'confidence: level={conf.get(\"level\")}, h2h={conf.get(\"h2h_games\")}, season={conf.get(\"season_games\")}') / "
 - 2026-04-23 23:40:46 | curl -s -X POST http://localhost:5000/api/trigger-update | python -m json.tool / sleep 3 && curl -s http://localhost:5000/api/update-status | python -m json.tool
+- 2026-04-26 22:31:57 | curl -s http://localhost:5000/ | head -5 2>/dev/null || echo "server not responding"
+- 2026-04-26 22:32:12 | python -c " / import urllib.request, json / with urllib.request.urlopen('http://localhost:5000/api/saves/9e139aed') as r: /     d = json.loads(r.read()) /     print('name:', d['name']) /     print('formation:', d['formation']) /     print('id:', d['id']) / "
+- 2026-04-26 22:32:19 | python -c " / import urllib.request / req = urllib.request.Request('http://localhost:5000/api/saves/9e139aed', method='DELETE') / with urllib.request.urlopen(req) as r: /     print('deleted:', r.status) / "

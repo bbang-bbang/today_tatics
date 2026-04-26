@@ -110,6 +110,23 @@
                         <button id="btn-reset" class="action-btn" title="전체 초기화">초기화</button>
                     </div>
                     <div class="ltb-divider"></div>
+                    <!-- 레이어 -->
+                    <div class="ltb-group">
+                        <span class="ltb-label">레이어</span>
+                        <div class="layer-row">
+                            <button class="layer-select-btn active" data-layer="1" title="1압박 레이어 선택">1 압박</button>
+                            <button class="layer-vis-btn" data-layer="1" title="레이어 1 숨기기">👁</button>
+                        </div>
+                        <div class="layer-row">
+                            <button class="layer-select-btn" data-layer="2" title="2커버 레이어 선택">2 커버</button>
+                            <button class="layer-vis-btn" data-layer="2" title="레이어 2 숨기기">👁</button>
+                        </div>
+                        <div class="layer-row">
+                            <button class="layer-select-btn" data-layer="3" title="3전환 레이어 선택">3 전환</button>
+                            <button class="layer-vis-btn" data-layer="3" title="레이어 3 숨기기">👁</button>
+                        </div>
+                    </div>
+                    <div class="ltb-divider"></div>
                     <!-- 저장/로드 -->
                     <div class="ltb-group ltb-grid2">
                         <button id="btn-save" class="action-btn save-btn" title="현재 전술 저장">저장</button>
@@ -293,6 +310,19 @@
             <button id="slot-picker-close" class="player-edit-close-btn">&times;</button>
         </div>
         <div id="slot-picker-list" class="slot-picker-list"></div>
+    </div>
+
+    <!-- 전술 노트 팝업 -->
+    <div id="note-popup" class="player-edit-popup hidden">
+        <div class="player-edit-header">
+            <span class="note-popup-title">전술 노트</span>
+            <button id="note-popup-close" class="player-edit-close-btn">&times;</button>
+        </div>
+        <textarea id="note-popup-input" class="note-popup-textarea" maxlength="40" placeholder="예: 압박 후 즉시 전환" rows="2"></textarea>
+        <div class="note-popup-actions">
+            <button id="note-popup-save" class="player-edit-confirm-btn">저장</button>
+            <button id="note-popup-delete" class="note-popup-delete-btn">삭제</button>
+        </div>
     </div>
 
     <!-- 선수 편집 팝업 -->

@@ -14,7 +14,9 @@
         drawStyle: "arrow",     // "arrow" | "dashedArrow" | "line" | "dashedLine"
         drawColor: "rgba(255,255,255,0.85)",
         players: [],            // {id, team, x, y, name, number}
-        lines: [],              // {sx,sy,ex,ey, style, color}
+        lines: [],              // {sx,sy,ex,ey, style, color, layer}
+        activeLayer: 1,         // 현재 그리기 레이어 (1|2|3)
+        layerVisible: { 1: true, 2: true, 3: true }, // 레이어별 가시성
         animations: [],         // {player, line, progress, duration}
         multiPoints: null,      // [{fx,fy},...] when drawing multi-point path
         multiPreviewEnd: null,  // {px,py} canvas coords of current mouse for preview
@@ -206,6 +208,8 @@
 
     function drawLines() {
         for (const l of state.lines) {
+            const lyr = l.layer || 1;
+            if (!state.layerVisible[lyr]) continue;
             if (l.style === 'curvedArrow') {
                 drawCurvedLine(l.sx, l.sy, l.cx, l.cy, l.ex, l.ey, l.color, false);
             } else if (l.style === 'multiArrow') drawMultiLine(l.points, l.color, false, null);
@@ -982,7 +986,7 @@
                     // 3번 클릭: 곡선 방향 확정 → 저장
                     const l = state.drawingLine;
                     if (Math.sqrt((l.ex - l.sx) ** 2 + (l.ey - l.sy) ** 2) > 0.01) {
-                        state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: 'curvedArrow', color: l.color, attachedPlayerId: l.attachedPlayerId });
+                        state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: 'curvedArrow', color: l.color, attachedPlayerId: l.attachedPlayerId, layer: state.activeLayer });
                     }
                     state.drawingLine = null;
                 }
@@ -1068,7 +1072,7 @@
         else if (state.mode === "draw" && state.drawingLine && state.drawingLine.style !== 'curvedArrow') {
             const l = state.drawingLine;
             if (Math.sqrt((l.ex - l.sx) ** 2 + (l.ey - l.sy) ** 2) > 0.04) {
-                state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId });
+                state.lines.push({ sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId, layer: state.activeLayer });
             }
             state.drawingLine = null; render();
         }
@@ -1152,14 +1156,7 @@
         if (player) { openEditPopup(player, e.clientX, e.clientY); return; }
         // 화살표 더블클릭 → 전술 노트 편집
         const line = hitTestLine(px, py);
-        if (line) {
-            const current = line.note || "";
-            const note = prompt("전술 노트 (빈칸이면 삭제):", current);
-            if (note === null) return; // 취소
-            line.note = note.trim() || undefined;
-            render();
-            showToast(line.note ? "노트가 추가되었습니다." : "노트가 삭제되었습니다.");
-        }
+        if (line) openNotePopup(line, e.clientX, e.clientY);
     });
 
     // ── Right-click: 꺾기 완료 or 선수 제거 ──────────────────
@@ -1168,7 +1165,7 @@
         if (state.mode === "draw" && state.multiPoints) {
             if (state.multiPoints.length >= 2) {
                 const pts = state.multiPoints;
-                state.lines.push({ style: 'multiArrow', color: state.drawColor, points: [...pts], sx: pts[0].fx, sy: pts[0].fy, ex: pts[pts.length-1].fx, ey: pts[pts.length-1].fy, attachedPlayerId: state.multiAttachedPlayerId || null });
+                state.lines.push({ style: 'multiArrow', color: state.drawColor, points: [...pts], sx: pts[0].fx, sy: pts[0].fy, ex: pts[pts.length-1].fx, ey: pts[pts.length-1].fy, attachedPlayerId: state.multiAttachedPlayerId || null, layer: state.activeLayer });
             }
             state.multiPoints = null; state.multiPreviewEnd = null; state.multiAttachedPlayerId = null; render();
             return;
@@ -1241,6 +1238,90 @@
         e.target.classList.toggle("active", state.showRoleTags);
         render();
     });
+
+    // ── 전술 노트 팝업 ────────────────────────────────────
+    const notePopup    = document.getElementById("note-popup");
+    const noteInput    = document.getElementById("note-popup-input");
+    const noteClose    = document.getElementById("note-popup-close");
+    const noteSave     = document.getElementById("note-popup-save");
+    const noteDelete   = document.getElementById("note-popup-delete");
+    let   _noteLine    = null;
+
+    function openNotePopup(line, cx, cy) {
+        _noteLine = line;
+        noteInput.value = line.note || "";
+        // 화면 경계 넘지 않게 위치 조정
+        const pw = 224, ph = 130;
+        const left = Math.min(cx + 8, window.innerWidth  - pw - 8);
+        const top  = Math.min(cy + 8, window.innerHeight - ph - 8);
+        notePopup.style.left = left + "px";
+        notePopup.style.top  = top  + "px";
+        notePopup.classList.remove("hidden");
+        noteInput.focus();
+        noteInput.select();
+    }
+
+    function closeNotePopup() {
+        notePopup.classList.add("hidden");
+        _noteLine = null;
+    }
+
+    function commitNote() {
+        if (!_noteLine) return;
+        const val = noteInput.value.trim();
+        _noteLine.note = val || undefined;
+        render();
+        closeNotePopup();
+        showToast(val ? "노트가 추가되었습니다." : "노트가 삭제되었습니다.");
+    }
+
+    noteSave.addEventListener("click", commitNote);
+    noteDelete.addEventListener("click", () => {
+        if (!_noteLine) return;
+        _noteLine.note = undefined;
+        render();
+        closeNotePopup();
+        showToast("노트가 삭제되었습니다.");
+    });
+    noteClose.addEventListener("click", closeNotePopup);
+    noteInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitNote(); }
+        if (e.key === "Escape") closeNotePopup();
+    });
+    // 팝업 바깥 클릭 시 닫기
+    document.addEventListener("mousedown", (e) => {
+        if (!notePopup.classList.contains("hidden") && !notePopup.contains(e.target)) closeNotePopup();
+    });
+
+    // ── 레이어 컨트롤 ─────────────────────────────────────
+    function syncLayerUI() {
+        document.querySelectorAll(".layer-select-btn").forEach(btn => {
+            const n = parseInt(btn.dataset.layer);
+            btn.classList.toggle("active", state.activeLayer === n);
+        });
+        document.querySelectorAll(".layer-vis-btn").forEach(btn => {
+            const n = parseInt(btn.dataset.layer);
+            const vis = state.layerVisible[n];
+            btn.textContent = vis ? "👁" : "🚫";
+            btn.title = vis ? `레이어 ${n} 숨기기` : `레이어 ${n} 표시`;
+            btn.classList.toggle("layer-hidden", !vis);
+        });
+    }
+    document.querySelectorAll(".layer-select-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            state.activeLayer = parseInt(btn.dataset.layer);
+            syncLayerUI();
+        });
+    });
+    document.querySelectorAll(".layer-vis-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const n = parseInt(btn.dataset.layer);
+            state.layerVisible[n] = !state.layerVisible[n];
+            syncLayerUI(); render();
+        });
+    });
+    syncLayerUI();
     document.getElementById("btn-reset").addEventListener("click", () => {
         state.lines = [];
         state.players.forEach(p => { p.onField = false; p.slotIdx = null; });
@@ -1425,7 +1506,31 @@
     // ── Toast ─────────────────────────────────────────────
     let toastEl = document.createElement("div"); toastEl.className = "toast"; document.body.appendChild(toastEl);
     let toastTimer = null;
-    function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2000); }
+    function showToast(msg) { toastEl.textContent = msg; toastEl.classList.remove("toast-has-action"); toastEl.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2000); }
+
+    function copyShareLink(id) {
+        const url = `${location.origin}${location.pathname}?share=${encodeURIComponent(id)}`;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(() => showToast("링크가 클립보드에 복사되었습니다!"));
+        } else {
+            prompt("아래 링크를 복사하세요:", url);
+        }
+    }
+
+    function showLinkToast(saveId) {
+        toastEl.innerHTML = "";
+        const span = document.createElement("span");
+        span.textContent = "전술이 저장되었습니다.";
+        const btn = document.createElement("button");
+        btn.className = "toast-link-btn";
+        btn.textContent = "🔗 링크 복사";
+        btn.onclick = () => copyShareLink(saveId);
+        toastEl.appendChild(span);
+        toastEl.appendChild(btn);
+        toastEl.classList.add("show", "toast-has-action");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toastEl.classList.remove("show", "toast-has-action"); toastEl.textContent = ""; }, 5000);
+    }
 
     // ── Slot picker ───────────────────────────────────────
     const slotPicker = document.getElementById("slot-picker");
@@ -1773,9 +1878,10 @@
             slots: state.slots,
             players: state.players.map((p) => ({ id: p.id, team: p.team, x: p.x, y: p.y, onField: p.onField, slotIdx: p.slotIdx ?? null, name: p.name, number: p.number, position: p.position || "", height: p.height || null, weight: p.weight || null, dob: p.dob || "" })),
             lines: state.lines.map((l) => {
-                if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
-                if (l.style === 'multiArrow') return { points: l.points, sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
-                return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
+                const lyr = l.layer || 1;
+                if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx, cy: l.cy, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined, layer: lyr };
+                if (l.style === 'multiArrow') return { points: l.points, sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined, layer: lyr };
+                return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style, color: l.color, attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined, layer: lyr };
             }),
             teamAId: state.teamA ? state.teamA.id : null,
             teamBId: state.teamB ? state.teamB.id : null,
@@ -1796,9 +1902,10 @@
         state.balls = (data.balls || []).map(b => ({ id: b.id ?? state.nextId++, x: b.x, y: b.y }));
         // backward compat: old saves use "arrows"
         state.lines = (data.lines || data.arrows || []).map((l) => {
-            if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
-            if (l.style === 'multiArrow') return { points: l.points || [], sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: 'multiArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
-            return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style || "arrow", color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined };
+            const lyr = l.layer || 1;
+            if (l.style === 'curvedArrow') return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, cx: l.cx ?? l.sx, cy: l.cy ?? l.sy, style: 'curvedArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined, layer: lyr };
+            if (l.style === 'multiArrow') return { points: l.points || [], sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: 'multiArrow', color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined, layer: lyr };
+            return { sx: l.sx, sy: l.sy, ex: l.ex, ey: l.ey, style: l.style || "arrow", color: l.color || "rgba(255,255,255,0.85)", attachedPlayerId: l.attachedPlayerId || null, note: l.note || undefined, layer: lyr };
         });
         render(); renderBench();
     }
@@ -1837,8 +1944,9 @@
             await fetch(`/api/saves/${saveOverwriteId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snap) });
             showToast("전술이 덮어쓰기 되었습니다.");
         } else {
-            await fetch("/api/saves", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snap) });
-            showToast("전술이 저장되었습니다.");
+            const _saveRes = await fetch("/api/saves", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snap) });
+            const _saved = await _saveRes.json();
+            showLinkToast(_saved.id);
         }
         closeSaveModal();
     });
@@ -1879,7 +1987,7 @@
         for (const s of saves) {
             const item = document.createElement("div"); item.className = "save-item";
             item.innerHTML = `<div class="save-item-info"><div class="save-item-name">${escapeHtml(s.name)}</div><div class="save-item-meta">${s.formation} &middot; ${formatDate(s.updatedAt)}</div></div>
-            <div class="save-item-actions"><button class="btn-load-item" data-id="${s.id}">불러오기</button><button class="btn-overwrite-item" data-id="${s.id}" data-name="${escapeAttr(s.name)}">덮어쓰기</button><button class="btn-delete-item" data-id="${s.id}">삭제</button></div>`;
+            <div class="save-item-actions"><button class="btn-load-item" data-id="${s.id}">불러오기</button><button class="btn-overwrite-item" data-id="${s.id}" data-name="${escapeAttr(s.name)}">덮어쓰기</button><button class="btn-link-item" data-id="${s.id}" title="공유 링크 복사">🔗</button><button class="btn-delete-item" data-id="${s.id}">삭제</button></div>`;
             savesList.appendChild(item);
         }
         savesList.onclick = async (e) => {
@@ -1887,6 +1995,7 @@
             const id = btn.dataset.id;
             if (btn.classList.contains("btn-load-item")) { const r = await fetch(`/api/saves/${id}`); applySnapshot(await r.json()); closeLoadModal(); showToast("전술을 불러왔습니다."); }
             else if (btn.classList.contains("btn-overwrite-item")) { closeLoadModal(); openSaveModal(id, btn.dataset.name); }
+            else if (btn.classList.contains("btn-link-item")) { copyShareLink(id); }
             else if (btn.classList.contains("btn-delete-item")) { if (!confirm("정말 삭제하시겠습니까?")) return; await fetch(`/api/saves/${id}`, { method: "DELETE" }); showToast("삭제되었습니다."); openLoadModal(); }
         };
     }
@@ -2453,6 +2562,12 @@
         state.formations = formData; state.teams = teamData;
         loadCustomFormations();
         resize(); loadFormation("4-4-2");
+        const _shareId = new URLSearchParams(location.search).get("share");
+        if (_shareId) {
+            fetch(`/api/saves/${encodeURIComponent(_shareId)}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => { if (data && !data.error) { applySnapshot(data); showToast(`"${data.name}" 전술을 불러왔습니다.`); } });
+        }
     });
 })();
 
