@@ -14,12 +14,9 @@ app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-# Railway 배포 시 RAILWAY_DATA_DIR=/data 로 볼륨 경로 지정
-# 로컬 개발 시 BASE_DIR 그대로 사용
-DATA_DIR    = os.environ.get("RAILWAY_DATA_DIR", BASE_DIR)
-DB_PATH     = os.path.join(DATA_DIR, "players.db")   # Volume(Railway) or BASE_DIR(로컬)
-SAVES_DIR   = os.path.join(DATA_DIR, "saves")        # 볼륨 → 영구 보존
-SQUADS_DIR  = os.path.join(DATA_DIR, "squads")       # 볼륨 → 영구 보존
+DB_PATH     = os.path.join(BASE_DIR, "players.db")
+SAVES_DIR   = os.path.join(BASE_DIR, "saves")
+SQUADS_DIR  = os.path.join(BASE_DIR, "squads")
 STATUS_FILE = os.path.join(BASE_DIR, "data", "player_status.json")
 os.makedirs(SAVES_DIR,  exist_ok=True)
 os.makedirs(SQUADS_DIR, exist_ok=True)
@@ -5324,16 +5321,6 @@ def trigger_update():
     t = threading.Thread(target=_run_update_pipeline, kwargs={"triggered_by": "manual"}, daemon=True)
     t.start()
     return jsonify({"ok": True, "msg": "업데이트를 시작했습니다"})
-
-
-@app.route("/api/health")
-def health():
-    return jsonify({
-        "update_secret_set": bool(os.environ.get("UPDATE_SECRET")),
-        "disable_scheduler": bool(os.environ.get("DISABLE_SCHEDULER")),
-        "railway_data_dir": os.environ.get("RAILWAY_DATA_DIR", "not set"),
-        "build": "2026-04-27-v2",
-    })
 
 
 if __name__ == "__main__":
