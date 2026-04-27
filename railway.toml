@@ -1,6 +1,6 @@
 [build]
-builder = "nixpacks"
-# cache-bust: 2026-04-27
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120"
