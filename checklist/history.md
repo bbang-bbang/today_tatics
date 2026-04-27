@@ -1579,3 +1579,9 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-26 22:32:12 | python -c " / import urllib.request, json / with urllib.request.urlopen('http://localhost:5000/api/saves/9e139aed') as r: /     d = json.loads(r.read()) /     print('name:', d['name']) /     print('formation:', d['formation']) /     print('id:', d['id']) / "
 - 2026-04-26 22:32:19 | python -c " / import urllib.request / req = urllib.request.Request('http://localhost:5000/api/saves/9e139aed', method='DELETE') / with urllib.request.urlopen(req) as r: /     print('deleted:', r.status) / "
 - 2026-04-27 00:17:19 | git lfs version 2>/dev/null || echo "NOT_INSTALLED"
+- 2026-04-27 00:56:40 | python -c "import secrets; print(secrets.token_hex(24))"
+- 2026-04-27 01:57:47 | python -c " / import urllib.request, json /  / base = 'https://web-production-a755.up.railway.app' /  / with urllib.request.urlopen(base + '/api/health', timeout=10) as r: /     print(json.loads(r.read())) / "
+- 2026-04-27 02:03:33 | python -c " / import urllib.request, urllib.error, json /  / base = 'https://web-production-a755.up.railway.app' /  / with urllib.request.urlopen(base + '/api/health', timeout=10) as r: /     print(json.loads(r.read())) / "
+- 2026-04-27 10:23:25 | git log --oneline -10
+- 2026-04-27 10:23:29 | git status
+- 2026-04-27 10:23:29 | git diff
