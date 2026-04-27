@@ -1,13 +1,15 @@
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git git-lfs ca-certificates \
+    curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN git lfs install --system
 
 WORKDIR /app
 COPY . /app
-RUN git lfs pull
+
+RUN curl -fsSL https://github.com/bbang-bbang/today_tatics/releases/download/db-v1/players.db \
+        -o players.db \
+    && [ "$(stat -c%s players.db)" -gt 50000000 ]
 
 RUN pip install --no-cache-dir -r requirements.txt
 
