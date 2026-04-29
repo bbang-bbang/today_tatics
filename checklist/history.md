@@ -22,6 +22,41 @@
 
 ---
 
+## 2026-04-29 15:00 | P1 데이터 정합성 보강 (DB 엔지니어 보고 후속)
+
+### 배경
+- DB 엔지니어가 식별한 High 등급 정합성 부채 정리
+- 사용자 요청: PM 판단으로 P1 전체 진행
+
+### 작업 1: events score NULL 2건 조사 (`crawlers/fix_null_scores.py`)
+- 대상: `event 12116762` (Seoul E-Land vs Asan, 2024-04-24), `12116765` (Cheonan vs Gimpo, 2024-04-24)
+- SofaScore API 재조회 결과 두 경기 모두 **status=postponed (연기)**
+- 결론: NULL이 정상 데이터, UPDATE 불필요. 보완 항목에서 제외
+
+### 작업 2: teams 테이블 재구축 (`crawlers/rebuild_teams_table.py`)
+- 이전 상태: teams 1행(수원만), events↔teams orphan 101팀
+- 데이터 소스 발견:
+  - `data/sofascore_teams.json`은 핀란드 리그 매핑 10건 — K리그 마스터 아님 (오해 주의)
+  - `data/kleague_players_2026.json` (29팀 = K1 12 + K2 17)이 진짜 K리그 마스터
+- 전략: events에서 102팀 추출 + kleague JSON에서 한글 short_name 매칭 + tournament_id로 league 라벨링
+- league 우선순위 로직: 가장 최근 K1/K2/K3 출전 tournament_id 사용 (강등팀이 K2로 정확히 분류되도록)
+- tournament 매핑 발견: T2293=J3리그(일본), T10268=K3리그(한국), T11669=브라질, T18641=MLS Next Pro, T357=국제친선
+
+### 결과
+- teams 1 → 102행, orphan 101 → 0
+- 한글 매칭 29/29 (K1 12 + K2 17 모두)
+- K3 9팀은 short_name 미매칭 (kleague 마스터에 K3 없음, 정상)
+- events/mps/heatmap 카운트 변동 0 (회귀 없음 검증됨)
+
+### 영향 범위
+- `main.py`는 현재 teams 테이블을 사용하지 않음 → 화면 영향 0
+- 향후 SQL JOIN 기반 쿼리 작성 시 teams JOIN 정상 작동 (P4 분석가 부채 해소)
+
+### 보존
+- 백업: `players.db.bak_p1_20260429_150312` (100M)
+
+---
+
 ## 2026-04-26 19:00 | Railway 배포 준비
 
 ### 변경 파일
@@ -1672,3 +1707,16 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-29 14:47:01 | python -c " / import urllib.request, urllib.parse, json / url='http://127.0.0.1:5000/api/team-analytics?teamId=suwon&year=2026' / try: /   r=urllib.request.urlopen(url, timeout=15).read() /   d=json.loads(r) /   print('team-analytics ok, keys:', list(d.keys())[:10] if isinstance(d,dict) else type(d)) /   if isinstance(d,dict): /     for k in ['games','wins','draws','losses','goals_for','goals_against','total_games','recent_form']: /       if k in d: print(' ',k,'=',d[k]) / except Exception as e: /   print('err:', e) / "
 - 2026-04-29 14:48:21 | git status && echo "---DIFF---" && git diff checklist/history.md | head -60 && echo "---SUBMODULE?---" && git diff today_tatics 2>&1 | head -20
 - 2026-04-29 14:48:39 | cat .gitignore 2>/dev/null | grep -E "bak|backup|players" | head -5; echo "---"; git log --oneline -5
+- 2026-04-29 14:48:50 | git add checklist/history.md && git status --short
+- 2026-04-29 14:49:11 | git push origin main 2>&1 | tail -10
+- 2026-04-29 14:59:40 | python -c " / import json / with open('data/sofascore_teams.json', 'r', encoding='utf-8') as f: /     d = json.load(f) / print(f'type: {type(d).__name__}') / if isinstance(d, list): /     print(f'count: {len(d)}') /     print('sample[0]:', json.dumps(d[0], ensure_ascii=False, indent=2)) / elif isinstance(d, dict): /     print(f'keys: {list(d.keys())[:5]}') /     k = list(d.keys())[0] /     print(f'sample[{k}]:', json.dumps(d[k], ensure_ascii=False, indent=2)) / "
+- 2026-04-29 15:00:19 | ls data/ && echo '---' && python -c " / import json, os / for fn in os.listdir('data'): /     p = f'data/{fn}' /     if not fn.endswith('.json'): continue /     try: /         with open(p, 'r', encoding='utf-8') as f: /             d = json.load(f) /         if isinstance(d, list): info = f'list[{len(d)}]' /         elif isinstance(d, dict): info = f'dict keys={len(d)}' /         else: info = type(d).__name__ /         print(f'  {fn:50} {info}') /     except Exception as e: /         print(f'  {fn:50} ERROR {e}') / "
+- 2026-04-29 15:00:29 | python -c " / import json / with open('data/kleague_team_stats.json', 'r', encoding='utf-8') as f: /     d = json.load(f) / print('keys (first 10):', list(d.keys())[:10]) / k0 = list(d.keys())[0] / v0 = d[k0] / print(f'\\nsample [{k0}]:') / print(json.dumps(v0, ensure_ascii=False, indent=2)[:600]) / "
+- 2026-04-29 15:00:32 | python -c " / import json / with open('data/kleague_players_2026.json', 'r', encoding='utf-8') as f: /     d = json.load(f) / print('keys (first 5):', list(d.keys())[:5]) / k0 = list(d.keys())[0] / v0 = d[k0] / print(f'\\nsample [{k0}] type={type(v0).__name__}') / if isinstance(v0, dict): /     print('  inner keys:', list(v0.keys())[:8]) /     for k in list(v0.keys())[:3]: /         print(f'  [{k}] preview:', str(v0[k])[:200]) / elif isinstance(v0, list): /     print(f'  list len: {len(v0)}, sample:', json.dumps(v0[0], ensure_ascii=False)[:200] if v0 else 'empty') / "
+- 2026-04-29 15:03:13 | cp players.db players.db.bak_p1_$(date +%Y%m%d_%H%M%S) && ls -lh players.db.bak_p1_* | tail -1
+- 2026-04-29 15:03:38 | PYTHONIOENCODING=utf-8 python -u crawlers/fix_null_scores.py 2>&1
+- 2026-04-29 15:05:00 | PYTHONIOENCODING=utf-8 python -u crawlers/rebuild_teams_table.py
+- 2026-04-29 15:05:26 | PYTHONIOENCODING=utf-8 python -c " / import sqlite3 / c = sqlite3.connect('players.db') / for tid in [10268, 11669, 18641, 357, 495]: /     print(f'-- T{tid}') /     for r in c.execute('SELECT home_team_name, away_team_name FROM events WHERE tournament_id=? LIMIT 3', (tid,)).fetchall(): /         print(f'  {r[0]} vs {r[1]}') / "
+- 2026-04-29 15:05:49 | PYTHONIOENCODING=utf-8 python -u crawlers/rebuild_teams_table.py
+- 2026-04-29 15:06:41 | PYTHONIOENCODING=utf-8 python -u crawlers/rebuild_teams_table.py
+- 2026-04-29 15:08:00 | git status --short && echo "---" && git add checklist/history.md crawlers/fix_null_scores.py crawlers/rebuild_teams_table.py && git status --short
