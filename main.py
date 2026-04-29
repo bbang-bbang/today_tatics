@@ -1648,7 +1648,7 @@ def _rest_factor(rest_days):
 
 
 def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
-                  apply_sos=True, apply_rest=True,
+                  apply_sos=False, apply_rest=True,
                   home_rest_days=None, away_rest_days=None,
                   decay=None):
     """
