@@ -22,6 +22,46 @@
 
 ---
 
+## 2026-04-29 16:30 | 가비아 g클라우드 정식 배포
+
+### 배경
+- Railway 임시 운영 → 정식 운영(가비아 g2 시나리오 A)으로 이전
+- 메모리(`deployment_target.md`) 결정 사양: 2vCPU/4GB/SSD50GB Rocky Linux 9.6
+
+### 결정 사항
+- **호스트 직접 설치 채택** — 메모리에 "도커 격리 권장"이었으나 4GB 노드 자원 현실 + 단일 앱이라 도커 오버헤드 회피 (메모리 갱신함)
+- 사용자: rocky, 경로: `/opt/today_tatics`
+- 외부 접근: `http://1.201.126.200/` (가비아 콘솔에서 80 인바운드 HTTP 허용)
+
+### 셋업
+1. dnf update, swap 1GB, 기본 유틸 (htop은 EPEL)
+2. firewalld 설치 + 22/80/443 (가비아 이미지에 firewalld 미설치)
+3. Python 3.11 + Playwright OS deps (nss/nspr/atk/cups-libs/gtk3/libdrm)
+4. git clone, Playwright Chromium, players.db 100MB scp
+5. systemd (gunicorn 2 workers, /var/log/today_tatics) + Nginx 리버스 프록시
+6. 일일 백업 cron (`deploy/backup.sh`, 03:00 KST, 30일 보관)
+
+### 트러블슈팅
+- venv는 `mv` 후 깨짐 (절대 경로 shebang) → 재생성
+- requirements.txt에 gunicorn 빠짐 (Railway revert 영향) → 별도 설치
+- Nginx 기본 server 블록 충돌 → /etc/nginx/nginx.conf default_server 제거
+- 가비아 외부 방화벽이 80 차단 → 콘솔 인바운드 허용 (사용자)
+
+### 검증
+- 내부: gunicorn:5000 → 200 (9ms), nginx:80 → 200 (10ms)
+- 외부: HTTP 200, 0.15초 (Railway 대비 빠름)
+- 회귀: H2H 7경기, 4/25 placeholder 노출 0건 — P0~P2 결과 모두 반영
+
+### 후속
+- Railway 종료 결정
+- 도메인 + Let's Encrypt HTTPS
+- logrotate
+
+### 보안
+- `today-project.pem` `.gitignore` 추가 (`*.pem`, `*.key`) — 우연 커밋 방지
+
+---
+
 ## 2026-04-29 15:30 | P2 데이터 정합성 보강 (orphan 정리 + K1/K2 venue 백필)
 
 ### 배경
@@ -1792,3 +1832,4 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-29 16:30:53 | curl -s -o /dev/null -w "硫붿씤:    HTTP %{http_code} size=%{size_download} time=%{time_total}s\n" --max-time 10 http://1.201.126.200/ / curl -s -o /dev/null -w "/static/css/style.css: HTTP %{http_code} size=%{size_download}\n" --max-time 10 http://1.201.126.200/static/css/style.css / curl -s -o /dev/null -w "/api/teams:            HTTP %{http_code} size=%{size_download}\n" --max-time 10 http://1.201.126.200/api/teams / curl -s -o /dev/null -w "/api/standings:        HTTP %{http_code} size=%{size_download}\n" --max-time 10 http://1.201.126.200/api/standings / curl -s -o /dev/null -w "/api/results?teamId=suwon: HTTP %{http_code} size=%{size_download}\n" --max-time 10 "http://1.201.126.200/api/results?teamId=suwon"
 - 2026-04-29 16:32:08 | ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'crontab -l; echo "---"; sudo systemctl status crond --no-pager | head -3' 2>&1 | grep -v "post-quantum\|store now\|openssh.com"
 - 2026-04-29 16:32:17 | ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'echo "0 3 * * * /opt/today_tatics/deploy/backup.sh >> /var/log/today_tatics/backup.log 2>&1" | crontab -; crontab -l' 2>&1 | grep -v "post-quantum\|store now\|openssh.com"
+- 2026-04-29 16:33:18 | git add deploy/backup.sh checklist/history.md && git commit -m "$(cat <<'EOF' / Deploy to Gabia g-cloud (Rocky 9.6, 2vCPU/4GB) /  / - Production endpoint: http://1.201.126.200/ (replaces Railway temporary) / - Host: /opt/today_tatics, user=rocky, gunicorn 2 workers + Nginx reverse proxy / - Daily backup at 03:00 KST: players.db + data/*.json (30-day retention) / - Verified externally: HTTP 200, 0.15s response (faster than Railway, KR region) / - P0~P2 data integrity work fully reflected on production: /   * H2H 7 matches (dedupe regression resolved) /   * Placeholder event 90435012 not exposed /   * Teams/orphan/venue all consistent /  / deploy/backup.sh added (sqlite3 .backup for consistent snapshots) / .pem already gitignored (a461734). /  / Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com> / EOF / )" && git push origin main 2>&1 | tail -3
