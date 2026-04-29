@@ -1673,8 +1673,10 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
     league_avg = float(_r[0]) if _r and _r[0] else 1.3
 
     def _team_xg(ss_id):
-        # 2025+2026 통합 조회, date_ts DESC → 최신 경기가 rank=0
-        cur.execute("""
+        # 학습 기간: K1은 2024 포함(데이터 부족 보강), K2는 2025+2026
+        # P2(2026-04-29) 정합성 작업으로 2024 events 메타 복구되어 K1 백필 활용 가능
+        years = "('2024','2025','2026')" if tid_filter == 410 else "('2025','2026')"
+        cur.execute(f"""
             SELECT e.id, e.home_team_id=? AS is_home, e.home_score, e.away_score,
                    (SELECT SUM(mps.expected_goals) FROM match_player_stats mps
                     WHERE mps.event_id=e.id AND mps.team_id=?) AS xg_for,
@@ -1686,7 +1688,7 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
               AND (e.home_team_id=? OR e.away_team_id=?)
               AND e.home_score IS NOT NULL AND e.away_score IS NOT NULL
               AND e.date_ts < ?
-              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) IN ('2025','2026')
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) IN {years}
             ORDER BY e.date_ts DESC
         """, (ss_id, ss_id, ss_id, tid_filter, ss_id, ss_id, as_of_ts))
         rows = cur.fetchall()
