@@ -23,3 +23,7 @@ Thumbs.db
 # IDE
 .vscode/
 *.code-workspace
+
+# SSH keys
+*.pem
+*.key
