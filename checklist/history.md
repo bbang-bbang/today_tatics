@@ -22,6 +22,48 @@
 
 ---
 
+## 2026-04-29 15:30 | P2 데이터 정합성 보강 (orphan 정리 + K1/K2 venue 백필)
+
+### 배경
+- P1 후속, DB 엔지니어가 식별한 Medium 이슈 정리
+- 사용자 PM 위임 진행
+
+### 작업 1: orphan event 백필 (`crawlers/backfill_orphan_events.py`)
+- 대상: heatmap_points 80,527pts (1,151 events) + match_player_stats 6,703행 (180 events) = unique 1,331 events
+- 시기 분포 분석: 전부 2014~2024 한국 K리그 경기 (player_id 100% 알려진 한국 선수)
+- 전략: SofaScore `/api/v1/event/{id}` 호출 → 성공 시 events INSERT, 실패 시 cascading delete
+- 결과: **1,331건 모두 INSERT 성공, 삭제 0건** (SofaScore가 옛날 event도 보존)
+- 효과: events 1,200 → 2,531 (10년치 K리그 history 복구)
+
+### 작업 2: K1+K2 venue 백필 (`crawlers/fetch_venues.py --league all`)
+- 작업 1 직후 events 메타에 venue 정보가 없어 K1 95%, K2 35%가 venue NULL
+- fetch_venues.py가 SofaScore venueCoordinates + Nominatim geocoding 폴백 처리
+- 1,218 events 처리. 마지막 3건 `90...` 계열은 SofaScore 응답 없음 (placeholder형 ID, 다음 update_data.py에서 자연 정리됨)
+- 결과: **K1 venue 0% → 97%, K2 84% → 98%**
+
+### 작업 3: teams 재구축 재실행 (rebuild_teams_table.py)
+- 작업 1로 새 team_id들이 events에 추가되어 events↔teams orphan 101 → 157로 증가
+- 재구축 후 teams 102 → 259, orphan 0
+
+### 최종 정합성 (P2 시작 → P2 끝)
+| 지표 | 시작 | 끝 |
+|------|------|-----|
+| events | 1,200 | 2,531 |
+| heatmap orphan | 80,527 pts | 0 |
+| mps orphan | 6,703 행 | 0 |
+| events→teams orphan | 101 | 0 |
+| K1 venue 커버리지 | 11% | 97% |
+| K2 venue 커버리지 | 84% | 98% |
+
+### 영향 범위
+- 사용자 가시 효과: K1 경기 클릭 시 경기장명/날씨 위젯 정상 표시 (이전엔 K1 95% 빈 화면)
+- 백필된 옛날 events (2014~2023)는 H2H 페이지에 추가 노출 — `tournament_id` 필터로 K1/K2/K3 구분되므로 화면 혼선 없음 검증 필요
+
+### 보존
+- 백업: `players.db.bak_p2_20260429_151250` (100M)
+
+---
+
 ## 2026-04-29 15:00 | P1 데이터 정합성 보강 (DB 엔지니어 보고 후속)
 
 ### 배경
@@ -1720,3 +1762,13 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-29 15:05:49 | PYTHONIOENCODING=utf-8 python -u crawlers/rebuild_teams_table.py
 - 2026-04-29 15:06:41 | PYTHONIOENCODING=utf-8 python -u crawlers/rebuild_teams_table.py
 - 2026-04-29 15:08:00 | git status --short && echo "---" && git add checklist/history.md crawlers/fix_null_scores.py crawlers/rebuild_teams_table.py && git status --short
+- 2026-04-29 15:08:35 | git add checklist/history.md && git status --short
+- 2026-04-29 15:12:51 | cp players.db players.db.bak_p2_$(date +%Y%m%d_%H%M%S) && ls -lh players.db.bak_p2_* | tail -1
+- 2026-04-29 15:13:54 | PYTHONIOENCODING=utf-8 python -u crawlers/backfill_orphan_events.py 2>&1 | tee /tmp/backfill_orphan.log
+- 2026-04-29 15:19:51 | tail -10 /tmp/backfill_orphan.log 2>&1
+- 2026-04-29 15:32:09 | tail -15 /tmp/backfill_orphan.log
+- 2026-04-29 15:32:52 | PYTHONIOENCODING=utf-8 python -u crawlers/fetch_venues.py --league all 2>&1 | tee /tmp/fetch_venues.log
+- 2026-04-29 15:45:06 | tail -5 /tmp/fetch_venues.log 2>&1; echo '---'; wc -l /tmp/fetch_venues.log 2>&1
+- 2026-04-29 15:45:45 | tail -5 /tmp/fetch_venues.log
+- 2026-04-29 15:46:15 | PYTHONIOENCODING=utf-8 python -u crawlers/rebuild_teams_table.py 2>&1 | tail -20
+- 2026-04-29 15:46:57 | git status --short
