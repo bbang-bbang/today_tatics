@@ -1479,10 +1479,10 @@ _POISSON_MAX_GOALS = 5  # 스코어 매트릭스 최대 (0~5골)
 #   draw_boost 수식: new_draw% = (raw_draw + boost) / (1 + boost)
 # draw_boost = argmax outcome 결정 시 draw 확률에 더해 줄 오프셋 (0~1 스케일)
 _LEAGUE_CONSTANTS = {
-    410: {"home_adv": 1.07, "away_adj": 0.93, "draw_boost": 0.12},  # K1: away_adj 0.90→0.93 (그리드서치 최적, 2026 원정과소예측 보정)
-    777: {"home_adv": 0.96, "away_adj": 0.90, "draw_boost": 0.06},  # K2: home_adv 0.93→0.96 (실데이터 홈1.32:원정1.24=1.065, ratio=home_adv/away_adj=0.96/0.90=1.067)
+    410: {"home_adv": 1.07, "away_adj": 0.93, "draw_boost": 0.12, "dc_rho": 0.10},  # K1: dc_rho 0.10 (Dixon-Coles 무승부 과다 보정)
+    777: {"home_adv": 0.96, "away_adj": 0.90, "draw_boost": 0.06, "dc_rho": 0.00},  # K2: dc_rho 0 (무승부 과소이므로 미적용)
 }
-_DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0.10}
+_DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0.10, "dc_rho": 0.0}
 
 # 시간 감쇠 계수: 경기 순위가 1 올라갈 때마다 가중치를 λ배로 감쇠
 # 0.88 → 최근 경기 대비 10경기 전은 약 27% 비중, 20경기 전(전 시즌)은 약 7% 비중
@@ -1514,18 +1514,38 @@ def _poisson_pmf(k, lam):
     return (lam ** k) * math.exp(-lam) / math.factorial(k)
 
 
-def _score_matrix(lam_h, lam_a, max_goals=_POISSON_MAX_GOALS):
+def _score_matrix(lam_h, lam_a, max_goals=_POISSON_MAX_GOALS, dc_rho=0.0):
     """
     홈/원정 람다로 스코어 매트릭스 반환.
     m[i][j] = P(홈 i골 × 원정 j골).
     마지막 행/열은 max_goals 이상 누적 포함.
+
+    dc_rho: Dixon-Coles 보정 파라미터.
+      rho > 0: 0-0/0-1/1-0/1-1 영역에서 1-1·0-0 확률 ↓, 1-0·0-1 확률 ↑ → 무승부 과다 예측 완화
+      rho < 0: 반대 (무승부 과소 보정)
+      rho = 0: 표준 포아송 (보정 없음)
     """
     ph = [_poisson_pmf(k, lam_h) for k in range(max_goals + 1)]
     pa = [_poisson_pmf(k, lam_a) for k in range(max_goals + 1)]
     # 꼬리 확률(max_goals+ 이상)을 마지막 칸에 합산
     ph[-1] += max(0.0, 1.0 - sum(ph))
     pa[-1] += max(0.0, 1.0 - sum(pa))
-    return [[ph[i] * pa[j] for j in range(max_goals + 1)] for i in range(max_goals + 1)]
+    matrix = [[ph[i] * pa[j] for j in range(max_goals + 1)] for i in range(max_goals + 1)]
+
+    if dc_rho != 0.0:
+        # Dixon-Coles tau: 저득점 4칸만 곱셈 보정 후 재정규화
+        tau00 = max(0.0, 1.0 - lam_h * lam_a * dc_rho)
+        tau01 = max(0.0, 1.0 + lam_h * dc_rho)
+        tau10 = max(0.0, 1.0 + lam_a * dc_rho)
+        tau11 = max(0.0, 1.0 - dc_rho)
+        matrix[0][0] *= tau00
+        matrix[0][1] *= tau01
+        matrix[1][0] *= tau10
+        matrix[1][1] *= tau11
+        s = sum(sum(row) for row in matrix)
+        if s > 0:
+            matrix = [[v / s for v in row] for row in matrix]
+    return matrix
 
 
 def _matrix_outcomes(matrix, draw_boost=0.0):
@@ -1742,7 +1762,7 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
         lam_h *= rest_factor_home
         lam_a *= rest_factor_away
 
-    matrix   = _score_matrix(lam_h, lam_a)
+    matrix   = _score_matrix(lam_h, lam_a, dc_rho=coefs.get("dc_rho", 0.0))
     outcomes = _matrix_outcomes(matrix, draw_boost=coefs.get("draw_boost", 0.0))
     return {
         "lam_home":   lam_h,
@@ -2191,7 +2211,7 @@ def get_match_prediction():
     lam_home = max(0.1, h_atk_adj * a_def * league_avg * _coefs["home_adv"])
     lam_away = max(0.1, a_atk_adj * h_def * league_avg * _coefs["away_adj"])
 
-    matrix     = _score_matrix(lam_home, lam_away)
+    matrix     = _score_matrix(lam_home, lam_away, dc_rho=_coefs.get("dc_rho", 0.0))
     outcomes   = _matrix_outcomes(matrix, draw_boost=_coefs.get("draw_boost", 0.0))
     pred_home  = outcomes["home"]
     pred_draw  = outcomes["draw"]
