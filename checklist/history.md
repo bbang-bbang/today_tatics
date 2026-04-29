@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-04-29 09:30 | 최근 경기 데이터 증분 수집
+
+### 실행
+- `python update_data.py` (수원 삼성 K2 증분)
+- 신규 경기 1건 (`event 15403845`, 4/25 수원 3-2 부산), 라인업 19명 + 히트맵 + 날씨 + venue 정상
+- 부수효과: 과거 events 메타 누락 149건 복구, 날씨 150경기, 히트맵 +9,537pts
+
+### 회귀 발견 + 처리
+- SofaScore가 동일 경기를 두 event_id로 노출 (4/25 수원-부산: `15403845`=실데이터, `90435012`=빈 placeholder, 백업 시점부터 존재)
+- events만 직접 조회하는 H2H 계열 쿼리에서 이중 카운트 발생 확인 (수원-부산 8경기/12득점 → 정상 7/9)
+- `DELETE FROM events WHERE id=90435012` 실행 (mps=0, hm=0 확인 후), 회귀 해소
+- 백업: `players.db.bak_20260429_092602`
+
+### 후속 노트
+- 재발 시 `update_data.py` STEP 1에 dedupe 가드(같은 일자 + h_id + a_id에서 mps 없는 쪽 자동 제거) 추가 검토 — 현재는 1건뿐이라 보류 (YAGNI)
+
+---
+
 ## 2026-04-26 19:00 | Railway 배포 준비
 
 ### 변경 파일
@@ -1585,3 +1603,72 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-27 10:23:25 | git log --oneline -10
 - 2026-04-27 10:23:29 | git status
 - 2026-04-27 10:23:29 | git diff
+- 2026-04-27 10:23:57 | git push origin main
+- 2026-04-27 10:24:01 | git status
+- 2026-04-27 10:25:03 | git remote -v
+- 2026-04-27 10:27:28 | curl -s -o /dev/null -w "HTTP %{http_code}\n" https://web-production-a755.up.railway.app/
+- 2026-04-27 10:27:32 | curl -s https://web-production-a755.up.railway.app/api/health
+- 2026-04-27 10:27:51 | curl -s -o /dev/null -w "HTML: HTTP %{http_code} size=%{size_download}\n" https://web-production-a755.up.railway.app/ / curl -s -o /dev/null -w "CSS:  HTTP %{http_code} size=%{size_download}\n" https://web-production-a755.up.railway.app/static/css/style.css / curl -s -o /dev/null -w "APP:  HTTP %{http_code} size=%{size_download}\n" https://web-production-a755.up.railway.app/static/js/app.js / curl -s -o /dev/null -w "TEAM: HTTP %{http_code} size=%{size_download}\n" https://web-production-a755.up.railway.app/api/teams / curl -s -o /dev/null -w "STAND:HTTP %{http_code} size=%{size_download}\n" https://web-production-a755.up.railway.app/api/standings
+- 2026-04-27 10:51:44 | curl -s https://web-production-a755.up.railway.app/ -o /tmp/railway.html && wc -l /tmp/railway.html
+- 2026-04-27 10:51:47 | curl -s -o /dev/null -w "%{http_code} %{content_type}\n" https://web-production-a755.up.railway.app/api/results / curl -s -o /dev/null -w "%{http_code} %{content_type}\n" https://web-production-a755.up.railway.app/api/team-stats / curl -s -o /dev/null -w "%{http_code} %{content_type}\n" https://web-production-a755.up.railway.app/api/formations / curl -s -o /dev/null -w "%{http_code} %{content_type}\n" https://web-production-a755.up.railway.app/static/img/emblems/suwon.png
+- 2026-04-27 10:51:52 | ls static/img/ 2>/dev/null | head -20
+- 2026-04-27 10:51:53 | ls static/img/emblems/ 2>/dev/null | head -10 && echo "---" && ls static/img/kits/ 2>/dev/null | head -10
+- 2026-04-27 10:52:01 | curl -s -o /dev/null -w "K01: %{http_code}\n" https://web-production-a755.up.railway.app/static/img/emblems/emblem_K01.png / curl -s -o /dev/null -w "K12: %{http_code}\n" https://web-production-a755.up.railway.app/static/img/emblems/emblem_K12.png
+- 2026-04-27 10:52:02 | head -30 /tmp/railway.html
+- 2026-04-27 10:52:08 | ls static/img/emblems/ | wc -l && ls static/img/emblems/
+- 2026-04-27 10:52:09 | git ls-files static/img/emblems/ | head -40
+- 2026-04-27 10:52:27 | wc -l templates/index.html
+- 2026-04-27 10:52:29 | curl -s https://web-production-a755.up.railway.app/ | tail -30
+- 2026-04-27 10:52:37 | curl -s https://web-production-a755.up.railway.app/api/teams | python -c "import json,sys; d=json.loads(sys.stdin.read()); print('teams type:', type(d).__name__); print('count:', len(d) if hasattr(d,'__len__') else '?'); print('sample:', json.dumps(d[:1] if isinstance(d,list) else d, ensure_ascii=False)[:300])"
+- 2026-04-27 10:52:39 | curl -s https://web-production-a755.up.railway.app/api/standings | python -c "import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d, ensure_ascii=False)[:500])"
+- 2026-04-27 10:52:41 | curl -s https://web-production-a755.up.railway.app/api/results | python -c "import json,sys; d=json.loads(sys.stdin.read()); print(type(d).__name__, 'keys/len:', list(d.keys())[:5] if isinstance(d,dict) else len(d))"
+- 2026-04-27 10:52:56 | curl -s https://web-production-a755.up.railway.app/api/teams -o teams_check.json && python -c "import json; d=json.load(open('teams_check.json',encoding='utf-8')); print('count:', len(d)); print('first:', d[0]['name'], '/', d[0]['short']); print('K1 count:', sum(1 for t in d if t.get('league')=='K1')); print('K2 count:', sum(1 for t in d if t.get('league')=='K2'))" && rm teams_check.json
+- 2026-04-27 10:53:04 | curl -s https://web-production-a755.up.railway.app/api/teams -o teams_check.json && python -c " / import json / with open('teams_check.json','rb') as f: /     raw = f.read() / print('first 200 bytes:', raw[:200]) / print('---') / d = json.loads(raw.decode('utf-8')) / print('Repr first name:', repr(d[0]['name'])) / print('Bytes of first name:', d[0]['name'].encode('utf-8')) / " && rm teams_check.json
+- 2026-04-27 10:55:57 | curl -s -o /dev/null -w "match-prediction: %{http_code}\n" "https://web-production-a755.up.railway.app/api/match-prediction?home=ulsan&away=fcseoul" / curl -s "https://web-production-a755.up.railway.app/api/match-prediction?home=ulsan&away=fcseoul" -o pred_check.json && python -c " / import json / d = json.load(open('pred_check.json',encoding='utf-8')) / print('keys:', list(d.keys())[:15]) / print('size:', len(open('pred_check.json','rb').read()), 'bytes') / " && rm pred_check.json
+- 2026-04-27 10:56:09 | curl -s "https://web-production-a755.up.railway.app/api/match-prediction?home=ulsan&away=fcseoul"
+- 2026-04-27 10:56:19 | curl -s -w "\nHTTP %{http_code} time=%{time_total}s\n" "https://web-production-a755.up.railway.app/api/match-prediction?homeTeam=ulsan&awayTeam=fcseoul"
+- 2026-04-27 10:56:34 | echo "=== nonexistent path ===" / curl -s "https://web-production-a755.up.railway.app/api/this-does-not-exist" / echo "" / echo "=== match-prediction (working params) ===" / curl -s "https://web-production-a755.up.railway.app/api/match-prediction?homeTeam=ulsan&awayTeam=fcseoul" / echo "" / echo "=== match-prediction (no params) ===" / curl -s "https://web-production-a755.up.railway.app/api/match-prediction" / echo "" / echo "=== curl with verbose headers on match-prediction ===" / curl -sI "https://web-production-a755.up.railway.app/api/match-prediction?homeTeam=ulsan&awayTeam=fcseoul"
+- 2026-04-27 10:56:49 | for i in 1 2 3; do /   echo "--- attempt $i ---" /   curl -s -o /dev/null -w "teams=%{http_code} " https://web-production-a755.up.railway.app/api/teams /   curl -s -o /dev/null -w "predict=%{http_code} " "https://web-production-a755.up.railway.app/api/match-prediction?homeTeam=ulsan&awayTeam=fcseoul" /   curl -s -o /dev/null -w "health=%{http_code}\n" https://web-production-a755.up.railway.app/api/health / done
+- 2026-04-27 10:57:08 | until curl -sf https://web-production-a755.up.railway.app/api/health -o /tmp/h.json; do sleep 5; done && echo "BACK UP" && cat /tmp/h.json && rm /tmp/h.json
+- 2026-04-27 10:57:24 | git log --all --oneline -20 -- main.py | head -20
+- 2026-04-27 10:57:25 | git log --all --oneline -20 -- static/js/prediction.js | head -20
+- 2026-04-27 10:57:37 | cat /tmp/h.json 2>/dev/null && echo "--- still down ---" || echo "still polling"
+- 2026-04-27 10:57:48 | cat /tmp/h.json 2>/dev/null || echo "still down"
+- 2026-04-27 11:00:37 | curl -s -w "\nHTTP %{http_code}\n" https://web-production-a755.up.railway.app/api/health
+- 2026-04-27 11:01:09 | curl -s -w "\n[%{http_code}] " https://web-production-a755.up.railway.app/api/health / echo "" / curl -s -w "\n[%{http_code}] " https://web-production-a755.up.railway.app/ / echo ""
+- 2026-04-27 11:16:45 | ls -la players.db / echo "--- first 200 bytes ---" / head -c 200 players.db / echo "" / echo "--- .gitattributes ---" / cat .gitattributes 2>/dev/null || echo "(no .gitattributes)" / echo "--- nixpacks files ---" / ls -la nixpacks.toml .nixpacks 2>/dev/null / ls -la *.toml 2>/dev/null
+- 2026-04-27 11:18:13 | git push origin main
+- 2026-04-27 11:18:21 | until curl -sf https://web-production-a755.up.railway.app/api/health -o /tmp/h.json 2>/dev/null; do /   printf "." /   sleep 8 / done / echo "" / echo "=== HEALTH BACK ===" / cat /tmp/h.json / echo "" / echo "=== match-prediction test ===" / curl -s -w "\nHTTP %{http_code}\n" "https://web-production-a755.up.railway.app/api/match-prediction?homeTeam=ulsan&awayTeam=fcseoul" -o /tmp/pred.json / python -c "import json; d=json.load(open('/tmp/pred.json',encoding='utf-8')); print('keys:', list(d.keys())[:15] if isinstance(d,dict) else 'not dict')" / rm -f /tmp/h.json /tmp/pred.json
+- 2026-04-27 11:47:13 | curl -s -w "\nHTTP %{http_code}\n" https://web-production-a755.up.railway.app/api/health / echo "---" / curl -s -w "\nHTTP %{http_code}\n" https://web-production-a755.up.railway.app/
+- 2026-04-27 12:52:05 | echo "=== git lfs status ===" / git lfs ls-files 2>&1 / echo "" / echo "=== git lfs version ===" / git lfs version 2>&1 / echo "" / echo "=== players.db in git ===" / git ls-files -s players.db 2>&1 / echo "" / echo "=== local file ===" / ls -la players.db / echo "" / echo "=== file type check ===" / head -c 50 players.db | od -c | head -2
+- 2026-04-27 12:52:22 | echo "=== LFS push status (last push log) ===" / git lfs status 2>&1 / echo "" / echo "=== verify LFS files are on remote (fetch dry-run) ===" / git lfs fsck --pointers 2>&1 | head -20 / echo "" / echo "=== LFS objects locally ===" / ls -la .git/lfs/objects/ 2>/dev/null | head -10 || echo "no LFS cache" / echo "" / echo "=== git config LFS endpoint ===" / git config -l | grep -i lfs 2>&1
+- 2026-04-27 12:52:49 | echo "=== local LFS cache size ===" / find .git/lfs/objects/ -type f -exec ls -la {} \; 2>/dev/null / echo "" / echo "=== ask GitHub LFS API if it has the object ===" / LFS_OID=$(git lfs ls-files --long | awk '{print $1}') / echo "Pointer OID: $LFS_OID" / curl -s -X POST -H "Accept: application/vnd.git-lfs+json" \ /   -H "Content-Type: application/vnd.git-lfs+json" \ /   -d "{\"operation\":\"download\",\"transfers\":[\"basic\"],\"objects\":[{\"oid\":\"$LFS_OID\",\"size\":103329792}]}" \ /   https://github.com/bbang-bbang/today_tatics.git/info/lfs/objects/batch 2>&1 | head -30
+- 2026-04-27 12:58:41 | echo "=== current Railway state ===" / curl -s -w "HTTP %{http_code}\n" https://web-production-a755.up.railway.app/api/health / echo "" / echo "=== check .dockerignore for nixpacks.toml exclusion ===" / cat .dockerignore 2>/dev/null || echo "(no .dockerignore)" / echo "" / echo "=== verify nixpacks.toml is on origin ===" / git ls-remote origin main / git show origin/main --stat -- nixpacks.toml 2>&1 | head -10
+- 2026-04-27 13:02:24 | rm nixpacks.toml && git rm nixpacks.toml 2>&1 / echo "---" / git status
+- 2026-04-27 13:02:44 | git push origin main
+- 2026-04-27 13:23:52 | curl -s -w "\nHTTP %{http_code}\n" https://web-production-a755.up.railway.app/api/health
+- 2026-04-27 13:45:31 | echo "=== gh CLI ===" / gh --version 2>&1 | head -2 / gh auth status 2>&1 | head -5 / echo "" / echo "=== repo visibility ===" / curl -s https://api.github.com/repos/bbang-bbang/today_tatics | python -c "import json,sys; d=json.loads(sys.stdin.read()); print('private:', d.get('private')); print('full_name:', d.get('full_name'))"
+- 2026-04-27 13:53:00 | URL="https://github.com/bbang-bbang/today_tatics/releases/download/db-v1/players.db" / echo "=== HEAD check ===" / curl -sIL "$URL" -o /dev/null -w "final HTTP: %{http_code}\nsize: %{size_download}\nfinal URL: %{url_effective}\n" / echo "" / echo "=== first 16 bytes (should start with 'SQLite format 3') ===" / curl -sL "$URL" -r 0-15 | od -An -c
+- 2026-04-27 13:53:40 | git push origin main
+- 2026-04-27 14:04:10 | curl -s -o /dev/null -w "current: HTTP %{http_code}\n" https://web-production-a755.up.railway.app/api/health
+- 2026-04-27 14:06:25 | curl -s -w "\nHTTP %{http_code}\n" https://web-production-a755.up.railway.app/api/health
+- 2026-04-27 14:13:16 | cat .gitattributes / echo "---" / git show 24d27d4^:.gitattributes 2>&1 | head
+- 2026-04-27 14:14:41 | git push origin main
+- 2026-04-27 16:45:11 | ls deploy/
+- 2026-04-28 10:02:25 | ls C:/Users/ehban/.claude/projects/C--Users-ehban-OneDrive-------today-tatics/memory/ 2>/dev/null || echo "empty or missing"
+- 2026-04-29 09:25:15 | ls crawlers/ && echo "---" && ls -lh players.db 2>/dev/null && echo "---" && python -c "import sqlite3; c=sqlite3.connect('players.db'); cur=c.cursor(); cur.execute('SELECT COUNT(*), MAX(date_ts) FROM events'); r=cur.fetchone(); import datetime; print(f'events: {r[0]}, last_ts: {r[1]} ({datetime.datetime.fromtimestamp(r[1]).strftime(\"%Y-%m-%d %H:%M\") if r[1] else \"N/A\"})'); cur.execute('SELECT COUNT(*) FROM heatmap_points'); print(f'heatmap_points: {cur.fetchone()[0]}'); cur.execute('SELECT COUNT(*) FROM match_player_stats'); print(f'match_player_stats: {cur.fetchone()[0]}'); cur.execute('SELECT COUNT(*) FROM player_stats'); print(f'player_stats: {cur.fetchone()[0]}')"
+- 2026-04-29 09:25:38 | python -c "import playwright; print('playwright ok', playwright.__version__)" 2>&1 | head -3
+- 2026-04-29 09:25:52 | python -c "from playwright.async_api import async_playwright; print('playwright async_api OK')"
+- 2026-04-29 09:26:03 | cp players.db players.db.bak_$(date +%Y%m%d_%H%M%S) && ls -lh players.db.bak_* | tail -3
+- 2026-04-29 09:26:09 | PYTHONIOENCODING=utf-8 python -u update_data.py 2>&1 | tee /tmp/update_data.log
+- 2026-04-29 09:39:45 | tail -40 /tmp/update_data.log
+- 2026-04-29 14:22:40 | grep -nE "FROM events|FROM match_player_stats|JOIN events|JOIN match_player_stats" main.py | head -40
+- 2026-04-29 14:46:03 | sleep 5 && curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:5000/api/teams
+- 2026-04-29 14:46:08 | curl -s "http://127.0.0.1:5000/api/results?teamId=suwon" | python -c "import sys,json; d=json.load(sys.stdin); apr25=[m for m in d if m['date']=='2026-04-25']; print('count_2026-04-25:', len(apr25)); print('rows:', json.dumps(apr25, ensure_ascii=False))"
+- 2026-04-29 14:46:12 | curl -s "http://127.0.0.1:5000/api/h2h?teamA=suwon&teamB=busan"
+- 2026-04-29 14:46:13 | curl -s "http://127.0.0.1:5000/api/team-stats?teamId=suwon" | python -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d, ensure_ascii=False))"
+- 2026-04-29 14:46:14 | curl -s "http://127.0.0.1:5000/api/team-stats-by-year?teamId=suwon" | python -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d, ensure_ascii=False, indent=2))" | head -40
+- 2026-04-29 14:46:26 | curl -s "http://127.0.0.1:5000/api/h2h-matches?teamA=suwon&teamB=busan&limit=20" | python -c " / import sys,json / d=json.load(sys.stdin) / total_suwon=0 / for m in d: /     if m['home']=='Suwon Samsung Bluewings': /         gs=m['home_score'] /         is_suwon_home=True /     else: /         gs=m['away_score'] /         is_suwon_home=False /     total_suwon += gs /     print(m['date'], 'suwon_home' if is_suwon_home else 'suwon_away', 'score', m['home_score'],'-',m['away_score'], 'suwon_goals=',gs) / print('TOTAL suwon goals:', total_suwon) / "
+- 2026-04-29 14:47:01 | python -c " / import urllib.request, urllib.parse, json / url='http://127.0.0.1:5000/api/team-analytics?teamId=suwon&year=2026' / try: /   r=urllib.request.urlopen(url, timeout=15).read() /   d=json.loads(r) /   print('team-analytics ok, keys:', list(d.keys())[:10] if isinstance(d,dict) else type(d)) /   if isinstance(d,dict): /     for k in ['games','wins','draws','losses','goals_for','goals_against','total_games','recent_form']: /       if k in d: print(' ',k,'=',d[k]) / except Exception as e: /   print('err:', e) / "
+- 2026-04-29 14:48:21 | git status && echo "---DIFF---" && git diff checklist/history.md | head -60 && echo "---SUBMODULE?---" && git diff today_tatics 2>&1 | head -20
+- 2026-04-29 14:48:39 | cat .gitignore 2>/dev/null | grep -E "bak|backup|players" | head -5; echo "---"; git log --oneline -5
