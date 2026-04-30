@@ -15,6 +15,10 @@ saves/
 
 # SQLite DB (로컬 수집 데이터)
 *.db
+*.db.gz
+*.db.bak*
+*.bak
+*.bak_*
 
 # OS
 .DS_Store
