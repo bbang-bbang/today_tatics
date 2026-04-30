@@ -1479,10 +1479,10 @@ _POISSON_MAX_GOALS = 5  # 스코어 매트릭스 최대 (0~5골)
 #   draw_boost 수식: new_draw% = (raw_draw + boost) / (1 + boost)
 # draw_boost = argmax outcome 결정 시 draw 확률에 더해 줄 오프셋 (0~1 스케일)
 _LEAGUE_CONSTANTS = {
-    410: {"home_adv": 1.07, "away_adj": 0.93, "draw_boost": 0.12, "dc_rho": 0.10},  # K1: dc_rho 0.10 (Dixon-Coles 무승부 과다 보정)
-    777: {"home_adv": 0.96, "away_adj": 0.90, "draw_boost": 0.06, "dc_rho": 0.00},  # K2: dc_rho 0 (무승부 과소이므로 미적용)
+    410: {"home_adv": 1.07, "away_adj": 0.93, "draw_boost": 0.12, "dc_rho": 0.10, "shrinkage_k": 5},  # K1: shrinkage_k=5 (표본 부족 팀 → 리그 평균 회귀)
+    777: {"home_adv": 0.96, "away_adj": 0.90, "draw_boost": 0.06, "dc_rho": 0.00, "shrinkage_k": 0},  # K2: shrinkage_k=0 (충분한 표본, 회귀 안전 우선)
 }
-_DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0.10, "dc_rho": 0.0}
+_DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0.10, "dc_rho": 0.0, "shrinkage_k": 0}
 
 # 시간 감쇠 계수: 경기 순위가 1 올라갈 때마다 가중치를 λ배로 감쇠
 # 0.88 → 최근 경기 대비 10경기 전은 약 27% 비중, 20경기 전(전 시즌)은 약 7% 비중
@@ -1682,6 +1682,8 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
     """
     if decay is None:
         decay = _MODEL_PARAMS["decay_lambda"]
+    coefs = _league_coefs(tid_filter)
+    shrinkage_k = coefs.get("shrinkage_k", 0)
     cur.execute("""
         SELECT AVG(home_score + away_score) / 2.0
         FROM events
@@ -1722,6 +1724,14 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
             wf += w * (float(xg_f) if xg_f is not None else float(gf or 0))
             wa += w * (float(xg_a) if xg_a is not None else float(ga or 0))
             wt += w
+        # Empirical Bayes shrinkage: 표본 부족 팀의 추정치를 리그 평균(prior)으로 끌어당김
+        # shrinkage_k=가상 prior 경기 수. 표본 wt가 클수록 prior 영향 ↓
+        if shrinkage_k > 0:
+            return {
+                "games":       len(rows),
+                "xg_for":     (wf + shrinkage_k * league_avg) / (wt + shrinkage_k),
+                "xg_against": (wa + shrinkage_k * league_avg) / (wt + shrinkage_k),
+            }
         return {"games": len(rows), "xg_for": wf / wt, "xg_against": wa / wt}
 
     h = _team_xg(home_ss)
@@ -1748,7 +1758,6 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
             h_atk = h_atk / sos_home
             a_atk = a_atk / sos_away
 
-    coefs = _league_coefs(tid_filter)
     lam_h = max(0.1, h_atk * a_def * league_avg * coefs["home_adv"])
     lam_a = max(0.1, a_atk * h_def * league_avg * coefs["away_adj"])
 
