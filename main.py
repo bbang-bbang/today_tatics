@@ -4494,10 +4494,16 @@ def next_round():
 
     now_ts = int(_dt.datetime.now().timestamp())
     rows = cur.execute("""
-        SELECT id, date_ts, home_team_id, home_team_name, away_team_id, away_team_name, venue_name
-        FROM events
-        WHERE tournament_id=? AND home_score IS NULL AND date_ts > ?
-        ORDER BY date_ts ASC
+        SELECT e.id, e.date_ts, e.home_team_id,
+               COALESCE(th.short_name, e.home_team_name) AS home_name,
+               e.away_team_id,
+               COALESCE(ta.short_name, e.away_team_name) AS away_name,
+               e.venue_name
+        FROM events e
+        LEFT JOIN teams th ON e.home_team_id = th.id
+        LEFT JOIN teams ta ON e.away_team_id = ta.id
+        WHERE e.tournament_id=? AND e.home_score IS NULL AND e.date_ts > ?
+        ORDER BY e.date_ts ASC
     """, (tid, now_ts)).fetchall()
 
     if not rows:
