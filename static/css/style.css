@@ -6430,3 +6430,26 @@ body.pr-expanded-lock {
     .prn-meta .prn-venue { display: none; }
     .prn-vs { font-size: 0.6rem; }
 }
+
+/* 직전 포메이션 칩 */
+.prn-formations {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 4px 0;
+    font-size: 0.72rem;
+    border-top: 1px dashed rgba(255,255,255,0.06);
+    border-bottom: 1px dashed rgba(255,255,255,0.06);
+}
+.prn-form-h, .prn-form-a {
+    background: rgba(99,179,237,0.13);
+    color: #cbd5e1;
+    padding: 2px 8px; border-radius: 4px;
+    font-weight: 600; font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+.prn-form-h { color: var(--home-col, #cbd5e1); background: color-mix(in srgb, var(--home-col, #94a3b8) 15%, transparent); }
+.prn-form-a { color: var(--away-col, #cbd5e1); background: color-mix(in srgb, var(--away-col, #94a3b8) 15%, transparent); }
+.prn-form-vs {
+    font-size: 0.62rem; color: #64748b;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    flex: 1; text-align: center;
+}

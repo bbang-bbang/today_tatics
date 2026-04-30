@@ -941,6 +941,12 @@
                         ${aSlug ? `<img class="prn-emb" src="/static/img/emblems/${aCol.e}" alt="" loading="lazy">` : ''}
                     </div>
                 </div>
+                ${(m.home.recent_formation || m.away.recent_formation) ? `
+                <div class="prn-formations">
+                    <span class="prn-form-h">${m.home.recent_formation || '—'}</span>
+                    <span class="prn-form-vs">최근</span>
+                    <span class="prn-form-a">${m.away.recent_formation || '—'}</span>
+                </div>` : ''}
                 <div class="prn-bars">
                     <div class="prn-bar prn-bar-h ${cls(p.home_pct)}" style="--w:${p.home_pct}%"><span>홈 ${p.home_pct}%</span></div>
                     <div class="prn-bar prn-bar-d ${cls(p.draw_pct)}" style="--w:${p.draw_pct}%"><span>무 ${p.draw_pct}%</span></div>

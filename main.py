@@ -4527,6 +4527,17 @@ def next_round():
             rounds[wk] = len(rounds) + 1
     next_round_no = len(rounds) + 1
 
+    def recent_formation(team_id):
+        row = cur.execute("""
+            SELECT ml.formation
+            FROM match_lineups ml
+            JOIN events e2 ON ml.event_id = e2.id
+            WHERE ml.team_id=? AND ml.formation IS NOT NULL AND ml.formation != ''
+              AND e2.tournament_id=? AND e2.home_score IS NOT NULL
+            ORDER BY e2.date_ts DESC LIMIT 1
+        """, (team_id, tid)).fetchone()
+        return row[0] if row else None
+
     matches = []
     for r in same_week:
         eid, ts, hid, hn, aid, an, venue = r
@@ -4534,8 +4545,8 @@ def next_round():
         match_obj = {
             "id":      eid,
             "date_ts": ts,
-            "home":    {"id": hid, "name": hn},
-            "away":    {"id": aid, "name": an},
+            "home":    {"id": hid, "name": hn, "recent_formation": recent_formation(hid)},
+            "away":    {"id": aid, "name": an, "recent_formation": recent_formation(aid)},
             "venue":   venue,
         }
         if pred:
