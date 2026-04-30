@@ -4,6 +4,43 @@
 
 ---
 
+## 2026-04-30 00:30 | K1 예측 모델 개선 (+3.9%p)
+
+### 배경
+- 백테스트로 측정한 결과 K1 1X2 적중률 34.3% (baseline 33.3% 거의 동일, 사실상 무작위)
+- K2 47.8%는 양호. K1만 핀포인트 개선
+
+### 진단 (Base: K1 1X2 34.3%, Brier 0.222, pred draws 29 vs actual 22)
+1. K1 학습 데이터 부족 — 2025+2026만 사용 (201경기, 팀당 ~17경기)
+2. xG 폴백 — K1 mps 격차로 expected_goals 신호 약화
+3. 표준 포아송 → 무승부 과다 예측
+4. Dixon-Coles 보정 미적용
+5. 표본 부족 팀의 atk/def 추정 노이즈 큼
+
+### 채택 (백테스트로 효과 검증)
+1. **학습 기간 K1 → 2024+2025+2026** (P2 데이터 정합성 확보됐으니 안전) — K1 +3.9%p
+2. **Dixon-Coles K1 dc_rho=0.10** — 무승부 분포 정상화 (pred 31→24, actual 22 근접)
+3. **Empirical Bayes K1 shrinkage_k=3** — 표본 부족 팀의 추정치를 리그 평균(prior)으로 회귀
+4. **K1 home_adv 1.07→1.04** — shrinkage가 강·약팀 격차 줄여 발생한 home 편향 보정
+
+### 거부 (백테스트로 부정 효과 확인 후 롤백)
+- SOS 기본 ON: K2 -4.5%p (K-League 데이터에서 노이즈가 신호 초과)
+- shrinkage_k=5: home 편향 과도
+- K2 draw_boost 0.06→0.12: K2 -6%p (over-correction)
+
+### 최종 (K1 / K2)
+- 1X2: **38.2%** (+3.9%p) / 47.8% (회귀 0)
+- Brier: 0.220 / 0.223
+- TOP3: 44.1% / 26.9%
+- K1 outcome 분포 actual 거의 일치 (pred 28-23-17 vs actual 26-22-20)
+- K1 high confidence 정확도 37.2% → **43.8%** (+6.6%p)
+
+### 후속 (별도 일정)
+- 더 큰 개선 위해선 LightGBM 등 ML 기반 (K1 +5~10%p 가능, 1~2일 작업)
+- K2 무승부 과소 예측은 미해결 (draw_boost로는 over-correction 유발 — 다른 처방 필요)
+
+---
+
 ## 2026-04-29 09:30 | 최근 경기 데이터 증분 수집
 
 ### 실행
@@ -1841,3 +1878,4 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-29 16:44:27 | ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'cd /opt/today_tatics && git pull && sudo systemctl restart today_tatics && sleep 2 && sudo systemctl is-active today_tatics' 2>&1 | grep -v "post-quantum\|store now\|openssh.com" | tail -8
 - 2026-04-29 16:46:24 | grep -n "_score_matrix(lam" main.py | head -10
 - 2026-04-30 09:10:53 | git add main.py && git commit -m "$(cat <<'EOF' / Predict: Empirical Bayes shrinkage on team xG estimates (K1) /  / K1 has data-starved teams (12 teams, ~17 games each per season) where / raw weighted xG estimates carry high variance. Empirical Bayes pulls / those estimates toward the league prior: /  /   shrunk = (wf + k * league_avg) / (wt + k) /  / where k = shrinkage_k (virtual prior games). For a team with wt=10 / and k=5, the shrunk estimate is 67% data + 33% prior. As wt grows, / prior influence decays automatically. /  / K1: shrinkage_k=5 (treats data-starved teams) / K2: shrinkage_k=0 (already has stable samples; safety-first revert /                    if Step-2 SOS regression repeats) /  / Refactored: coefs lookup hoisted to top of _predict_core so _team_xg / closure can read shrinkage_k. /  / Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com> / EOF / )" && git push origin main 2>&1 | tail -3 / ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'cd /opt/today_tatics && git pull -q && sudo systemctl restart today_tatics && sleep 2 && sudo systemctl is-active today_tatics' 2>&1 | grep -v "post-quantum\|store now\|openssh.com" | tail -2
+- 2026-04-30 09:15:02 | git add checklist/history.md && git commit -m "Document K1 prediction model improvements (+3.9%p) /  / $(cat <<'EOF' /  / Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com> / EOF / )" && git push origin main 2>&1 | tail -2
