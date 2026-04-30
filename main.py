@@ -1488,15 +1488,6 @@ _DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0
 # 0.88 → 최근 경기 대비 10경기 전은 약 27% 비중, 20경기 전(전 시즌)은 약 7% 비중
 _DECAY_LAMBDA = 0.88
 
-# UI에서 실시간 조정 가능한 모델 파라미터 (서버 재시작 시 기본값으로 리셋)
-_MODEL_PARAMS = {
-    "k1_draw_boost": _LEAGUE_CONSTANTS[410]["draw_boost"],
-    "k2_draw_boost": _LEAGUE_CONSTANTS[777]["draw_boost"],
-    "k1_away_adj":   _LEAGUE_CONSTANTS[410]["away_adj"],
-    "k2_away_adj":   _LEAGUE_CONSTANTS[777]["away_adj"],
-    "decay_lambda":  _DECAY_LAMBDA,
-}
-
 # 레거시 상수 (기존 코드 호환용, 내부에서는 _LEAGUE_CONSTANTS 사용)
 _HOME_ADVANTAGE    = 1.15
 _AWAY_ADJUSTMENT   = 0.90
@@ -1676,12 +1667,12 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
     - as_of_ts 직전까지의 데이터만 사용 (look-ahead bias 차단)
     - 부상자 보정은 호출자가 책임 (백테스트는 부상 데이터가 시점성 없으므로 제외)
     - apply_sos: True면 상대 강도(SOS) 보정 적용
-    - decay: 시간 감쇠 계수. None이면 _MODEL_PARAMS에서 읽음. 2025+2026 통합 학습.
+    - decay: 시간 감쇠 계수. None이면 _DECAY_LAMBDA(0.88) 사용. K1은 2024+2025+2026, K2는 2025+2026.
     반환: {lam_home, lam_away, pred_home/draw/away, top_scores, h_games, a_games, league_avg, matrix, sos_home, sos_away}
     None 반환: 양 팀 중 한 쪽 사전 경기 0 (cold start)
     """
     if decay is None:
-        decay = _MODEL_PARAMS["decay_lambda"]
+        decay = _DECAY_LAMBDA
     coefs = _league_coefs(tid_filter)
     shrinkage_k = coefs.get("shrinkage_k", 0)
     cur.execute("""
@@ -2178,7 +2169,7 @@ def get_match_prediction():
         rows = cur.fetchall()
         if not rows:
             return {"games": 0, "xg_for": 1.3, "xg_against": 1.3}
-        _decay = _MODEL_PARAMS["decay_lambda"]
+        _decay = _DECAY_LAMBDA
         wf = wa = wt = 0.0
         for rank, (_id, is_home, hs, as_, xg_f, xg_a) in enumerate(rows):
             w = _decay ** rank
@@ -4485,47 +4476,6 @@ def delete_player_status(player_id):
 
 _BACKTEST_CACHE = {}  # {(league,year): {ts:..., data:...}}
 _BACKTEST_TTL_SEC = 600
-
-
-@app.route("/api/model-params", methods=["GET"])
-def get_model_params():
-    """현재 예측 모델 파라미터 조회"""
-    return jsonify({
-        "k1_draw_boost": _MODEL_PARAMS["k1_draw_boost"],
-        "k2_draw_boost": _MODEL_PARAMS["k2_draw_boost"],
-        "k1_away_adj":   _MODEL_PARAMS["k1_away_adj"],
-        "k2_away_adj":   _MODEL_PARAMS["k2_away_adj"],
-        "decay_lambda":  _MODEL_PARAMS["decay_lambda"],
-        "defaults": {
-            "k1_draw_boost": 0.12,
-            "k2_draw_boost": 0.06,
-            "k1_away_adj":   0.93,
-            "k2_away_adj":   0.90,
-            "decay_lambda":  0.88,
-        }
-    })
-
-
-@app.route("/api/model-params", methods=["POST"])
-def set_model_params():
-    """예측 모델 파라미터 실시간 업데이트 (서버 재시작 시 기본값 복원)"""
-    data = request.get_json(silent=True) or {}
-    k1db = max(0.0, min(0.5, float(data.get("k1_draw_boost", _MODEL_PARAMS["k1_draw_boost"]))))
-    k2db = max(0.0, min(0.5, float(data.get("k2_draw_boost", _MODEL_PARAMS["k2_draw_boost"]))))
-    k1aa = max(0.7, min(1.2, float(data.get("k1_away_adj",   _MODEL_PARAMS["k1_away_adj"]))))
-    k2aa = max(0.7, min(1.2, float(data.get("k2_away_adj",   _MODEL_PARAMS["k2_away_adj"]))))
-    dec  = max(0.5, min(1.0, float(data.get("decay_lambda",  _MODEL_PARAMS["decay_lambda"]))))
-    _MODEL_PARAMS["k1_draw_boost"] = k1db
-    _MODEL_PARAMS["k2_draw_boost"] = k2db
-    _MODEL_PARAMS["k1_away_adj"]   = k1aa
-    _MODEL_PARAMS["k2_away_adj"]   = k2aa
-    _MODEL_PARAMS["decay_lambda"]  = dec
-    _LEAGUE_CONSTANTS[410]["draw_boost"] = k1db
-    _LEAGUE_CONSTANTS[777]["draw_boost"] = k2db
-    _LEAGUE_CONSTANTS[410]["away_adj"]   = k1aa
-    _LEAGUE_CONSTANTS[777]["away_adj"]   = k2aa
-    _BACKTEST_CACHE.clear()
-    return jsonify({"ok": True, "params": _MODEL_PARAMS})
 
 
 @app.route("/api/prediction-backtest")
