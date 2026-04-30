@@ -6367,3 +6367,66 @@ body.pr-expanded-lock {
     font-size: 0.7rem; color: #64748b;
     margin-top: 2px;
 }
+
+/* ── prn polish: 팀컬러 stripe / 엠블럼 / 모바일 ───────────────── */
+.prn-card {
+    position: relative;
+    overflow: hidden;
+}
+.prn-stripe {
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--home-col, #334) 0% 50%, var(--away-col, #334) 50% 100%);
+    opacity: 0.85;
+}
+.prn-meta {
+    display: flex; gap: 6px; align-items: baseline;
+    font-size: 0.7rem; color: #94a3b8;
+    margin-top: 4px;
+}
+.prn-meta .prn-venue {
+    color: #64748b;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1; min-width: 0;
+}
+.prn-team {
+    display: flex; align-items: center; gap: 6px; min-width: 0;
+}
+.prn-h { justify-content: flex-start; }
+.prn-a { justify-content: flex-end; }
+.prn-emb {
+    width: 22px; height: 22px; object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+}
+.prn-tname {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
+}
+.prn-team.prn-pick .prn-tname {
+    text-shadow: 0 0 12px rgba(252,211,77,0.4);
+}
+.prn-vs {
+    font-size: 0.65rem; font-weight: 600; color: #64748b;
+    letter-spacing: 0.08em; flex-shrink: 0;
+}
+
+/* 모바일 (768px 이하) — 카드 1열, 콤팩트 */
+@media (max-width: 768px) {
+    .prn-wrap { padding: 14px 12px 10px; }
+    .prn-grid { grid-template-columns: 1fr; gap: 8px; }
+    .prn-card { padding: 10px 12px; }
+    .prn-title { font-size: 0.95rem; }
+    .prn-teams { font-size: 0.85rem; }
+    .prn-emb { width: 18px; height: 18px; }
+    .prn-bars { gap: 2px; }
+    .prn-bar { height: 16px; }
+    .prn-bar span { line-height: 16px; font-size: 0.65rem; padding: 0 6px; }
+    .prn-score { font-size: 0.72rem; }
+    .prn-disclaimer { font-size: 0.65rem; }
+}
+
+/* 매우 좁은 화면 (480px 이하) */
+@media (max-width: 480px) {
+    .prn-meta .prn-venue { display: none; }
+    .prn-vs { font-size: 0.6rem; }
+}

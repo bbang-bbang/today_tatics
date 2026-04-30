@@ -35,6 +35,19 @@
     };
     function tc(slug) { return SLUG_COLOR[slug] || { p:"#334", a:"#aaa", e:"" }; }
 
+    // 한글 short_name → slug (29팀, K1+K2)
+    const KO_TO_SLUG = {
+        "울산":"ulsan","포항":"pohang","제주":"jeju","전북":"jeonbuk","FC서울":"fcseoul",
+        "대전":"daejeon","인천":"incheon","강원":"gangwon","광주":"gwangju","부천":"bucheon",
+        "안양":"anyang","김천":"gimcheon","수원삼성":"suwon","부산":"busan","전남":"jeonnam",
+        "성남":"seongnam","대구":"daegu","경남":"gyeongnam","수원FC":"suwon_fc",
+        "서울이랜드":"seouland","안산":"ansan","충남아산":"asan","김포":"gimpo",
+        "충북청주":"cheongju","천안":"cheonan","화성":"hwaseong","파주":"paju",
+        "김해":"gimhae","용인":"yongin",
+    };
+    function koSlug(name) { return KO_TO_SLUG[name] || null; }
+    function koColor(name) { return tc(KO_TO_SLUG[name]); }
+
     const section   = document.getElementById("prediction-section");
     const report    = document.getElementById("prediction-report");
     const closeBtn  = document.getElementById("prediction-close");
@@ -906,12 +919,27 @@
             const vals = [p.home_pct, p.draw_pct, p.away_pct];
             const max = Math.max(...vals);
             const cls = v => v === max ? 'prn-pick' : '';
-            return `<div class="prn-card">
-                <div class="prn-meta">${dateStr}${m.venue ? ' · ' + m.venue : ''}</div>
+            const hCol = koColor(m.home.name);
+            const aCol = koColor(m.away.name);
+            const hSlug = koSlug(m.home.name);
+            const aSlug = koSlug(m.away.name);
+            const venueShort = m.venue ? m.venue.replace(/Stadium|World Cup|Football|Sports|Center/gi, '').trim().replace(/\s+/g, ' ') : '';
+            return `<div class="prn-card" style="--home-col:${hCol.p};--away-col:${aCol.p}">
+                <div class="prn-stripe"></div>
+                <div class="prn-meta">
+                    <span class="prn-date">${dateStr}</span>
+                    ${venueShort ? `<span class="prn-venue">· ${venueShort}</span>` : ''}
+                </div>
                 <div class="prn-teams">
-                    <span class="prn-team prn-h ${cls(p.home_pct)}">${m.home.name}</span>
-                    <span class="prn-vs">vs</span>
-                    <span class="prn-team prn-a ${cls(p.away_pct)}">${m.away.name}</span>
+                    <div class="prn-team prn-h ${cls(p.home_pct)}">
+                        ${hSlug ? `<img class="prn-emb" src="/static/img/emblems/${hCol.e}" alt="" loading="lazy">` : ''}
+                        <span class="prn-tname">${m.home.name}</span>
+                    </div>
+                    <span class="prn-vs">VS</span>
+                    <div class="prn-team prn-a ${cls(p.away_pct)}">
+                        <span class="prn-tname">${m.away.name}</span>
+                        ${aSlug ? `<img class="prn-emb" src="/static/img/emblems/${aCol.e}" alt="" loading="lazy">` : ''}
+                    </div>
                 </div>
                 <div class="prn-bars">
                     <div class="prn-bar prn-bar-h ${cls(p.home_pct)}" style="--w:${p.home_pct}%"><span>홈 ${p.home_pct}%</span></div>
