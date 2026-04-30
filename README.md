@@ -1,4 +1,4 @@
-# today_tatics
+# today_tactics
 
 K리그 전술 분석 웹 애플리케이션 — K리그1/2 전 팀 데이터 수집 파이프라인
 
@@ -38,7 +38,7 @@ python main.py
 ## 프로젝트 구조
 
 ```
-today_tatics/
+today_tactics/
   main.py                        # Flask 서버 (45+ API 엔드포인트)
   update_data.py                 # 증분 업데이트 통합 실행
   players.db                     # SQLite DB

@@ -3,9 +3,9 @@
 # 사용법: bash setup.sh
 set -e
 
-APP_DIR="/opt/today_tatics"
+APP_DIR="/opt/today_tactics"
 APP_USER="tactics"
-REPO="https://github.com/bbang-bbang/today_tatics.git"
+REPO="https://github.com/bbang-bbang/today_tactics.git"
 
 echo "▶ EPEL 저장소 활성화"
 dnf install -y epel-release
@@ -35,22 +35,22 @@ sudo -u $APP_USER $APP_DIR/.venv/bin/playwright install chromium
 sudo -u $APP_USER $APP_DIR/.venv/bin/playwright install-deps chromium || true
 
 echo "▶ 로그 디렉토리 생성"
-mkdir -p /var/log/today_tatics
-chown $APP_USER:$APP_USER /var/log/today_tatics
+mkdir -p /var/log/today_tactics
+chown $APP_USER:$APP_USER /var/log/today_tactics
 
 echo "▶ 디렉토리 권한"
 mkdir -p $APP_DIR/saves $APP_DIR/squads $APP_DIR/data
 chown -R $APP_USER:$APP_USER $APP_DIR
 
 echo "▶ systemd 서비스 등록"
-cp /tmp/today_tatics.service /etc/systemd/system/today_tatics.service
+cp /tmp/today_tactics.service /etc/systemd/system/today_tactics.service
 systemctl daemon-reload
-systemctl enable today_tatics
-systemctl start today_tatics
+systemctl enable today_tactics
+systemctl start today_tactics
 
 echo "▶ Nginx 설정"
 # Rocky는 sites-available/enabled 없이 conf.d/ 사용
-cp /tmp/today_tatics.nginx /etc/nginx/conf.d/today_tatics.conf
+cp /tmp/today_tactics.nginx /etc/nginx/conf.d/today_tactics.conf
 nginx -t && systemctl enable --now nginx
 
 echo "▶ SELinux — Nginx → Gunicorn 프록시 허용"
@@ -65,5 +65,5 @@ firewall-cmd --reload
 
 echo ""
 echo "✅ 설치 완료!"
-echo "   앱 상태: systemctl status today_tatics"
-echo "   로그:    journalctl -u today_tatics -f"
+echo "   앱 상태: systemctl status today_tactics"
+echo "   로그:    journalctl -u today_tactics -f"

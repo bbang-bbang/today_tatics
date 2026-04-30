@@ -248,7 +248,7 @@ def nominatim_geocode(name, city):
         {"q": f"{name}, {city}, South Korea", "format": "json", "limit": 1}
     )
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "today_tatics/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "today_tactics/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             res = json.loads(resp.read())
         if res: return float(res[0]["lat"]), float(res[0]["lon"])

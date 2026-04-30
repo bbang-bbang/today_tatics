@@ -55,7 +55,7 @@ def nominatim_geocode(stadium_name, city):
         "q": query, "format": "json", "limit": 1
     })
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "today_tatics/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "today_tactics/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             results = json.loads(resp.read())
         if results:

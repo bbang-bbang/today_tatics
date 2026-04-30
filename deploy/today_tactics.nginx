@@ -4,7 +4,7 @@ server {
 
     # 정적 파일은 Nginx가 직접 서빙 (Flask 우회 → 빠름)
     location /static/ {
-        alias /opt/today_tatics/static/;
+        alias /opt/today_tactics/static/;
         expires 1h;
         add_header Cache-Control "public";
     }

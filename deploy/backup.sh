@@ -2,11 +2,11 @@
 # Today Tactics 일일 백업: players.db + data/*.json
 # - SQLite는 .backup 명령으로 일관성 보장 (single-writer 잠금 회피)
 # - 30일 보관 후 자동 삭제
-# - cron 등록: 0 3 * * * /opt/today_tatics/deploy/backup.sh >> /var/log/today_tatics/backup.log 2>&1
+# - cron 등록: 0 3 * * * /opt/today_tactics/deploy/backup.sh >> /var/log/today_tactics/backup.log 2>&1
 set -e
 
-BACKUP_DIR=/var/backups/today_tatics
-SRC_DIR=/opt/today_tatics
+BACKUP_DIR=/var/backups/today_tactics
+SRC_DIR=/opt/today_tactics
 TS=$(date +%Y%m%d)
 
 mkdir -p $BACKUP_DIR
