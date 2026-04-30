@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-04-30 14:30 | 라인업 백필 + 한글명 보강
+
+### 라인업 (`crawlers/crawl_lineups.py`)
+- ok=1775, skip=0, fail=34 (cancel/postponed)
+- match_lineups: 56 → **1,831 events**, 행 2,233 → **67,748** (32배)
+- K1 전체 97%, K2 전체 98%
+- 컬럼 활용 가능: formation, position, is_starter, slot_order
+
+### 한글명 (`crawlers/fill_ko_names_from_api.py`)
+- 업데이트 0건 / SofaScore에 한국어 없음 276건 (한계)
+- K1 2026 94% (313/330), K2 2026 97% (432/442)
+- 누락 27명은 SofaScore 측 한국어 데이터 자체 없음
+
+### 후속 (선택)
+- formation 컬럼 활용해 전술판/분석 도구에 라인업 노출
+- K1 2026 미커버 20경기는 다음 update_data 사이클에서 자연 정리
+
+---
+
 ## 2026-04-30 13:00 | 다음 라운드 Pre-match 예측 화면
 
 ### 배경
@@ -1982,3 +2001,4 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-30 14:02:19 | ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'cd /opt/today_tactics && PYTHONIOENCODING=utf-8 venv/bin/python crawlers/crawl_lineups.py 2>&1 | tee /tmp/lineup.log | tail -20' 2>&1 | grep -v "post-quantum\|store now\|openssh.com" | tail -20
 - 2026-04-30 14:23:51 | ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'tail -3 /tmp/lineup.log 2>/dev/null && echo "---" && wc -l /tmp/lineup.log' 2>&1 | grep -v "post-quantum\|store now\|openssh.com" | tail -5
 - 2026-04-30 14:25:40 | ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'cd /opt/today_tactics && PYTHONIOENCODING=utf-8 venv/bin/python crawlers/fill_ko_names_from_api.py 2>&1 | tee /tmp/fill_ko.log | tail -3' 2>&1 | grep -v "post-quantum\|store now\|openssh.com" | tail -5
+- 2026-04-30 14:28:50 | git add checklist/history.md && git commit -m "Document lineup backfill + Korean name fill (32x lineup growth) /  / $(cat <<'EOF' /  / Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com> / EOF / )" && git push origin main 2>&1 | tail -2
