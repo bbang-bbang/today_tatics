@@ -9,7 +9,7 @@ WorkingDirectory=/opt/today_tactics
 Environment="PATH=/opt/today_tactics/.venv/bin"
 Environment="FLASK_DEBUG=0"
 ExecStart=/opt/today_tactics/.venv/bin/gunicorn \
-    --workers 2 \
+    --workers 1 \
     --bind 127.0.0.1:5000 \
     --timeout 120 \
     --access-logfile /var/log/today_tactics/access.log \
