@@ -4,6 +4,33 @@
 
 ---
 
+## 2026-04-30 11:20 | 프로젝트 리네이밍: today_tatics → today_tactics
+
+### 배경
+- 도메인 등록 직전 오타 발견: `tatics` (오타) → `tactics` (정확)
+- 글로벌 확장 계획(EPL/라리가/분데스리가) 고려 시 정확한 영문 표기 필수
+
+### 변경
+- GitHub repo: `bbang-bbang/today_tatics` → `bbang-bbang/today_tactics`
+- 로컬: 코드/문서/deploy 파일 일괄 sed 치환 + remote URL 갱신
+- 서버: `/opt/today_tatics` → `/opt/today_tactics`, `/var/log/today_tactics`, `/var/backups/today_tactics`, systemd unit, nginx conf, cron, logrotate 모두 갱신
+- venv 재생성 (절대 경로 shebang 깨짐)
+
+### 미변경 (의도적)
+- `checklist/history.md` 내부 — 이미 historical record
+- 로컬 디렉토리 `today_tatics/` — Claude Code 메모리 경로(`~/.claude/projects/...today-tatics`) 보존
+- `players.db.bak_*` 백업 파일명
+
+### 트러블슈팅
+- `deploy/today_tactics.service` 템플릿이 setup.sh 가정(User=tactics, .venv 경로) 사용 → 운영 환경(User=rocky, venv) 맞춰 수정 필요. 다음 셋업 시 템플릿 정리 권장
+- 다운타임 약 5분
+
+### 검증
+- 외부 200 OK, 0.17초
+- K1 백테스트 38.2% / Brier 0.220 (마이그레이션 전과 동일)
+
+---
+
 ## 2026-04-30 00:30 | K1 예측 모델 개선 (+3.9%p)
 
 ### 배경
