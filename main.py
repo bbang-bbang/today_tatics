@@ -1479,7 +1479,7 @@ _POISSON_MAX_GOALS = 5  # 스코어 매트릭스 최대 (0~5골)
 #   draw_boost 수식: new_draw% = (raw_draw + boost) / (1 + boost)
 # draw_boost = argmax outcome 결정 시 draw 확률에 더해 줄 오프셋 (0~1 스케일)
 _LEAGUE_CONSTANTS = {
-    410: {"home_adv": 1.07, "away_adj": 0.93, "draw_boost": 0.12, "dc_rho": 0.10, "shrinkage_k": 3},  # K1: shrinkage_k=3 (k=5는 home 편향 유발했음, 약화)
+    410: {"home_adv": 1.04, "away_adj": 0.93, "draw_boost": 0.12, "dc_rho": 0.10, "shrinkage_k": 3},  # K1: home_adv 1.07→1.04 (shrinkage가 격차 줄여 home 편향 유발한 영향 보정)
     777: {"home_adv": 0.96, "away_adj": 0.90, "draw_boost": 0.06, "dc_rho": 0.00, "shrinkage_k": 0},  # K2: shrinkage_k=0 (충분한 표본, 회귀 안전 우선)
 }
 _DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0.10, "dc_rho": 0.0, "shrinkage_k": 0}
