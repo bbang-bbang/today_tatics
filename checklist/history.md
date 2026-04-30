@@ -4,6 +4,32 @@
 
 ---
 
+## 2026-04-30 13:00 | 다음 라운드 Pre-match 예측 화면
+
+### 배경
+- 사용자 요청: "1~8R 데이터로 9R 예측" = 다음 라운드 미리보기
+- 6인 페르소나 + PM/QA/도박맨 검토 만장일치 PASS
+
+### 구현
+- `crawlers/fetch_next_round.py`: SofaScore에서 K1+K2 미래 일정 수집 (138 K1 + 200 K2 잔여 경기)
+- `/api/next-round?league=k1|k2`: 가장 빠른 미래 라운드(ISO 주차) + `_predict_core` 예측 + 백테스트 캐시 기반 누적 정확도
+- `prediction.js`/`style.css`/`index.html`: 카드 그리드 (날짜·장소, 팀명+pick 강조, 3-way 막대, 예상 스코어, λ), 헤더에 누적 적중률+Brier+disclaimer
+
+### 다중 페르소나 조건 충족
+- 솔직성: "누적 47.8% (67경기) Brier 0.223 · 참고용, 베팅 권장 X"
+- 누적 추적: 백테스트 캐시 자동 활용
+
+### 운영 변경
+- gunicorn workers 2→**1** (multi-worker 환경에서 메모리 캐시 워커별 분리 이슈 해결, K-League 트래픽엔 1 worker 충분)
+- `deploy/today_tactics.service` 템플릿도 동기화
+- 새 cron: 매주 월요일 02:00 `fetch_next_round.py`
+
+### 검증
+- 외부 API 200, K2 10R 8경기, 누적 정확도 47.8% / Brier 0.223 표시
+- prediction.js cache v6 → v7
+
+---
+
 ## 2026-04-30 11:35 | 도메인 + HTTPS 적용
 
 ### 도메인
