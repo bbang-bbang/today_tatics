@@ -6340,3 +6340,30 @@ body.pr-expanded-lock {
     .prn-grid { grid-template-columns: 1fr; }
     .prn-title-row { flex-direction: column; align-items: flex-start; }
 }
+
+/* top scores 3개 노출 */
+.prn-score {
+    font-size: 0.78rem; color: #cbd5e1;
+    border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px;
+    line-height: 1.55;
+}
+.prn-ts {
+    color: #94a3b8;
+    margin-right: 2px;
+}
+.prn-ts em {
+    font-style: normal;
+    color: #cbd5e1;
+    font-size: 0.72rem;
+}
+.prn-ts-pick {
+    color: #fcd34d;
+    font-weight: 700;
+}
+.prn-ts-pick em {
+    color: #fcd34d;
+}
+.prn-lambda {
+    font-size: 0.7rem; color: #64748b;
+    margin-top: 2px;
+}

@@ -918,7 +918,12 @@
                     <div class="prn-bar prn-bar-d ${cls(p.draw_pct)}" style="--w:${p.draw_pct}%"><span>무 ${p.draw_pct}%</span></div>
                     <div class="prn-bar prn-bar-a ${cls(p.away_pct)}" style="--w:${p.away_pct}%"><span>원정 ${p.away_pct}%</span></div>
                 </div>
-                <div class="prn-score">예상 <b>${ts.home}-${ts.away}</b> (${ts.pct}%) · λ ${p.lam_home}–${p.lam_away}</div>
+                <div class="prn-score">
+                    예상 스코어 ${(p.top_scores || [ts]).map((s, i) =>
+                        `<span class="prn-ts ${i===0 ? 'prn-ts-pick' : ''}">${s.home}-${s.away} <em>${s.pct}%</em></span>`
+                    ).join(' · ')}
+                </div>
+                <div class="prn-lambda">λ ${p.lam_home}–${p.lam_away}</div>
             </div>`;
         }).join('');
 

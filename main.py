@@ -4539,14 +4539,15 @@ def next_round():
             "venue":   venue,
         }
         if pred:
-            ts_top = pred["top_scores"][0] if pred["top_scores"] else None
+            ts_list = pred.get("top_scores") or []
             match_obj["pred"] = {
-                "home_pct":  pred["pred_home"],
-                "draw_pct":  pred["pred_draw"],
-                "away_pct":  pred["pred_away"],
-                "top_score": ts_top,
-                "lam_home":  round(pred["lam_home"], 2),
-                "lam_away":  round(pred["lam_away"], 2),
+                "home_pct":   pred["pred_home"],
+                "draw_pct":   pred["pred_draw"],
+                "away_pct":   pred["pred_away"],
+                "top_score":  ts_list[0] if ts_list else None,
+                "top_scores": ts_list[:3],
+                "lam_home":   round(pred["lam_home"], 2),
+                "lam_away":   round(pred["lam_away"], 2),
             }
         else:
             match_obj["pred"] = None
