@@ -870,6 +870,87 @@
 
     let _lastHome = null, _lastAway = null;
 
-    // 페이지 로드 시 K2 일정 불러오기
+    // ── 다음 라운드 미리보기 ──────────────────────────────────────────────
+    async function loadNextRound(league = "k2") {
+        const wrap = document.getElementById("pred-next-round");
+        if (!wrap) return;
+        wrap.innerHTML = '<div class="prn-loading">⏳ 다음 라운드 예측 로딩...</div>';
+        try {
+            const r = await fetch(`/api/next-round?league=${league}`);
+            const d = await r.json();
+            wrap.innerHTML = renderNextRoundHtml(d);
+        } catch (e) { wrap.innerHTML = ''; console.warn("next-round fail", e); }
+    }
+
+    function renderNextRoundHtml(d) {
+        if (!d.matches || !d.matches.length) {
+            return `<div class="prn-empty">📅 ${d.league} 다음 라운드 일정 미정</div>`;
+        }
+        const acc = d.accuracy_to_date;
+        const accBanner = acc
+            ? `누적 적중률 <b>${acc.hit_1x2_pct}%</b> (${acc.n_total}경기 검증) · Brier ${acc.brier_score}`
+            : '누적 정확도 (백테스트 1회 호출 후 표시)';
+
+        const dayKr = ['일','월','화','수','목','금','토'];
+        const cards = d.matches.map(m => {
+            if (!m.pred) {
+                return `<div class="prn-card prn-card-skip">
+                    <div class="prn-teams">${m.home.name} vs ${m.away.name}</div>
+                    <div class="prn-note">${m.note || '예측 불가'}</div>
+                </div>`;
+            }
+            const p = m.pred;
+            const ts = p.top_score || {};
+            const dt = new Date(m.date_ts * 1000);
+            const dateStr = `${dt.getMonth()+1}/${dt.getDate()} ${dayKr[dt.getDay()]} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+            const vals = [p.home_pct, p.draw_pct, p.away_pct];
+            const max = Math.max(...vals);
+            const cls = v => v === max ? 'prn-pick' : '';
+            return `<div class="prn-card">
+                <div class="prn-meta">${dateStr}${m.venue ? ' · ' + m.venue : ''}</div>
+                <div class="prn-teams">
+                    <span class="prn-team prn-h ${cls(p.home_pct)}">${m.home.name}</span>
+                    <span class="prn-vs">vs</span>
+                    <span class="prn-team prn-a ${cls(p.away_pct)}">${m.away.name}</span>
+                </div>
+                <div class="prn-bars">
+                    <div class="prn-bar prn-bar-h ${cls(p.home_pct)}" style="--w:${p.home_pct}%"><span>홈 ${p.home_pct}%</span></div>
+                    <div class="prn-bar prn-bar-d ${cls(p.draw_pct)}" style="--w:${p.draw_pct}%"><span>무 ${p.draw_pct}%</span></div>
+                    <div class="prn-bar prn-bar-a ${cls(p.away_pct)}" style="--w:${p.away_pct}%"><span>원정 ${p.away_pct}%</span></div>
+                </div>
+                <div class="prn-score">예상 <b>${ts.home}-${ts.away}</b> (${ts.pct}%) · λ ${p.lam_home}–${p.lam_away}</div>
+            </div>`;
+        }).join('');
+
+        return `<div class="prn-wrap">
+            <div class="prn-header">
+                <div class="prn-title-row">
+                    <span class="prn-title">📅 ${d.league} ${d.round_label} 모델 예측 미리보기</span>
+                    <div class="prn-tabs">
+                        <button class="prn-tab ${d.league === 'K1' ? 'active' : ''}" data-lg="k1">K1</button>
+                        <button class="prn-tab ${d.league === 'K2' ? 'active' : ''}" data-lg="k2">K2</button>
+                    </div>
+                </div>
+                <div class="prn-acc">${accBanner}</div>
+                <div class="prn-disclaimer">⚠ baseline 33% 대비 우위지만 완전하지 않습니다. 참고용 — 베팅 의사결정 권장 X</div>
+            </div>
+            <div class="prn-grid">${cards}</div>
+        </div>`;
+    }
+
+    // 탭 위임 클릭 (K1 ↔ K2 전환)
+    document.addEventListener("click", e => {
+        const tab = e.target.closest(".prn-tab");
+        if (!tab) return;
+        const lg = tab.dataset.lg;
+        if (lg) loadNextRound(lg);
+    });
+
+    // 페이지 로드 시 K2 일정 + 다음 라운드 불러오기
     loadSchedule();
+    // 백테스트 캐시 워밍 (누적 정확도 표시용) → 약간의 지연 후 다음 라운드 갱신
+    fetch("/api/prediction-backtest?league=k2&year=2026").catch(() => {});
+    fetch("/api/prediction-backtest?league=k1&year=2026").catch(() => {});
+    loadNextRound("k2");
+    setTimeout(() => loadNextRound("k2"), 5000);  // 백테스트 캐시 hit 후 한 번 더 갱신
 })();
