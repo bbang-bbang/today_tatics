@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-04-30 11:35 | 도메인 + HTTPS 적용
+
+### 도메인
+- **today-tactics.co.kr** (가비아 등록, 16,500원/년)
+- DNS A 레코드: `@` → `1.201.126.200` 전파 완료, `www` 등록 누락 (사용자 콘솔 재확인 필요)
+
+### HTTPS
+- Let's Encrypt 인증서 (`certbot --nginx`), 만료 2026-07-29
+- HTTP→HTTPS 301 자동 리다이렉트
+- Nginx `server_name` 갱신
+
+### 자동 갱신
+- Rocky 9 패키지에 systemd timer 미포함 → 수동 cron 등록
+- `0 4 * * *` 매일 04:00 `/usr/bin/certbot renew --post-hook "systemctl reload nginx"` (백업 cron 03:00과 분리)
+- `certbot renew --dry-run` 통과
+
+### 후속 (사용자 작업 대기)
+- `www` A 레코드 가비아 등록 확인 후 `certbot --expand -d today-tactics.co.kr -d www.today-tactics.co.kr`
+
+---
+
 ## 2026-04-30 11:20 | 프로젝트 리네이밍: today_tatics → today_tactics
 
 ### 배경
@@ -1918,3 +1939,4 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-30 12:25:11 | cat "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\4572d7ac-4311-483c-b3c4-7b5b1309df3f\tasks\bkzjgk32w.output"
 - 2026-04-30 12:32:05 | cat "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\4572d7ac-4311-483c-b3c4-7b5b1309df3f\tasks\bc7l12998.output"
 - 2026-04-30 12:32:16 | nslookup www.today-tactics.co.kr 8.8.8.8 2>&1 | grep -E "Address|NXDOMAIN" | tail -3 / echo "---" / nslookup www.today-tactics.co.kr 168.126.63.1 2>&1 | grep -E "Address" | tail -3
+- 2026-04-30 12:32:55 | git add checklist/history.md && git commit -m "Document domain + HTTPS rollout (today-tactics.co.kr) /  / $(cat <<'EOF' /  / Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com> / EOF / )" && git push origin main 2>&1 | tail -2
