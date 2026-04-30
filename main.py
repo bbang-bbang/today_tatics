@@ -4478,6 +4478,97 @@ _BACKTEST_CACHE = {}  # {(league,year): {ts:..., data:...}}
 _BACKTEST_TTL_SEC = 600
 
 
+@app.route("/api/next-round")
+def next_round():
+    """
+    다가오는 가장 빠른 라운드(같은 주차 묶음) 경기 + 모델 예측.
+    누적 정확도(백테스트 hit/Brier)도 함께 반환해 사용자가 신뢰도 정직하게 인지.
+    """
+    import datetime as _dt, time as _time
+    league = request.args.get("league", "k2").lower()
+    tid = 410 if league == "k1" else 777
+
+    db_path = DB_PATH
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    now_ts = int(_dt.datetime.now().timestamp())
+    rows = cur.execute("""
+        SELECT id, date_ts, home_team_id, home_team_name, away_team_id, away_team_name, venue_name
+        FROM events
+        WHERE tournament_id=? AND home_score IS NULL AND date_ts > ?
+        ORDER BY date_ts ASC
+    """, (tid, now_ts)).fetchall()
+
+    if not rows:
+        conn.close()
+        return jsonify({"league": league.upper(), "matches": []})
+
+    earliest_week = _dt.datetime.fromtimestamp(rows[0][1]).strftime("%Y-W%W")
+    same_week = [r for r in rows if _dt.datetime.fromtimestamp(r[1]).strftime("%Y-W%W") == earliest_week]
+    year = str(_dt.datetime.fromtimestamp(rows[0][1]).year)
+
+    # 라운드 번호 추정 (백테스트와 동일: 같은 주차 = 같은 라운드)
+    rounds = {}
+    for (ts,) in cur.execute("""
+        SELECT date_ts FROM events
+        WHERE tournament_id=? AND home_score IS NOT NULL
+          AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+        ORDER BY date_ts ASC
+    """, (tid, year)).fetchall():
+        wk = _dt.datetime.fromtimestamp(ts).strftime("%Y-W%W")
+        if wk not in rounds:
+            rounds[wk] = len(rounds) + 1
+    next_round_no = len(rounds) + 1
+
+    matches = []
+    for r in same_week:
+        eid, ts, hid, hn, aid, an, venue = r
+        pred = _predict_core(cur, hid, aid, tid, ts, year)
+        match_obj = {
+            "id":      eid,
+            "date_ts": ts,
+            "home":    {"id": hid, "name": hn},
+            "away":    {"id": aid, "name": an},
+            "venue":   venue,
+        }
+        if pred:
+            ts_top = pred["top_scores"][0] if pred["top_scores"] else None
+            match_obj["pred"] = {
+                "home_pct":  pred["pred_home"],
+                "draw_pct":  pred["pred_draw"],
+                "away_pct":  pred["pred_away"],
+                "top_score": ts_top,
+                "lam_home":  round(pred["lam_home"], 2),
+                "lam_away":  round(pred["lam_away"], 2),
+            }
+        else:
+            match_obj["pred"] = None
+            match_obj["note"] = "표본 부족 (cold start)"
+        matches.append(match_obj)
+
+    accuracy = None
+    cached_bt = _BACKTEST_CACHE.get((league, year))
+    if cached_bt and (_time.time() - cached_bt["ts"] < _BACKTEST_TTL_SEC):
+        d = cached_bt["data"]
+        if d.get("ready"):
+            accuracy = {
+                "hit_1x2_pct": d["hit_1x2_pct"],
+                "n_total":     d["n_total"],
+                "brier_score": d["brier_score"],
+            }
+
+    conn.close()
+    return jsonify({
+        "league":           league.upper(),
+        "round_no":         next_round_no,
+        "round_label":      f"{next_round_no}R",
+        "iso_week":         earliest_week,
+        "matches":          matches,
+        "accuracy_to_date": accuracy,
+    })
+
+
 @app.route("/api/prediction-backtest")
 def prediction_backtest():
     """
