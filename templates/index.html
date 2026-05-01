@@ -67,7 +67,7 @@
                 <nav id="left-toolbar">
                     <!-- 모드 -->
                     <div class="ltb-group ltb-grid2">
-                        <button id="btn-select" class="mode-btn active" title="선수 이동 모드">이동</button>
+                        <button id="btn-select" class="mode-btn active" title="선수 이동 모드">↖ 이동</button>
                         <button id="btn-erase" class="mode-btn" title="선 하나씩 지우기">✕ 지우기</button>
                     </div>
                     <div class="ltb-divider"></div>
@@ -104,10 +104,10 @@
                     <div class="ltb-group ltb-grid2">
                         <button id="btn-add-ball" class="action-btn" title="축구공 추가">⚽ 공 추가</button>
                         <button id="btn-play-all" class="action-btn play-btn" title="모든 선 애니메이션 재생">▶ 재생</button>
-                        <button id="btn-clear-lines" class="action-btn" title="그리기 지우기">그리기지우기</button>
-                        <button id="btn-undo-line" class="action-btn" title="마지막 선 취소">실행취소</button>
-                        <button id="btn-role-tag" class="action-btn" title="포지션 태그 표시/숨기기">롤 태그</button>
-                        <button id="btn-reset" class="action-btn" title="전체 초기화">초기화</button>
+                        <button id="btn-clear-lines" class="action-btn" title="그리기 지우기">🗑 지우기</button>
+                        <button id="btn-undo-line" class="action-btn" title="마지막 선 취소">↩ 취소</button>
+                        <button id="btn-role-tag" class="action-btn" title="포지션 태그 표시/숨기기">🏷 롤태그</button>
+                        <button id="btn-reset" class="action-btn" title="전체 초기화">↺ 초기화</button>
                     </div>
                     <div class="ltb-divider"></div>
                     <!-- 레이어 -->
@@ -129,9 +129,9 @@
                     <div class="ltb-divider"></div>
                     <!-- 저장/로드 -->
                     <div class="ltb-group ltb-grid2">
-                        <button id="btn-save" class="action-btn save-btn" title="현재 전술 저장">저장</button>
-                        <button id="btn-load" class="action-btn load-btn" title="저장된 전술 불러오기">불러오기</button>
-                        <button id="btn-export-png" class="action-btn export-btn" title="전술판을 이미지로 내보내기">이미지 저장</button>
+                        <button id="btn-save" class="action-btn save-btn" title="현재 전술 저장">💾 저장</button>
+                        <button id="btn-load" class="action-btn load-btn" title="저장된 전술 불러오기">📂 불러오기</button>
+                        <button id="btn-export-png" class="action-btn export-btn" title="전술판을 이미지로 내보내기">🖼 이미지</button>
                         <button id="btn-k2-heatmap" class="action-btn" title="K리그 선수 히트맵">🔥 히트맵</button>
                     </div>
                     <div class="ltb-divider"></div>
@@ -704,5 +704,62 @@
     <script src="/static/js/player_analytics.js?v=1"></script>
     <script src="/static/js/player_report.js?v=3"></script>
     <script src="/static/js/insights.js?v=2"></script>
+
+    <!-- 온보딩 오버레이 -->
+    <div id="onboarding-overlay" class="ob-overlay" style="display:none" aria-modal="true" role="dialog" aria-label="Today Tactics 소개">
+        <div class="ob-card">
+            <div class="ob-header">
+                <span class="ob-logo">Today Tactics</span>
+                <span class="ob-tagline">K리그 전술 분석 · 경기 예측 · 선수 데이터</span>
+            </div>
+            <div class="ob-steps">
+                <div class="ob-step">
+                    <span class="ob-num">1</span>
+                    <div class="ob-step-text">
+                        <strong>팀 선택</strong>
+                        <span>전술판 상단 HOME · AWAY 버튼으로 팀을 고르세요</span>
+                    </div>
+                </div>
+                <div class="ob-step">
+                    <span class="ob-num">2</span>
+                    <div class="ob-step-text">
+                        <strong>포메이션 설정</strong>
+                        <span>드롭다운에서 4-3-3, 4-4-2 등 전술 진형을 선택하세요</span>
+                    </div>
+                </div>
+                <div class="ob-step">
+                    <span class="ob-num">3</span>
+                    <div class="ob-step-text">
+                        <strong>전술 설계</strong>
+                        <span>선수를 드래그하고 왼쪽 툴바로 화살표·동선을 그리세요</span>
+                    </div>
+                </div>
+                <div class="ob-step">
+                    <span class="ob-num">+</span>
+                    <div class="ob-step-text">
+                        <strong>데이터 분석</strong>
+                        <span>상단 배너에서 경기를 선택하면 예측·선수 분석이 자동으로 펼쳐집니다</span>
+                    </div>
+                </div>
+            </div>
+            <button id="ob-start-btn" class="ob-start-btn">시작하기 →</button>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var overlay = document.getElementById('onboarding-overlay');
+        var startBtn = document.getElementById('ob-start-btn');
+        if (!localStorage.getItem('tt_onboarded')) {
+            overlay.style.display = '';
+            requestAnimationFrame(function () { overlay.classList.add('ob-visible'); });
+        }
+        startBtn.addEventListener('click', function () {
+            overlay.classList.remove('ob-visible');
+            overlay.classList.add('ob-hiding');
+            setTimeout(function () { overlay.style.display = 'none'; }, 300);
+            localStorage.setItem('tt_onboarded', '1');
+        });
+    })();
+    </script>
 </body>
 </html>
