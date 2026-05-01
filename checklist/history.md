@@ -4,6 +4,68 @@
 
 ---
 
+## 2026-05-01 01:00 | 반응형 UI 레이아웃 깨짐 수정 + 서버 배포
+
+### 문제
+- `@media (max-width: 1280px)` 블록이 `#board-report-wrap { flex-direction: column; }`에 걸려 있었는데,
+  `#board-report-wrap`은 이미 기본값이 `column`이라 규칙이 완전히 무효
+- 정작 `flex-direction: row`인 `#main-row`에 아무 breakpoint 없어
+  `#player-report-section`(min 420px)이 어떤 해상도에서도 캔버스 옆에 붙어 캔버스를 압박
+
+### 수정 (`static/css/style.css`)
+| 항목 | 변경 내용 |
+|------|-----------|
+| `@media (max-width: 1280px)` | `#board-report-wrap` → `#main-row { flex-direction: column; }` 로 교체 |
+| `.team-modal-content` (660px) | `max-width: 92vw` 추가 |
+| `.load-modal-content` (460px) | `max-width: 92vw` 추가 |
+| `.match-load-modal-content` (560px) | `max-width: 92vw` 추가 |
+
+### 서버 배포
+- `scp style.css → /opt/today_tactics/static/css/style.css`
+- `sudo systemctl restart today_tactics` → `active` 확인
+
+---
+
+## 2026-04-30 20:00 | 백테스트 라운드 정확도 수정 + 선수 name_ko 보강 + 라인업 증분 수집
+
+### ① 백테스트 라운드 번호 수정 (events.round 컬럼 추가)
+- **원인**: 주차(`%Y-%W`) 기반 라운드 추정 → 같은 주에 두 라운드가 있으면 합산됨 (R5=12경기 등)
+- **수정**: `events` 테이블에 `round INTEGER` 컬럼 추가 (ALTER TABLE)
+- `crawlers/backfill_rounds.py` 작성: K리그 공식 API(`kleague.com`)에서 K1+K2 2026 roundId 수집 후 events에 UPDATE
+- K1 R1~R10, K2 R1~R9 정상 매핑 (K1 6경기/R, K2 8경기/R)
+- 기존 코드(`_predict_core`의 `has_round` 체크)가 자동으로 신규 컬럼 사용
+
+### ② 중복 placeholder 이벤트 삭제 (7건)
+- **원인**: SofaScore가 동일 경기를 `90xxxxxxx` placeholder + `15xxxxxx` real 두 event_id로 노출
+- 영향 라운드: K1 R2(울산-서울 연기 경기), R8(3건), R9(3건)
+- 삭제 기준: `id > 90000000` + 동일 날짜·팀에 real 이벤트(`id < 90000000, mps>0`) 존재
+- 유일한 기록인 90xxxxxxx(27건)은 유지 (개막전·K2 경기 등 SofaScore 404 확인)
+- 결과: R2~R10 전부 정확히 6경기, K2 R1~R9 8경기
+
+### ③ 선수 name_ko 수동 수정 (6명)
+| id | 영문명 | 한글명 | 팀 |
+|----|--------|--------|-----|
+| 358306 | Il-Lok Yun | 윤일록 | 경남 FC |
+| 872801 | Jeong Jae Yong | 정재용 | 부천 FC 1995 |
+| 926586 | Seung-kyeom Im | 임승겸 | 광주 FC |
+| 1860547 | Jeon Yu-sang | 전유상 | 전남 드래곤즈 |
+| 1895572 | Jun-yeong Choi | 최준영 | FC 서울 |
+| 2188416 | Sang-Jun Park | 박상준 | 울산 HD FC |
+
+### ④ 라인업 증분 수집 (R8~R9, --days 30)
+- 수집 대상: 35경기 (최근 30일 미수집)
+- 성공: **9경기** × ~40명 (15xxxxxx real event IDs만 성공)
+- 실패: 26경기 (90xxxxxxx placeholder → SofaScore 404, 정상)
+- match_lineups: **56 → 65** 이벤트, 행 2,591개
+- 성공 경기: R2(울산-서울), R8 K1×3+K2×1, R9 K1×3+K2×1
+
+### 주의 (서버 배포 필요)
+- 위 작업은 **로컬 DB** 기준
+- 프로덕션(`today-tactics.co.kr`) 반영: `scp players.db` 또는 서버에서 동일 스크립트 실행
+- Flask 재시작 필요: 백테스트 인메모리 캐시(TTL 600초) 초기화
+
+---
+
 ## 2026-04-30 14:30 | 라인업 백필 + 한글명 보강
 
 ### 라인업 (`crawlers/crawl_lineups.py`)
@@ -2002,3 +2064,7 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-04-30 14:23:51 | ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'tail -3 /tmp/lineup.log 2>/dev/null && echo "---" && wc -l /tmp/lineup.log' 2>&1 | grep -v "post-quantum\|store now\|openssh.com" | tail -5
 - 2026-04-30 14:25:40 | ssh -i today-project.pem -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@1.201.126.200 'cd /opt/today_tactics && PYTHONIOENCODING=utf-8 venv/bin/python crawlers/fill_ko_names_from_api.py 2>&1 | tee /tmp/fill_ko.log | tail -3' 2>&1 | grep -v "post-quantum\|store now\|openssh.com" | tail -5
 - 2026-04-30 14:28:50 | git add checklist/history.md && git commit -m "Document lineup backfill + Korean name fill (32x lineup growth) /  / $(cat <<'EOF' /  / Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com> / EOF / )" && git push origin main 2>&1 | tail -2
+- 2026-04-30 14:29:20 | git add checklist/history.md && git commit -m "Re-add lineup+Korean name entry (lost in concurrent hook update) /  / $(cat <<'EOF' /  / Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com> / EOF / )" && git push origin main 2>&1 | tail -2
+- 2026-05-01 00:57:26 | sleep 2 && curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/
+- 2026-05-01 00:58:46 | curl -s -o /dev/null -w "%{http_code}" https://today-tactics.co.kr/ 2>/dev/null || curl -s -o /dev/null -w "%{http_code}" http://1.201.126.200/ 2>/dev/null
+- 2026-05-01 13:39:15 | ls ~/.ssh/ 2>/dev/null || echo "no .ssh dir"

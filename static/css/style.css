@@ -655,6 +655,7 @@ body {
 /* Team Modal */
 .team-modal-content {
     width: 660px;
+    max-width: 92vw;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
@@ -1526,6 +1527,7 @@ body {
 /* Load modal - saves list */
 .load-modal-content {
     width: 460px;
+    max-width: 92vw;
 }
 
 .saves-list {
@@ -1639,6 +1641,7 @@ body {
 /* 경기 라인업 불러오기 모달 */
 .match-load-modal-content {
     width: 560px;
+    max-width: 92vw;
 }
 .match-load-hint {
     color: #9aa4c8;
@@ -4916,9 +4919,9 @@ body.pr-expanded-lock {
 }
 
 /* 중간 해상도 (1280px 이하): 선수 리포트를 전술판 아래로 스택
-   — 3컬럼(툴바+캔버스+벤치+리포트)이 좁아져 캔버스가 찌그러지는 것 방지 */
+   — #main-row를 column으로 전환해 캔버스가 찌그러지는 것 방지 */
 @media (max-width: 1280px) {
-    #board-report-wrap {
+    #main-row {
         flex-direction: column;
     }
     #player-report-section {
