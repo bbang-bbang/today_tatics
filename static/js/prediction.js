@@ -105,69 +105,6 @@
         }).catch(() => {});
     }
 
-    // ── 시즌 시뮬레이션 (lazy, 리그별 캐시) ─────────────────
-    const _seasonSimCache = {};
-    function loadSeasonSim(league) {
-        const key = (league || "k2").toLowerCase();
-        if (_seasonSimCache[key]) return Promise.resolve(_seasonSimCache[key]);
-        return fetch(`/api/season-simulation?league=${key}&iter=10000`)
-            .then(r => r.json())
-            .then(d => { _seasonSimCache[key] = d; return d; })
-            .catch(() => null);
-    }
-    function seasonSimHtml(d) {
-        if (!d || !d.ready || !d.teams) return `<div class="sim-empty">데이터 없음</div>`;
-        const top = d.teams;
-        const maxWin = Math.max(...top.map(t => t.win_pct), 1);
-        return `
-        <div class="season-sim-body">
-            <div class="ssb-header">
-                <span class="ssb-meta">잔여 ${d.remaining_games}경기 · ${d.iter.toLocaleString()}회 시뮬</span>
-                <span class="ssb-zone">🏆 ${d.top_zone_label} · 🔻 ${d.rel_zone_label}</span>
-            </div>
-            <div class="ssb-table">
-                <div class="ssb-row ssb-head">
-                    <span class="sst-rank">순위</span>
-                    <span class="sst-team">팀</span>
-                    <span class="sst-pts">현재</span>
-                    <span class="sst-bar">우승확률</span>
-                    <span class="sst-pct">우승</span>
-                    <span class="sst-pct">TOP</span>
-                    <span class="sst-pct">강등</span>
-                </div>
-                ${top.map((t, i) => {
-                    const winColor = t.win_pct > 30 ? "#facc15" : t.win_pct > 5 ? "#7bed9f" : "#4ea4f8";
-                    const relColor = t.rel_pct > 30 ? "#f87171" : t.rel_pct > 5 ? "#fda4af" : "#6a8aa8";
-                    return `<div class="ssb-row">
-                        <span class="sst-rank">${i+1}</span>
-                        <span class="sst-team">${t.name}</span>
-                        <span class="sst-pts">${t.current_pts}pt (${t.current_played}경기)</span>
-                        <span class="sst-bar"><span class="sst-bar-fill" style="width:${(t.win_pct/maxWin*100).toFixed(0)}%;background:${winColor}"></span></span>
-                        <span class="sst-pct" style="color:${winColor};font-weight:${t.win_pct>0?700:400}">${t.win_pct}%</span>
-                        <span class="sst-pct">${t.top_pct}%</span>
-                        <span class="sst-pct" style="color:${relColor};font-weight:${t.rel_pct>10?700:400}">${t.rel_pct}%</span>
-                    </div>`;
-                }).join("")}
-            </div>
-        </div>`;
-    }
-    function attachSeasonSimToggle(wrap, league) {
-        const btn  = wrap.querySelector(`.season-sim-toggle`);
-        const body = wrap.querySelector(`.season-sim-container`);
-        if (!btn || !body) return;
-        btn.addEventListener("click", () => {
-            const isOpen = body.classList.toggle("open");
-            btn.textContent = isOpen ? "▼ 시즌 시뮬레이션 닫기" : "🎲 시즌 시뮬레이션 (우승/TOP/강등 확률)";
-            if (isOpen && !body.dataset.loaded) {
-                body.innerHTML = `<div class="sim-empty">시뮬레이션 중... (~3초)</div>`;
-                loadSeasonSim(league).then(d => {
-                    body.innerHTML = seasonSimHtml(d);
-                    body.dataset.loaded = "1";
-                });
-            }
-        });
-    }
-
     function renderRoundsBanner(roundsData, schedData, league) {
         const wrapId = league === "k1" ? "k1-schedule-banner-wrap" : "k2-schedule-banner-wrap";
         const wrap = document.getElementById(wrapId);
@@ -193,12 +130,9 @@
                 </button>`).join("")}
             </div>
             <div class="ksb-list" id="${league}-game-list"></div>
-            <button class="season-sim-toggle">🎲 시즌 시뮬레이션 (우승/TOP/강등 확률)</button>
-            <div class="season-sim-container"></div>
         </div>`;
 
         renderRoundGames(curRound, rounds, league);
-        attachSeasonSimToggle(wrap, league);
 
         wrap.querySelectorAll(".ksb-round-btn").forEach(btn => {
             btn.addEventListener("click", () => {
