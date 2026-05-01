@@ -505,6 +505,7 @@
                     <button class="analytics-tab-btn" data-tab="month">월별 승률</button>
                     <button class="analytics-tab-btn" data-tab="ha">홈/어웨이</button>
                     <button class="analytics-tab-btn" data-tab="weather">날씨</button>
+                    <button class="analytics-tab-btn" data-tab="goal-timing">골 타이밍</button>
                 </div>
                 <div id="year-filter-global" class="year-filter-wrap"></div>
             </div>
@@ -538,6 +539,15 @@
                 <div class="chart-wrap chart-wrap-sm"><canvas id="chart-hum"></canvas></div>
                 <p class="analytics-section-label">💨 풍속별 승률 (m/s)</p>
                 <div class="chart-wrap chart-wrap-sm"><canvas id="chart-wind"></canvas></div>
+            </div>
+            <!-- 골 타이밍 -->
+            <div id="analytics-panel-goal-timing" class="analytics-panel hidden">
+                <div class="gt-half-labels">
+                    <span class="gt-half-label">전반</span>
+                    <span class="gt-half-label">후반</span>
+                </div>
+                <div class="chart-wrap" style="height:260px"><canvas id="chart-goal-timing"></canvas></div>
+                <div id="goal-timing-summary" class="gt-summary"></div>
             </div>
         </div>
     </div>

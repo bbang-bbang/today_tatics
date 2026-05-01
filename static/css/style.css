@@ -6456,3 +6456,53 @@ body.pr-expanded-lock {
     text-transform: uppercase; letter-spacing: 0.1em;
     flex: 1; text-align: center;
 }
+
+/* ── 골 타이밍 패널 ──────────────────────────────────────── */
+.gt-half-labels {
+    display: flex;
+    gap: 0;
+    margin-bottom: 4px;
+}
+.gt-half-label {
+    flex: 1;
+    text-align: center;
+    font-size: 11px;
+    color: #64748b;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.gt-half-label:first-child {
+    border-right: 1px dashed rgba(255,255,255,0.12);
+    flex: 3;
+}
+.gt-half-label:last-child { flex: 4; }
+.gt-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 0 4px;
+}
+.gt-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 11px;
+    color: #64748b;
+    min-width: 72px;
+}
+.gt-stat strong {
+    display: block;
+    font-size: 17px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+}
+.gt-pos { color: #4ade80 !important; }
+.gt-neg { color: #f87171 !important; }

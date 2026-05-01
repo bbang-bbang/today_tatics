@@ -5394,6 +5394,84 @@ if not os.environ.get("DISABLE_SCHEDULER") and (
     _sched_thread.start()
 
 
+@app.route("/api/goal-timing")
+def goal_timing():
+    """팀별 골 타이밍 분석 (15분 구간별 득점/실점)"""
+    team_id_str = request.args.get("teamId")
+    year        = request.args.get("year")
+
+    team_info = next((t for t in TEAMS if t["id"] == team_id_str), None)
+    if not team_info:
+        return jsonify({"error": "team not found"}), 404
+
+    ss_id = team_info["sofascore_id"]
+
+    year_cond = ""
+    yp: tuple = ()
+    if year:
+        year_cond = "AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) = ?"
+        yp = (year,)
+
+    bucket_expr = """
+        CASE
+            WHEN g.minute <= 15 THEN '1-15'
+            WHEN g.minute <= 30 THEN '16-30'
+            WHEN g.minute <= 45 THEN '31-45'
+            WHEN g.minute <= 60 THEN '46-60'
+            WHEN g.minute <= 75 THEN '61-75'
+            WHEN g.minute = 90 AND g.added_time > 0 THEN '90+'
+            WHEN g.minute <= 90 THEN '76-90'
+            ELSE '90+'
+        END
+    """
+
+    conn = sqlite3.connect(DB_PATH)
+    cur  = conn.cursor()
+
+    cur.execute(f"""
+        SELECT {bucket_expr} AS bucket, COUNT(*) AS cnt
+        FROM goal_events g
+        JOIN events e ON g.event_id = e.id
+        WHERE g.team_id = ? AND g.is_own_goal = 0
+          AND (e.home_team_id = ? OR e.away_team_id = ?)
+          {year_cond}
+        GROUP BY bucket
+    """, (ss_id, ss_id, ss_id) + yp)
+    for_map = {r[0]: r[1] for r in cur.fetchall()}
+
+    cur.execute(f"""
+        SELECT {bucket_expr} AS bucket, COUNT(*) AS cnt
+        FROM goal_events g
+        JOIN events e ON g.event_id = e.id
+        WHERE g.team_id != ? AND g.is_own_goal = 0
+          AND (e.home_team_id = ? OR e.away_team_id = ?)
+          {year_cond}
+        GROUP BY bucket
+    """, (ss_id, ss_id, ss_id) + yp)
+    against_map = {r[0]: r[1] for r in cur.fetchall()}
+
+    cur.execute("""
+        SELECT DISTINCT strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))
+        FROM goal_events g
+        JOIN events e ON g.event_id = e.id
+        WHERE (e.home_team_id = ? OR e.away_team_id = ?)
+        ORDER BY 1
+    """, (ss_id, ss_id))
+    years = [r[0] for r in cur.fetchall()]
+
+    conn.close()
+
+    BUCKETS = ['1-15', '16-30', '31-45', '46-60', '61-75', '76-90', '90+']
+    buckets = [{"label": b, "for": for_map.get(b, 0), "against": against_map.get(b, 0)} for b in BUCKETS]
+
+    return jsonify({
+        "buckets": buckets,
+        "total_for":     sum(b["for"]     for b in buckets),
+        "total_against": sum(b["against"] for b in buckets),
+        "available_years": years,
+    })
+
+
 @app.route("/api/update-status")
 def get_update_status():
     return jsonify(_UPDATE_STATUS)

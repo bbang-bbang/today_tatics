@@ -104,8 +104,11 @@
 
     function loadAnalytics(teamId) {
         titleEl.textContent = "불러오는 중...";
-        const url = `/api/team-analytics?teamId=${teamId}${currentYear !== "전체" ? "&year=" + currentYear : ""}`;
-        fetch(url).then(r => r.json()).then(data => {
+        const yp = currentYear !== "전체" ? "&year=" + currentYear : "";
+        Promise.all([
+            fetch(`/api/team-analytics?teamId=${teamId}${yp}`).then(r => r.json()),
+            fetch(`/api/goal-timing?teamId=${teamId}${yp}`).then(r => r.json()),
+        ]).then(([data, goalData]) => {
             titleEl.textContent = data.team + " 분석";
             const years = data.available_years || [];
             buildYearFilter(years, "year-filter-global");
@@ -113,6 +116,7 @@
             renderByMonth(data.by_month || []);
             renderByYearHA(data.by_year_ha || {});
             renderWeather(data.weather || {});
+            renderGoalTiming(goalData);
         });
     }
 
@@ -487,6 +491,76 @@
                 }
             })
         });
+    }
+
+    // ── 골 타이밍 ──────────────────────────────────────────────────
+    function renderGoalTiming(data) {
+        destroyChart("goal-timing");
+        const el = document.getElementById("chart-goal-timing");
+        const summaryEl = document.getElementById("goal-timing-summary");
+
+        if (!data || !data.buckets || (!data.total_for && !data.total_against)) {
+            el.closest(".chart-wrap").innerHTML = "<p class='chart-empty'>데이터 없음 (K2 전용)</p>";
+            if (summaryEl) summaryEl.innerHTML = "";
+            return;
+        }
+
+        const labels  = data.buckets.map(b => b.label + "'");
+        const forData = data.buckets.map(b => b.for);
+        const agData  = data.buckets.map(b => b.against);
+
+        charts["goal-timing"] = new Chart(el, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "득점",
+                        data: forData,
+                        backgroundColor: "rgba(78,164,248,0.82)",
+                        borderColor:     "rgba(78,164,248,1)",
+                        borderWidth: 1, borderRadius: 4,
+                    },
+                    {
+                        label: "실점",
+                        data: agData,
+                        backgroundColor: "rgba(248,90,78,0.75)",
+                        borderColor:     "rgba(248,90,78,1)",
+                        borderWidth: 1, borderRadius: 4,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: "#c8d0e8", font: { size: 12 }, boxWidth: 14 } },
+                    tooltip: {
+                        backgroundColor: "rgba(15,20,40,0.92)",
+                        titleColor: "#e2e8f0", bodyColor: "#8892b0",
+                        callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}골` }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: "#8a9fb8", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+                    y: { beginAtZero: true, ticks: { color: "#8a9fb8", precision: 0, font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.07)" } }
+                }
+            }
+        });
+
+        if (summaryEl) {
+            const peakFor = forData.indexOf(Math.max(...forData));
+            const peakAg  = agData.indexOf(Math.max(...agData));
+            const diff    = data.total_for - data.total_against;
+            const diffStr = diff > 0 ? `+${diff}` : String(diff);
+            summaryEl.innerHTML = `
+                <span class="gt-stat">총 득점<strong>${data.total_for}</strong></span>
+                <span class="gt-stat">총 실점<strong>${data.total_against}</strong></span>
+                <span class="gt-stat">득실차<strong class="${diff >= 0 ? "gt-pos" : "gt-neg"}">${diffStr}</strong></span>
+                <span class="gt-stat">최다 득점 구간<strong>${labels[peakFor]}</strong></span>
+                <span class="gt-stat">최다 실점 구간<strong>${labels[peakAg]}</strong></span>
+            `;
+        }
     }
 
 })();
