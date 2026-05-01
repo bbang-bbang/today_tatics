@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-05-01 14:47 | 팀별 골 타이밍 분석 탭 추가
+
+### 구현
+- `/api/goal-timing?teamId=X&year=Y`: `goal_events` 기반 15분 구간별 득점/실점 집계
+  - 구간: 1-15, 16-30, 31-45, 46-60, 61-75, 76-90, 90+
+  - `added_time > 0` 조건으로 90+ 구간 정확 분리 (minute는 최대 90으로 저장됨)
+  - 연도 필터 지원, available_years 반환
+- 팀 분석 모달 **골 타이밍** 탭 신설
+  - 전반/후반 레이블 + 득점(파랑)/실점(빨강) grouped bar 차트
+  - 하단 요약: 총 득점·실점·득실차·최다 득점 구간·최다 실점 구간
+- K2 전용 (K1은 SofaScore 골 이벤트 미수집, "데이터 없음" 표시)
+
+### 수원 삼성 샘플
+- 총 득점 127 / 실점 83, 최다 득점 구간 90+' (21골)
+
+### 배포
+- `scp` 4개 파일 → 서버, `systemctl restart` 완료 (14:47 KST)
+
+---
+
 ## 2026-05-01 01:00 | 반응형 UI 레이아웃 깨짐 수정 + 서버 배포
 
 ### 문제
@@ -2068,3 +2088,14 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-01 00:57:26 | sleep 2 && curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/
 - 2026-05-01 00:58:46 | curl -s -o /dev/null -w "%{http_code}" https://today-tactics.co.kr/ 2>/dev/null || curl -s -o /dev/null -w "%{http_code}" http://1.201.126.200/ 2>/dev/null
 - 2026-05-01 13:39:15 | ls ~/.ssh/ 2>/dev/null || echo "no .ssh dir"
+- 2026-05-01 14:06:28 | nslookup www.today-tactics.co.kr 8.8.8.8
+- 2026-05-01 14:06:43 | nslookup www.today-tactics.co.kr 8.8.8.8 2>&1
+- 2026-05-01 14:06:53 | nslookup www.today-tactics.co.kr 168.126.63.1 2>&1 && nslookup www.today-tactics.co.kr 1.1.1.1 2>&1
+- 2026-05-01 14:06:57 | nslookup today-tactics.co.kr 8.8.8.8 2>&1
+- 2026-05-01 14:08:13 | nslookup www.today-tactics.co.kr 8.8.8.8 2>&1
+- 2026-05-01 14:19:04 | nslookup www.today-tactics.co.kr 8.8.8.8 2>&1
+- 2026-05-01 14:23:02 | nslookup www.today-tactics.co.kr 8.8.8.8 2>&1
+- 2026-05-01 14:27:03 | nslookup www.today-tactics.co.kr 8.8.8.8 2>&1
+- 2026-05-01 14:27:07 | nslookup -type=NS today-tactics.co.kr 8.8.8.8 2>&1
+- 2026-05-01 14:27:09 | nslookup www.today-tactics.co.kr 43.201.170.100 2>&1
+- 2026-05-01 14:35:38 | nslookup www.today-tactics.co.kr 43.201.170.100 2>&1 && nslookup www.today-tactics.co.kr 8.8.8.8 2>&1
