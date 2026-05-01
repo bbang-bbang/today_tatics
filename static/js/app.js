@@ -2014,22 +2014,22 @@
     async function openMatchLoadModal() {
         matchLoadModal.classList.remove("hidden");
         if (!matchLoadDate.value) {
-            // 기본: 라인업이 있는 가장 최근 경기일
-            try {
-                const r = await fetch("/api/matches-latest-lineup-date");
-                const d = await r.json();
-                if (d && d.date) {
-                    matchLoadDate.value = d.date;
-                } else {
-                    const t = new Date(); const p = n => String(n).padStart(2, "0");
-                    matchLoadDate.value = `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}`;
-                }
-            } catch (e) {
-                const t = new Date(); const p = n => String(n).padStart(2, "0");
-                matchLoadDate.value = `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}`;
+            // 오늘 날짜로 즉시 경기 목록 표시 (대기 없음)
+            const t = new Date(); const p = n => String(n).padStart(2, "0");
+            matchLoadDate.value = `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}`;
+            // latest-lineup-date와 matches-by-date를 병렬 요청
+            const [, latestRes] = await Promise.all([
+                refreshMatchList(),
+                fetch("/api/matches-latest-lineup-date").then(r => r.json()).catch(() => null),
+            ]);
+            // 최신 라인업 날짜가 오늘과 다르면 날짜 업데이트 후 재조회
+            if (latestRes && latestRes.date && latestRes.date !== matchLoadDate.value) {
+                matchLoadDate.value = latestRes.date;
+                refreshMatchList();
             }
+        } else {
+            refreshMatchList();
         }
-        refreshMatchList();
     }
 
     async function refreshMatchList() {

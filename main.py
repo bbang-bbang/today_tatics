@@ -2512,6 +2512,7 @@ def _ensure_indexes():
         "CREATE INDEX IF NOT EXISTS idx_mps_event_id ON match_player_stats(event_id)",
         "CREATE INDEX IF NOT EXISTS idx_mps_team_event ON match_player_stats(team_id, event_id)",
         "CREATE INDEX IF NOT EXISTS idx_heatmap_event ON heatmap_points(event_id)",
+        "CREATE INDEX IF NOT EXISTS idx_lineups_event ON match_lineups(event_id)",
     ]
     for sql in indexes:
         try:
@@ -4922,20 +4923,23 @@ def _build_formation_slots(formation, mirror=False):
     return slots
 
 
-def _team_info_by_sofascore_id(ss_id):
-    t = next((t for t in TEAMS if t.get("sofascore_id") == ss_id), None)
-    if not t:
-        return None
-    return {
-        "slug":        t["id"],
-        "name":        t["name"],
-        "short":       t["short"],
-        "league":      t.get("league"),
-        "emblem":      t.get("emblem"),
-        "primary":     t.get("primary"),
-        "secondary":   t.get("secondary"),
-        "accent":      t.get("accent"),
+# O(n) 순회 제거 — sofascore_id → 팀 정보 O(1) 조회
+_TEAM_INFO_BY_SS_ID = {
+    t["sofascore_id"]: {
+        "slug":      t["id"],
+        "name":      t["name"],
+        "short":     t["short"],
+        "league":    t.get("league"),
+        "emblem":    t.get("emblem"),
+        "primary":   t.get("primary"),
+        "secondary": t.get("secondary"),
+        "accent":    t.get("accent"),
     }
+    for t in TEAMS if t.get("sofascore_id")
+}
+
+def _team_info_by_sofascore_id(ss_id):
+    return _TEAM_INFO_BY_SS_ID.get(ss_id)
 
 
 @app.route("/api/matches-by-date")
@@ -4966,13 +4970,15 @@ def matches_by_date():
         params.extend([start_ts, end_ts])
 
     if has_lineup:
-        where.append("EXISTS (SELECT 1 FROM match_lineups m WHERE m.event_id = e.id)")
+        where.append("lu.event_id IS NOT NULL")
 
+    # 코릴레이티드 서브쿼리 2개 → LEFT JOIN 1회로 교체 (idx_lineups_event 활용)
     sql = """
         SELECT e.id, e.home_team_id, e.home_team_name, e.away_team_id, e.away_team_name,
                e.date_ts, e.home_score, e.away_score, e.tournament_id,
-               (SELECT 1 FROM match_lineups m WHERE m.event_id = e.id LIMIT 1) AS has_lu
+               CASE WHEN lu.event_id IS NOT NULL THEN 1 ELSE 0 END AS has_lu
         FROM events e
+        LEFT JOIN (SELECT DISTINCT event_id FROM match_lineups) lu ON lu.event_id = e.id
         WHERE e.tournament_id IN (410, 777)
     """
     if where:
