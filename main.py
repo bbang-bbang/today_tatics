@@ -1492,6 +1492,19 @@ _DECAY_LAMBDA = 0.88
 _HOME_ADVANTAGE    = 1.15
 _AWAY_ADJUSTMENT   = 0.90
 
+# ── 인메모리 TTL 캐시 (예측 관련 반복 쿼리 최적화) ──────────────
+_PRED_CACHE: dict = {}
+_PRED_CACHE_TTL = 600  # 10분
+
+def _pcache_get(key):
+    entry = _PRED_CACHE.get(key)
+    if entry and time.time() - entry[0] < _PRED_CACHE_TTL:
+        return entry[1]
+    return None
+
+def _pcache_set(key, val):
+    _PRED_CACHE[key] = (time.time(), val)
+
 
 def _league_coefs(tid_filter):
     return _LEAGUE_CONSTANTS.get(tid_filter, _DEFAULT_LEAGUE_CONSTANTS)
@@ -1578,30 +1591,40 @@ def _all_team_def(cur, tid_filter, year_str, as_of_ts):
     상대 강도(SOS) 보정용. xG 없으면 실제 실점으로 fallback.
     반환: {team_id: avg_xg_against}
     """
+    _key = f"team_def:{tid_filter}:{year_str}:{as_of_ts}"
+    cached = _pcache_get(_key)
+    if cached is not None:
+        return cached
+    # 코릴레이티드 서브쿼리 → LEFT JOIN 집계로 교체 (경기 수만큼 서브쿼리 반복 제거)
     cur.execute("""
+        WITH mps_agg AS (
+            SELECT event_id, team_id, SUM(expected_goals) AS xg_sum
+            FROM match_player_stats
+            GROUP BY event_id, team_id
+        )
         SELECT team_id, AVG(xg_a)
         FROM (
             SELECT e.home_team_id AS team_id,
-                   COALESCE((SELECT SUM(mps.expected_goals) FROM match_player_stats mps
-                             WHERE mps.event_id=e.id AND mps.team_id=e.away_team_id),
-                            e.away_score) AS xg_a
+                   COALESCE(m_away.xg_sum, e.away_score) AS xg_a
             FROM events e
+            LEFT JOIN mps_agg m_away ON m_away.event_id=e.id AND m_away.team_id=e.away_team_id
             WHERE e.tournament_id=? AND e.home_score IS NOT NULL
               AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
               AND e.date_ts < ?
             UNION ALL
             SELECT e.away_team_id AS team_id,
-                   COALESCE((SELECT SUM(mps.expected_goals) FROM match_player_stats mps
-                             WHERE mps.event_id=e.id AND mps.team_id=e.home_team_id),
-                            e.home_score) AS xg_a
+                   COALESCE(m_home.xg_sum, e.home_score) AS xg_a
             FROM events e
+            LEFT JOIN mps_agg m_home ON m_home.event_id=e.id AND m_home.team_id=e.home_team_id
             WHERE e.tournament_id=? AND e.home_score IS NOT NULL
               AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
               AND e.date_ts < ?
         )
         GROUP BY team_id
     """, (tid_filter, year_str, as_of_ts, tid_filter, year_str, as_of_ts))
-    return {row[0]: float(row[1]) for row in cur.fetchall() if row[1] is not None}
+    result = {row[0]: float(row[1]) for row in cur.fetchall() if row[1] is not None}
+    _pcache_set(_key, result)
+    return result
 
 
 def _team_sos(cur, ss_id, tid_filter, year_str, as_of_ts, team_def_dict, league_def_avg):
@@ -1675,28 +1698,37 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
         decay = _DECAY_LAMBDA
     coefs = _league_coefs(tid_filter)
     shrinkage_k = coefs.get("shrinkage_k", 0)
-    cur.execute("""
-        SELECT AVG(home_score + away_score) / 2.0
-        FROM events
-        WHERE tournament_id=? AND home_score IS NOT NULL AND away_score IS NOT NULL
-          AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
-          AND date_ts < ?
-    """, (tid_filter, year_str, as_of_ts))
-    _r = cur.fetchone()
-    league_avg = float(_r[0]) if _r and _r[0] else 1.3
+    _lavg_key = f"league_avg:{tid_filter}:{year_str}"
+    league_avg = _pcache_get(_lavg_key)
+    if league_avg is None:
+        cur.execute("""
+            SELECT AVG(home_score + away_score) / 2.0
+            FROM events
+            WHERE tournament_id=? AND home_score IS NOT NULL AND away_score IS NOT NULL
+              AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
+              AND date_ts < ?
+        """, (tid_filter, year_str, as_of_ts))
+        _r = cur.fetchone()
+        league_avg = float(_r[0]) if _r and _r[0] else 1.3
+        _pcache_set(_lavg_key, league_avg)
 
     def _team_xg(ss_id):
         # 학습 기간: K1은 2024 포함(데이터 부족 보강), K2는 2025+2026
         # P2(2026-04-29) 정합성 작업으로 2024 events 메타 복구되어 K1 백필 활용 가능
         years = "('2024','2025','2026')" if tid_filter == 410 else "('2025','2026')"
+        # 서브쿼리 2개 → 단일 조건부 집계 JOIN으로 교체
         cur.execute(f"""
             SELECT e.id, e.home_team_id=? AS is_home, e.home_score, e.away_score,
-                   (SELECT SUM(mps.expected_goals) FROM match_player_stats mps
-                    WHERE mps.event_id=e.id AND mps.team_id=?) AS xg_for,
-                   (SELECT SUM(mps.expected_goals) FROM match_player_stats mps
-                    WHERE mps.event_id=e.id AND mps.team_id IS NOT NULL
-                      AND mps.team_id != ?) AS xg_against
+                   mps_agg.xg_for, mps_agg.xg_against
             FROM events e
+            LEFT JOIN (
+                SELECT event_id,
+                       SUM(CASE WHEN team_id=? THEN expected_goals ELSE 0 END) AS xg_for,
+                       SUM(CASE WHEN team_id IS NOT NULL AND team_id != ?
+                                THEN expected_goals ELSE 0 END) AS xg_against
+                FROM match_player_stats
+                GROUP BY event_id
+            ) mps_agg ON mps_agg.event_id=e.id
             WHERE e.tournament_id=?
               AND (e.home_team_id=? OR e.away_team_id=?)
               AND e.home_score IS NOT NULL AND e.away_score IS NOT NULL
@@ -2474,6 +2506,12 @@ def _ensure_indexes():
         "CREATE INDEX IF NOT EXISTS idx_heatmap_player_event ON heatmap_points(player_id, event_id)",
         "CREATE INDEX IF NOT EXISTS idx_players_name_ko ON players(name_ko)",
         "CREATE INDEX IF NOT EXISTS idx_goal_events_player ON goal_events(player_id)",
+        "CREATE INDEX IF NOT EXISTS idx_events_home_team ON events(home_team_id)",
+        "CREATE INDEX IF NOT EXISTS idx_events_away_team ON events(away_team_id)",
+        "CREATE INDEX IF NOT EXISTS idx_events_tourn_date ON events(tournament_id, date_ts)",
+        "CREATE INDEX IF NOT EXISTS idx_mps_event_id ON match_player_stats(event_id)",
+        "CREATE INDEX IF NOT EXISTS idx_mps_team_event ON match_player_stats(team_id, event_id)",
+        "CREATE INDEX IF NOT EXISTS idx_heatmap_event ON heatmap_points(event_id)",
     ]
     for sql in indexes:
         try:
@@ -2744,20 +2782,17 @@ def get_player_stat_report():
         if col not in _ALLOWED_PHYSICAL_COLS:
             raise ValueError(f"disallowed physical column: {col}")
         if not val: return None
+        # 쿼리 2회 → 1회: 단일 EXISTS + 조건부 COUNT로 통합
         cur.execute(f"""
-            SELECT COUNT(*) FROM players p2
-            WHERE p2.{col} > ? AND p2.{col} IS NOT NULL AND p2.{col} > 0
-              AND EXISTS (SELECT 1 FROM match_player_stats m2 JOIN events e2 ON m2.event_id=e2.id
-                          WHERE m2.player_id=p2.id AND e2.tournament_id=777)
-        """, (val,))
-        above = cur.fetchone()[0]
-        cur.execute(f"""
-            SELECT COUNT(*) FROM players p2
+            SELECT SUM(CASE WHEN p2.{col} > ? THEN 1 ELSE 0 END) AS above,
+                   COUNT(*) AS total
+            FROM players p2
             WHERE p2.{col} IS NOT NULL AND p2.{col} > 0
               AND EXISTS (SELECT 1 FROM match_player_stats m2 JOIN events e2 ON m2.event_id=e2.id
                           WHERE m2.player_id=p2.id AND e2.tournament_id=777)
-        """)
-        total = cur.fetchone()[0]
+        """, (val,))
+        row = cur.fetchone()
+        above, total = row[0] or 0, row[1] or 0
         return {"rank": above+1, "total": total, "pct": round((1 - above/total)*100) if total else None}
 
     height_rank = physical_rank("height", height)

@@ -1,15 +1,6 @@
 // analytics.js — 팀 분석 모달 (Chart.js 기반)
 
 (function () {
-    // ── Chart.js 동적 로드 ─────────────────────────────────────────
-    function loadChartJS(cb) {
-        if (window.Chart) { cb(); return; }
-        const s = document.createElement("script");
-        s.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js";
-        s.onload = cb;
-        document.head.appendChild(s);
-    }
-
     // ── DOM refs ──────────────────────────────────────────────────
     const modal      = document.getElementById("analytics-modal");
     const backdrop   = modal.querySelector(".modal-backdrop");
@@ -86,10 +77,8 @@
 
     // ── 열기 ─────────────────────────────────────────────────────
     document.getElementById("btn-analytics").addEventListener("click", () => {
-        loadChartJS(() => {
-            modal.classList.remove("hidden");
-            populateTeamSelect();
-        });
+        modal.classList.remove("hidden");
+        populateTeamSelect();
     });
 
     function closeModal() { modal.classList.add("hidden"); }

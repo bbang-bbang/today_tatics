@@ -2605,16 +2605,23 @@
         }
     }
 
+    let _pollTimer = null;
     function pollStatus() {
+        clearTimeout(_pollTimer);
+        // 백그라운드 탭이면 폴링 중단 — visibilitychange 때 재개
+        if (document.hidden) return;
         fetch("/api/update-status")
             .then(r => r.json())
             .then(d => {
                 renderStatus(d);
-                // 실행 중이면 2초마다 폴링, 평상시 60초
-                setTimeout(pollStatus, d.running ? 2000 : 60000);
+                _pollTimer = setTimeout(pollStatus, d.running ? 2000 : 60000);
             })
-            .catch(() => setTimeout(pollStatus, 30000));
+            .catch(() => { _pollTimer = setTimeout(pollStatus, 30000); });
     }
+    // 탭이 다시 포그라운드로 오면 즉시 폴링 재개
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) pollStatus();
+    });
 
     btn.addEventListener("click", () => {
         if (btn.classList.contains("spinning")) return;

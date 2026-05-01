@@ -4,6 +4,48 @@
 
 ---
 
+## 2026-05-01 | 성능 최적화 6종 — 인덱스·쿼리·캐싱·프론트
+
+### PM 판단 근거
+- 예측 API 호출마다 N+1 쿼리 + league_avg 재계산 → 서버 CPU 낭비
+- home/away_team_id 인덱스 미존재 → 팀 필터 쿼리 full scan
+- 프론트 날짜·팀 재선택 시 동일 API 중복 요청
+- 백그라운드 탭에서도 60초 폴링 지속 → 배터리·서버 낭비
+
+### ① 누락 인덱스 6개 추가 (main.py `_ensure_indexes`)
+| 인덱스 | 대상 |
+|--------|------|
+| idx_events_home_team | events(home_team_id) |
+| idx_events_away_team | events(away_team_id) |
+| idx_events_tourn_date | events(tournament_id, date_ts) |
+| idx_mps_event_id | match_player_stats(event_id) |
+| idx_mps_team_event | match_player_stats(team_id, event_id) |
+| idx_heatmap_event | heatmap_points(event_id) |
+
+### ② N+1 쿼리 통합 3건 (main.py)
+- `_all_team_def()`: 코릴레이티드 서브쿼리 × 경기 수 → CTE + LEFT JOIN 1회로 교체
+- `_team_xg()`: 경기당 서브쿼리 2개 → 단일 조건부 집계 JOIN으로 교체
+- `physical_rank()`: COUNT 쿼리 2회 → SUM(CASE)+COUNT 단일 쿼리로 통합
+
+### ③ 예측 지표 TTL 캐싱 (main.py)
+- `_PRED_CACHE` + `_pcache_get/set` 유틸 추가 (TTL 600초)
+- `league_avg`: 리그·연도별 키로 캐시 (예측 API 호출마다 재쿼리 방지)
+- `_all_team_def()` 결과: (tournament_id, year_str, as_of_ts) 키로 캐시
+
+### ④ 프론트엔드 GET API 메모리 캐시 (index.html fetch 래퍼)
+- TTL 30초, `/api/` GET 요청 전역 캐시
+- 제외: `/api/update-status`, `/api/trigger-update`, `/api/saves`, `/api/squads`
+- 뮤테이션(POST/DELETE) 시 saves·squads 관련 캐시 자동 무효화
+
+### ⑤ 폴링 Page Visibility API 적용 (app.js)
+- `document.hidden` 체크 → 백그라운드 탭이면 폴링 중단
+- `visibilitychange` 이벤트 → 포그라운드 복귀 시 즉시 재개
+
+### ⑥ Chart.js 중복 로딩 제거 (analytics.js, team_compare.js)
+- index.html CDN 로드가 항상 선행하므로 두 파일의 dynamic loadChartJS() 함수 및 래핑 호출 제거
+
+---
+
 ## 2026-05-01 16:33 | UI 직관성 개선 — 툴바 아이콘 + 첫 방문 온보딩
 
 ### PM 판단 근거

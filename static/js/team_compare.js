@@ -1,14 +1,6 @@
 // team_compare.js — 두 팀 주요 스탯 비교 모달 (Chart.js 레이더 오버레이)
 
 (function () {
-    function loadChartJS(cb) {
-        if (window.Chart) { cb(); return; }
-        const s = document.createElement("script");
-        s.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js";
-        s.onload = cb;
-        document.head.appendChild(s);
-    }
-
     const modal      = document.getElementById("team-compare-modal");
     if (!modal) return;
     const backdrop   = modal.querySelector(".modal-backdrop");
@@ -81,10 +73,8 @@
     }
 
     function open() {
-        loadChartJS(() => {
-            modal.classList.remove("hidden");
-            populateSelects();
-        });
+        modal.classList.remove("hidden");
+        populateSelects();
     }
     function close() { modal.classList.add("hidden"); }
 
