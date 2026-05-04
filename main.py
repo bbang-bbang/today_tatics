@@ -1723,9 +1723,11 @@ def _predict_core(cur, home_ss, away_ss, tid_filter, as_of_ts, year_str,
             FROM events e
             LEFT JOIN (
                 SELECT event_id,
-                       SUM(CASE WHEN team_id=? THEN expected_goals ELSE 0 END) AS xg_for,
+                       SUM(CASE WHEN team_id=? AND expected_goals IS NOT NULL
+                                THEN expected_goals END) AS xg_for,
                        SUM(CASE WHEN team_id IS NOT NULL AND team_id != ?
-                                THEN expected_goals ELSE 0 END) AS xg_against
+                                     AND expected_goals IS NOT NULL
+                                THEN expected_goals END) AS xg_against
                 FROM match_player_stats
                 GROUP BY event_id
             ) mps_agg ON mps_agg.event_id=e.id

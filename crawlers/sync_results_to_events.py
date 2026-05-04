@@ -92,10 +92,7 @@ def main():
             seen.add(key)
             try:
                 parts = score_raw.split("-")
-                if is_home:
-                    hs, as_ = int(parts[0]), int(parts[1])
-                else:
-                    hs, as_ = int(parts[1]), int(parts[0])
+                hs, as_ = int(parts[0]), int(parts[1])
             except Exception:
                 continue
             games.append({
