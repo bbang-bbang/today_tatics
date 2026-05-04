@@ -3777,6 +3777,77 @@ body {
 @media (max-width: 640px) {
     .kmc { width: 100%; }
 }
+
+/* ── 라운드 사전 예측 패널 (look-ahead bias 차단된 R(N-1)까지의 데이터) ── */
+.ksb-pred-panel:empty { display: none; }
+.ksb-pred-panel {
+    margin: 6px 0 10px;
+    padding: 10px 12px 8px;
+    background: rgba(20,30,50,0.5);
+    border: 1px solid rgba(78,164,248,0.18);
+    border-radius: 8px;
+}
+.rpp-loading,
+.rpp-empty {
+    color: #5a7a8a; font-size: 0.72rem; text-align: center; padding: 6px 0;
+}
+.rpp-head {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+    margin-bottom: 8px; padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.rpp-title { font-weight: 700; color: #c8d8f0; font-size: 0.78rem; }
+.rpp-acc {
+    background: rgba(74,222,128,0.1);
+    color: #4ade80; padding: 2px 8px; border-radius: 10px;
+    font-size: 0.7rem; font-weight: 600;
+}
+.rpp-acc b { font-size: 0.85rem; font-weight: 900; }
+.rpp-acc-pre { background: rgba(78,164,248,0.1); color: #4ea4f8; }
+.rpp-cutoff { color: #5a7a8a; font-size: 0.65rem; margin-left: auto; }
+
+.rpp-table {
+    width: 100%; border-collapse: collapse; font-size: 0.7rem;
+}
+.rpp-table thead th {
+    color: #5a7a8a; font-weight: 600; padding: 4px 6px;
+    text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.rpp-table thead th:first-child { text-align: left; }
+.rpp-table tbody td { padding: 5px 6px; text-align: center; }
+.rpp-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.03); }
+.rpp-table tbody tr:hover { background: rgba(78,164,248,0.04); }
+
+.rpp-mu {
+    text-align: left !important; color: #c8d8f0; font-weight: 600;
+    white-space: nowrap;
+}
+.rpp-h, .rpp-a { display: inline-block; min-width: 36px; }
+.rpp-h { color: #4ea4f8; }
+.rpp-a { color: #b87ef8; text-align: right; }
+.rpp-vs { color: #5a7a8a; font-size: 0.6rem; margin: 0 4px; }
+
+.rpp-pct { color: #6a8aa8; font-variant-numeric: tabular-nums; }
+.rpp-pick { color: #facc15; font-weight: 900; }
+
+.rpp-ts { color: #c8d8f0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rpp-actual { color: #c8d8f0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rpp-actual-tbd { color: #5a7a8a; font-weight: 400; font-style: italic; }
+
+.rpp-hit-ok { color: #4ade80; font-weight: 900; }
+.rpp-hit-no { color: #f87171; font-weight: 700; }
+.rpp-hit-na { color: #5a7a8a; }
+
+.rpp-foot {
+    color: #5a7a8a; font-size: 0.62rem; text-align: center;
+    margin-top: 6px; padding-top: 4px;
+    border-top: 1px dashed rgba(255,255,255,0.04);
+}
+
+@media (max-width: 640px) {
+    .rpp-cutoff { width: 100%; margin-left: 0; }
+    .rpp-table { font-size: 0.65rem; }
+}
 .ksb-item  {
     display: flex;
     align-items: center;

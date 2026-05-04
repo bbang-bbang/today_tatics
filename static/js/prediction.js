@@ -129,6 +129,7 @@
                     <span class="ksb-round-done">${r.finished}/${r.total}</span>
                 </button>`).join("")}
             </div>
+            <div class="ksb-pred-panel" id="${league}-pred-panel"></div>
             <div class="ksb-list" id="${league}-game-list"></div>
         </div>`;
 
@@ -146,11 +147,83 @@
         });
     }
 
+    // 라운드 사전 예측 캐시 (key: "k1_10")
+    const _roundPredCache = {};
+
+    async function renderRoundPredPanel(roundNum, league) {
+        const panel = document.getElementById(`${league}-pred-panel`);
+        if (!panel) return;
+        panel.innerHTML = `<div class="rpp-loading">⏳ R${roundNum} 모델 사전 예측 로딩...</div>`;
+        const cacheKey = `${league}_${roundNum}`;
+        let data = _roundPredCache[cacheKey];
+        if (!data) {
+            try {
+                const r = await fetch(`/api/round-predictions?league=${league}&round=${roundNum}`);
+                data = await r.json();
+                _roundPredCache[cacheKey] = data;
+            } catch (e) { panel.innerHTML = ""; return; }
+        }
+        const matches = (data && data.matches) || [];
+        const summary = data && data.summary;
+        const asOf    = data && data.as_of_date;
+        const predicted = matches.filter(m => m.pred);
+        if (!predicted.length) {
+            panel.innerHTML = `<div class="rpp-empty">📊 R${roundNum} 모델 예측 — 표본 부족</div>`;
+            return;
+        }
+
+        const summaryHtml = summary
+            ? `<span class="rpp-acc">1X2 적중 <b>${summary.hit_pct}%</b> (${summary.n_hit}/${summary.n_total})</span>`
+            : `<span class="rpp-acc rpp-acc-pre">미진행 라운드 — 적중 측정 전</span>`;
+
+        const rows = predicted.map(m => {
+            const p = m.pred;
+            const max = Math.max(p.home_pct, p.draw_pct, p.away_pct);
+            const cls = v => v === max ? " rpp-pick" : "";
+            const ts = p.top_score ? `${p.top_score.home}-${p.top_score.away}` : "—";
+            const actual = m.actual_score ? `${m.actual_score.home}-${m.actual_score.away}` : "";
+            const hitCell = ("hit" in p)
+                ? (p.hit ? `<td class="rpp-hit-ok">✓</td>` : `<td class="rpp-hit-no">✗</td>`)
+                : `<td class="rpp-hit-na">—</td>`;
+            const actualCell = m.actual_score
+                ? `<td class="rpp-actual">${actual}</td>`
+                : `<td class="rpp-actual rpp-actual-tbd">예정</td>`;
+            return `<tr>
+                <td class="rpp-mu"><span class="rpp-h">${m.home_short}</span><span class="rpp-vs">vs</span><span class="rpp-a">${m.away_short}</span></td>
+                <td class="rpp-pct${cls(p.home_pct)}">${p.home_pct}</td>
+                <td class="rpp-pct${cls(p.draw_pct)}">${p.draw_pct}</td>
+                <td class="rpp-pct${cls(p.away_pct)}">${p.away_pct}</td>
+                <td class="rpp-ts">${ts}</td>
+                ${actualCell}
+                ${hitCell}
+            </tr>`;
+        }).join("");
+
+        panel.innerHTML = `
+            <div class="rpp-head">
+                <span class="rpp-title">📊 R${roundNum} 모델 사전 예측</span>
+                ${summaryHtml}
+                <span class="rpp-cutoff">cutoff ${asOf}</span>
+            </div>
+            <table class="rpp-table">
+                <thead><tr>
+                    <th>매치업</th><th>홈%</th><th>무%</th><th>원정%</th><th>예상</th><th>실제</th><th></th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <div class="rpp-foot">⚠ R${roundNum-1}까지의 데이터로 예측 (look-ahead bias 차단). 베팅 의사결정 권장 X</div>
+        `;
+    }
+
     function renderRoundGames(roundNum, rounds, league) {
         const list = document.getElementById(`${league}-game-list`);
         if (!list) return;
         const rndData = rounds.find(r => r.round === roundNum);
         if (!rndData) return;
+
+        // 사전 예측 패널은 비동기 로드 (게임 카드와 병렬)
+        renderRoundPredPanel(roundNum, league);
+
 
         list.innerHTML = rndData.games.map(g => {
             const finished  = g.finished;
