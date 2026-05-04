@@ -146,6 +146,9 @@
         });
     }
 
+    // 라운드별 사전 예측 캐시 (key: "k1_10")
+    const _roundPredCache = {};
+
     function renderRoundGames(roundNum, rounds, league) {
         const list = document.getElementById(`${league}-game-list`);
         if (!list) return;
@@ -186,8 +189,14 @@
                     <span class="kmc-name">${g.away_short}</span>
                     ${awayEmb}
                 </div>
+                <div class="kmc-pred" data-pred-slot="1">
+                    <div class="kmc-pred-loading">⏳ 사전 예측 로딩…</div>
+                </div>
             </div>`;
         }).join("");
+
+        // 사전 예측 비동기 로드 → 카드에 인라인 주입
+        injectRoundPredictions(roundNum, league, list);
 
         list.querySelectorAll(".kmc").forEach(item => {
             item.addEventListener("click", () => {
@@ -210,6 +219,85 @@
                         .catch(() => {});
                 }
             });
+        });
+    }
+
+    // 라운드 사전 예측 fetch + 카드 인라인 주입
+    async function injectRoundPredictions(roundNum, league, listEl) {
+        const cacheKey = `${league}_${roundNum}`;
+        let data = _roundPredCache[cacheKey];
+        if (!data) {
+            try {
+                const r = await fetch(`/api/round-predictions?league=${league}&round=${roundNum}`);
+                data = await r.json();
+                _roundPredCache[cacheKey] = data;
+            } catch (e) {
+                listEl.querySelectorAll(".kmc-pred").forEach(s => s.innerHTML = "");
+                return;
+            }
+        }
+        const matches = (data && data.matches) || [];
+        const summary = data && data.summary;
+        const asOf    = data && data.as_of_date;
+
+        // 라운드 헤더에 적중률 요약 표시 (한 번만)
+        if (summary) {
+            const banner = document.getElementById(`${league}-schedule-banner`);
+            if (banner && !banner.querySelector(".ksb-rsum")) {
+                const sum = document.createElement("div");
+                sum.className = "ksb-rsum";
+                sum.innerHTML = `<span class="ksb-rsum-lbl">📊 R${roundNum} 사전 예측 1X2 적중률</span>
+                    <span class="ksb-rsum-val">${summary.hit_pct}%</span>
+                    <span class="ksb-rsum-sub">${summary.n_hit}/${summary.n_total}경기 · cutoff ${asOf}</span>`;
+                banner.querySelector(".ksb-header")?.appendChild(sum);
+            } else if (banner) {
+                const valEl = banner.querySelector(".ksb-rsum-val");
+                const subEl = banner.querySelector(".ksb-rsum-sub");
+                const lblEl = banner.querySelector(".ksb-rsum-lbl");
+                if (valEl) valEl.textContent = `${summary.hit_pct}%`;
+                if (subEl) subEl.textContent = `${summary.n_hit}/${summary.n_total}경기 · cutoff ${asOf}`;
+                if (lblEl) lblEl.textContent = `📊 R${roundNum} 사전 예측 1X2 적중률`;
+            }
+        } else {
+            const banner = document.getElementById(`${league}-schedule-banner`);
+            const rsum = banner?.querySelector(".ksb-rsum");
+            if (rsum) rsum.remove();
+        }
+
+        // 카드별 예측 주입
+        listEl.querySelectorAll(".kmc").forEach(item => {
+            const slot = item.querySelector(".kmc-pred");
+            if (!slot) return;
+            const home = item.dataset.home;
+            const away = item.dataset.away;
+            const m = matches.find(x => x.home_id === home && x.away_id === away);
+            if (!m || !m.pred) {
+                slot.innerHTML = m && m.note
+                    ? `<div class="kmc-pred-na">예측 불가 · ${m.note}</div>`
+                    : "";
+                return;
+            }
+            const p = m.pred;
+            const max = Math.max(p.home_pct, p.draw_pct, p.away_pct);
+            const cls = v => v === max ? " kmc-pp-pick" : "";
+            const hitMark = (p.hit === true) ? `<span class="kmc-hit kmc-hit-ok">✓ 적중</span>`
+                          : (p.hit === false) ? `<span class="kmc-hit kmc-hit-no">✗</span>`
+                          : "";
+            const top = p.top_score ? `<span class="kmc-pp-top">예상 ${p.top_score.home}-${p.top_score.away}</span>` : "";
+            slot.innerHTML = `
+                <div class="kmc-pp-row">
+                    <span class="kmc-pp-h${cls(p.home_pct)}">홈 ${p.home_pct}%</span>
+                    <span class="kmc-pp-d${cls(p.draw_pct)}">무 ${p.draw_pct}%</span>
+                    <span class="kmc-pp-a${cls(p.away_pct)}">원정 ${p.away_pct}%</span>
+                    ${hitMark}
+                </div>
+                <div class="kmc-pp-bar">
+                    <span class="kmc-pp-bh" style="width:${p.home_pct}%"></span>
+                    <span class="kmc-pp-bd" style="width:${p.draw_pct}%"></span>
+                    <span class="kmc-pp-ba" style="width:${p.away_pct}%"></span>
+                </div>
+                ${top ? `<div class="kmc-pp-meta">${top} · λ ${p.lam_home}–${p.lam_away}</div>` : ""}
+            `;
         });
     }
 

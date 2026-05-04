@@ -3815,13 +3815,28 @@ def _year_date_params(year):
         return "", ()
     return "AND match_date >= ? AND match_date < ?", (f"{y}-01-01", f"{y+1}-01-01")
 
+def _league_team_filter(league):
+    """league('k1'|'k2'|'all') → ('AND m.team_id IN (...)', ()) tuple. all이면 빈 필터."""
+    league = (league or "all").lower()
+    if league not in ("k1", "k2"):
+        return "", ()
+    label = "K1" if league == "k1" else "K2"
+    ids = [t["sofascore_id"] for t in TEAMS if t.get("league") == label]
+    if not ids:
+        return "", ()
+    placeholders = ",".join("?" * len(ids))
+    return f"AND m.team_id IN ({placeholders})", tuple(ids)
+
+
 @app.route("/api/insights/top-performers")
 def insights_top_performers():
-    """포지션별 TOP 퍼포머 (최소 3경기 이상, 90분 환산)"""
+    """포지션별 TOP 퍼포머 (최소 3경기 이상, 90분 환산). league=k1|k2|all 필터 지원"""
     year = request.args.get("year", "2026")
+    league = request.args.get("league", "all")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     date_cond, date_params = _year_date_params(year)
+    league_cond, league_params = _league_team_filter(league)
 
     def pinfo(r):
         return {
@@ -3844,10 +3859,10 @@ def insights_top_performers():
                     SELECT event_id FROM match_player_stats
                     WHERE player_id=m.player_id {date_cond})) as pk_goals
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
-        WHERE m.position='F' AND m.minutes_played>0 {date_cond}
+        WHERE m.position='F' AND m.minutes_played>0 {date_cond} {league_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90
         ORDER BY goals DESC LIMIT 30
-    """, date_params * 2).fetchall()
+    """, date_params + date_params + league_params).fetchall()
     result["F"] = [{**pinfo(r),
         "goals": r["goals"] or 0,
         "pk_goals": r["pk_goals"] or 0,
@@ -3865,10 +3880,10 @@ def insights_top_performers():
                SUM(m.total_passes) as tp, SUM(m.accurate_passes) as ap,
                SUM(m.tackles) as tkl, AVG(m.rating) as avg_rating
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
-        WHERE m.position='M' AND m.minutes_played>0 {date_cond}
+        WHERE m.position='M' AND m.minutes_played>0 {date_cond} {league_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90 AND tp>0
         ORDER BY (CAST(ap AS REAL)/tp) DESC LIMIT 30
-    """, date_params).fetchall()
+    """, date_params + league_params).fetchall()
     result["M"] = [{**pinfo(r),
         "pass_acc": round((r["ap"] or 0) / r["tp"] * 100, 1) if r["tp"] else None,
         "passes_p90": round((r["tp"] or 0) / r["mins"] * 90, 1),
@@ -3883,10 +3898,10 @@ def insights_top_performers():
                SUM(m.clearances) as clr, SUM(m.aerial_won) as aer,
                SUM(m.duel_won) as duel, AVG(m.rating) as avg_rating
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
-        WHERE m.position='D' AND m.minutes_played>0 {date_cond}
+        WHERE m.position='D' AND m.minutes_played>0 {date_cond} {league_cond}
         GROUP BY m.player_id HAVING games>=3 AND mins>=90
         ORDER BY (tkl + intc*1.5 + clr + aer + duel) / mins DESC LIMIT 30
-    """, date_params).fetchall()
+    """, date_params + league_params).fetchall()
     result["D"] = [{**pinfo(r),
         "def_score_p90": round(
             ((r["tkl"] or 0) + (r["intc"] or 0)*1.5 + (r["clr"] or 0)
@@ -4405,6 +4420,119 @@ def get_k1_rounds():
             current_round = rnd
 
     return jsonify({"rounds": rounds, "current_round": current_round})
+
+
+@app.route("/api/round-predictions")
+def round_predictions():
+    """
+    라운드별 사전 예측 — look-ahead bias 차단.
+    각 경기의 예측은 해당 라운드 시작일(가장 이른 경기 날짜) 0시 cutoff로 산출.
+    R1~R(N-1) 데이터만 사용해 RN을 예측.
+    """
+    import datetime as _dt
+    league = request.args.get("league", "k2").lower()
+    round_no = request.args.get("round", type=int)
+    if not round_no:
+        return jsonify({"error": "round required"}), 400
+    tid = 410 if league == "k1" else 777
+
+    try:
+        raw = _fetch_k1_all_games() if league == "k1" else _fetch_k2_all_games()
+    except Exception:
+        return jsonify({"league": league.upper(), "round": round_no, "matches": []})
+
+    parser = _parse_k1_game if league == "k1" else _parse_k2_game
+    games = [parser(g) for g in raw if g.get("roundId") == round_no]
+    if not games:
+        return jsonify({"league": league.upper(), "round": round_no, "matches": []})
+
+    games_sorted = sorted(games, key=lambda x: (x["date"], x["time"]))
+    earliest_date = games_sorted[0]["date"]
+    try:
+        earliest_dt = _dt.datetime.strptime(earliest_date, "%Y.%m.%d")
+    except ValueError:
+        return jsonify({"league": league.upper(), "round": round_no, "matches": []})
+    as_of_ts = int(earliest_dt.timestamp())
+    year = str(earliest_dt.year)
+
+    SLUG_TO_SS = {t["id"]: t["sofascore_id"] for t in TEAMS}
+
+    conn = sqlite3.connect(DB_PATH)
+    cur  = conn.cursor()
+
+    matches = []
+    n_pred = n_hit = 0
+    for g in games_sorted:
+        h_slug, a_slug = g["home_id"], g["away_id"]
+        h_ss = SLUG_TO_SS.get(h_slug)
+        a_ss = SLUG_TO_SS.get(a_slug)
+        m = {
+            "home_id":    h_slug,
+            "away_id":    a_slug,
+            "home_short": g["home_short"],
+            "away_short": g["away_short"],
+            "date":       g["date"],
+            "time":       g["time"],
+            "finished":   g["finished"],
+            "actual_score": (
+                {"home": g["home_score"], "away": g["away_score"]}
+                if g["finished"] and g["home_score"] is not None else None
+            ),
+        }
+        if not h_ss or not a_ss:
+            m["pred"] = None
+            m["note"] = "팀 매핑 누락"
+            matches.append(m); continue
+
+        pred = _predict_core(cur, h_ss, a_ss, tid, as_of_ts, year)
+        if not pred:
+            m["pred"] = None
+            m["note"] = "표본 부족 (cold start)"
+            matches.append(m); continue
+
+        top = pred.get("top_scores") or []
+        m["pred"] = {
+            "home_pct":  pred["pred_home"],
+            "draw_pct":  pred["pred_draw"],
+            "away_pct":  pred["pred_away"],
+            "top_score": top[0] if top else None,
+            "lam_home":  round(pred["lam_home"], 2),
+            "lam_away":  round(pred["lam_away"], 2),
+        }
+        n_pred += 1
+        if g["finished"] and g["home_score"] is not None:
+            try:
+                hs, ag = int(g["home_score"]), int(g["away_score"])
+                actual = "home" if hs > ag else "away" if ag > hs else "draw"
+                p = {"home": pred["pred_home"], "draw": pred["pred_draw"], "away": pred["pred_away"]}
+                pred_outcome = max(p, key=p.get)
+                m["pred"]["actual"]       = actual
+                m["pred"]["pred_outcome"] = pred_outcome
+                m["pred"]["hit"]          = (pred_outcome == actual)
+                if pred_outcome == actual:
+                    n_hit += 1
+            except (TypeError, ValueError):
+                pass
+        matches.append(m)
+
+    conn.close()
+    summary = None
+    if n_pred:
+        n_judged = sum(1 for m in matches if m.get("pred", {}).get("actual"))
+        n_judged_hit = sum(1 for m in matches if m.get("pred", {}).get("hit"))
+        if n_judged:
+            summary = {
+                "n_total":   n_judged,
+                "n_hit":     n_judged_hit,
+                "hit_pct":   round(n_judged_hit / n_judged * 100, 1),
+            }
+    return jsonify({
+        "league":     league.upper(),
+        "round":      round_no,
+        "as_of_date": earliest_date,
+        "matches":    matches,
+        "summary":    summary,
+    })
 
 
 @app.route("/api/player-vs-teams")

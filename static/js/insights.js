@@ -3,6 +3,7 @@
   "use strict";
 
   let currentYear = "2026";
+  let currentLeague = "all";  // "all" | "k1" | "k2"
   let currentPos = "F";
 
   // 포지션별 다중 정렬 상태: [{ key, dir }, ...] 우선순위 순
@@ -72,20 +73,42 @@
     el.classList.toggle("hidden", !hasData);
   }
 
-  /* ── 연도 필터 ── */
+  /* ── 연도 + 리그 필터 ── */
   function initYearFilter() {
     const wrap = document.getElementById("insights-year-filter");
     if (!wrap) return;
     const years = ["2026", "2025", "2024", "all"];
-    wrap.innerHTML = years.map(y =>
-      `<button class="ld-year-btn${y === currentYear ? " active" : ""}" data-year="${y}">${y === "all" ? "전체" : y}</button>`
-    ).join("");
+    const leagues = [
+      { v: "all", label: "전체" },
+      { v: "k1",  label: "K1" },
+      { v: "k2",  label: "K2" },
+    ];
+    wrap.innerHTML =
+      `<div class="ld-filter-row">
+         <span class="ld-filter-label">리그</span>
+         ${leagues.map(l =>
+           `<button class="ld-league-btn${l.v === currentLeague ? " active" : ""}" data-league="${l.v}">${l.label}</button>`
+         ).join("")}
+       </div>
+       <div class="ld-filter-row">
+         <span class="ld-filter-label">시즌</span>
+         ${years.map(y =>
+           `<button class="ld-year-btn${y === currentYear ? " active" : ""}" data-year="${y}">${y === "all" ? "전체" : y}</button>`
+         ).join("")}
+       </div>`;
+
     wrap.addEventListener("click", e => {
-      const btn = e.target.closest(".ld-year-btn");
-      if (!btn) return;
-      currentYear = btn.dataset.year;
-      wrap.querySelectorAll(".ld-year-btn").forEach(b => b.classList.toggle("active", b === btn));
-      loadAll();
+      const yBtn = e.target.closest(".ld-year-btn");
+      const lBtn = e.target.closest(".ld-league-btn");
+      if (yBtn) {
+        currentYear = yBtn.dataset.year;
+        wrap.querySelectorAll(".ld-year-btn").forEach(b => b.classList.toggle("active", b === yBtn));
+        loadAll();
+      } else if (lBtn) {
+        currentLeague = lBtn.dataset.league;
+        wrap.querySelectorAll(".ld-league-btn").forEach(b => b.classList.toggle("active", b === lBtn));
+        loadAll();
+      }
     });
   }
 
@@ -105,7 +128,7 @@
      1. TOP 퍼포머
   ══════════════════════════════════════════════════ */
   function loadTopPerformers() {
-    return fetch(`/api/insights/top-performers?year=${currentYear}`)
+    return fetch(`/api/insights/top-performers?year=${currentYear}&league=${currentLeague}`)
       .then(r => r.json())
       .then(data => {
         window._insTopData = data;

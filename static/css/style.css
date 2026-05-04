@@ -3691,6 +3691,7 @@ body {
 /* ── 경기 매치 카드 (kmc) ── */
 .kmc {
     display: flex;
+    flex-wrap: wrap;
     align-items: stretch;
     width: calc(50% - 4px);
     min-width: 240px;
@@ -3777,6 +3778,68 @@ body {
 @media (max-width: 640px) {
     .kmc { width: 100%; }
 }
+
+/* 라운드 카드 인라인 사전 예측 (look-ahead bias 차단된 R(N-1)까지의 데이터로 예측) */
+.kmc-pred {
+    flex-basis: 100%;
+    width: 100%;
+    padding: 6px 10px 8px;
+    background: rgba(0,0,0,0.22);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.kmc-pred-loading,
+.kmc-pred-na { color: #5a7a8a; font-size: 0.62rem; text-align: center; padding: 2px 0; }
+
+.kmc-pp-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    font-weight: 700;
+}
+.kmc-pp-h { color: #4ea4f8; opacity: 0.7; }
+.kmc-pp-d { color: #c8d8f0; opacity: 0.7; }
+.kmc-pp-a { color: #b87ef8; opacity: 0.7; }
+.kmc-pp-pick { opacity: 1; text-shadow: 0 0 6px currentColor; font-weight: 900; }
+
+.kmc-pp-bar {
+    display: flex;
+    height: 5px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+}
+.kmc-pp-bh { background: linear-gradient(90deg, #4ea4f8, #2563eb); }
+.kmc-pp-bd { background: linear-gradient(90deg, #6b7a8c, #94a3b8); }
+.kmc-pp-ba { background: linear-gradient(90deg, #b87ef8, #8b5cf6); }
+
+.kmc-pp-meta { color: #6a8aa8; font-size: 0.6rem; text-align: center; }
+.kmc-pp-top  { color: #c8d8f0; font-weight: 600; }
+
+.kmc-hit { font-size: 0.6rem; padding: 1px 5px; border-radius: 8px; font-weight: 800; margin-left: 6px; }
+.kmc-hit-ok { background: rgba(74,222,128,0.18); color: #4ade80; }
+.kmc-hit-no { background: rgba(248,113,113,0.15); color: #f87171; }
+
+/* 라운드 헤더 적중률 요약 */
+.ksb-rsum {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 4px 10px;
+    background: rgba(74,222,128,0.08);
+    border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 16px;
+    font-size: 0.7rem;
+}
+.ksb-rsum-lbl { color: #c8d8f0; font-weight: 600; }
+.ksb-rsum-val { color: #4ade80; font-weight: 900; font-size: 0.85rem; }
+.ksb-rsum-sub { color: var(--text-muted); font-size: 0.62rem; }
 .ksb-item  {
     display: flex;
     align-items: center;
@@ -4585,8 +4648,14 @@ body {
 }
 
 /* 연도 필터 */
-.ld-year-filter { display: flex; flex-wrap: wrap; gap: 5px; }
-.ld-year-btn {
+.ld-year-filter { display: flex; flex-direction: column; gap: 6px; }
+.ld-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.ld-filter-label {
+    color: #5a7a8a; font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.5px; min-width: 32px;
+}
+.ld-year-btn,
+.ld-league-btn {
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.1);
     color: #667; border-radius: 5px; font-size: 0.72rem;
@@ -4597,6 +4666,13 @@ body {
     background: rgba(78,164,248,0.15);
     border-color: rgba(78,164,248,0.5);
     color: #4ea4f8;
+}
+.ld-league-btn:hover { color: #aac; border-color: rgba(184,126,248,0.4); }
+.ld-league-btn.active {
+    background: rgba(184,126,248,0.15);
+    border-color: rgba(184,126,248,0.5);
+    color: #b87ef8;
+    font-weight: 700;
 }
 
 /* 메인 탭 */
