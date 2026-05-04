@@ -3915,6 +3915,90 @@ def insights_top_performers():
     return jsonify(result)
 
 
+@app.route("/api/insights/card-rankings")
+def insights_card_rankings():
+    """카드 수령 순위 — 선수별 + 팀별. year + league 필터 지원.
+    옐로카드 TOP 10 + 레드카드 TOP 5 (선수별), 팀별 평균(/경기) TOP 8."""
+    year   = request.args.get("year", "2026")
+    league = request.args.get("league", "all")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    date_cond, date_params = _year_date_params(year)
+    league_cond, league_params = _league_team_filter(league)
+
+    # 선수별 옐로 TOP 10
+    yellow_rows = conn.execute(f"""
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) AS name, m.team_id,
+               COUNT(*) AS games, SUM(m.minutes_played) AS mins,
+               SUM(COALESCE(m.yellow_cards,0)) AS yc,
+               SUM(COALESCE(m.red_cards,0))    AS rc
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.minutes_played>0 {date_cond} {league_cond}
+        GROUP BY m.player_id HAVING yc >= 1
+        ORDER BY yc DESC, rc DESC LIMIT 10
+    """, date_params + league_params).fetchall()
+
+    # 선수별 레드 TOP 5
+    red_rows = conn.execute(f"""
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) AS name, m.team_id,
+               COUNT(*) AS games, SUM(m.minutes_played) AS mins,
+               SUM(COALESCE(m.yellow_cards,0)) AS yc,
+               SUM(COALESCE(m.red_cards,0))    AS rc
+        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
+        WHERE m.minutes_played>0 {date_cond} {league_cond}
+        GROUP BY m.player_id HAVING rc >= 1
+        ORDER BY rc DESC, yc DESC LIMIT 5
+    """, date_params + league_params).fetchall()
+
+    # 팀별 — 경기당 평균 카드 (옐로+레드)
+    team_rows = conn.execute(f"""
+        SELECT m.team_id,
+               COUNT(DISTINCT m.event_id) AS games,
+               SUM(COALESCE(m.yellow_cards,0)) AS yc,
+               SUM(COALESCE(m.red_cards,0))    AS rc
+        FROM match_player_stats m
+        WHERE m.minutes_played>0 {date_cond} {league_cond}
+        GROUP BY m.team_id HAVING games >= 3
+        ORDER BY (yc + rc * 2.0) / games DESC LIMIT 12
+    """, date_params + league_params).fetchall()
+
+    def player_row(r):
+        mins = r["mins"] or 0
+        return {
+            "player_id":  r["player_id"],
+            "name":       r["name"] or "",
+            "team":       _ko_team(r["team_id"], ""),
+            "games":      r["games"],
+            "yellow":     r["yc"] or 0,
+            "red":        r["rc"] or 0,
+            "yc_per_90":  round((r["yc"] or 0) / mins * 90, 2) if mins else None,
+        }
+
+    def team_row(r):
+        g = r["games"] or 1
+        yc = r["yc"] or 0
+        rc = r["rc"] or 0
+        return {
+            "team":      _ko_team(r["team_id"], "") or str(r["team_id"]),
+            "team_id":   r["team_id"],
+            "games":     g,
+            "yellow":    yc,
+            "red":       rc,
+            "yc_per_g":  round(yc / g, 2),
+            "rc_per_g":  round(rc / g, 3),
+            "score":     round((yc + rc * 2.0) / g, 2),
+        }
+
+    conn.close()
+    return jsonify({
+        "year":   year,
+        "league": league,
+        "yellow_top": [player_row(r) for r in yellow_rows],
+        "red_top":    [player_row(r) for r in red_rows],
+        "team_top":   [team_row(r)   for r in team_rows],
+    })
+
+
 @app.route("/api/insights/xg-efficiency")
 def insights_xg_efficiency():
     year = request.args.get("year", "2026")

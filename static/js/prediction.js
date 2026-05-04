@@ -604,23 +604,6 @@
         </div>`;
     }
 
-    // ── 심판 인포 카드 (휴식일은 사용자 요청으로 제거) ──────
-    function refereeCardHtml(referee) {
-        if (!referee) return "";
-        return `<div class="pred-rest-ref">
-            <div class="rrc-ref">
-                <div class="rrc-ref-head">
-                    <span class="rrc-ref-icon">👨‍⚖️</span>
-                    <span class="rrc-ref-name">${referee.name}</span>
-                    <span class="rrc-ref-strict rrc-strict-${referee.strictness === '엄격' ? 'strict' : referee.strictness === '관대' ? 'lenient' : 'normal'}">${referee.strictness || '?'}</span>
-                </div>
-                <div class="rrc-ref-stats">
-                    🟨 ${referee.yellow_per_game}/경기 · 🟥 ${referee.red_per_game}/경기 · 통산 ${referee.career_games}경기
-                </div>
-            </div>
-        </div>`;
-    }
-
     // ── 세트피스 매치업 카드 ──────────────────────────────
     function setpieceCardHtml(home, away) {
         const h = home.setpiece, a = away.setpiece;
@@ -815,7 +798,6 @@
                 ${timingBarsHtml(home.goal_timing, home.name)}
                 ${timingBarsHtml(away.goal_timing, away.name)}
             </div>
-            ${refereeCardHtml(d.referee)}
             ${setpieceCardHtml(home, away)}
             ${(hLineup && hLineup.ready) || (aLineup && aLineup.ready) ? `
             <div class="pred-extras-row pred-lineup-row">

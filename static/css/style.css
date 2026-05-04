@@ -4230,50 +4230,6 @@ body {
 }
 
 /* 휴식일 + 심판 정보 카드 */
-.pred-rest-ref {
-    background: rgba(18,29,54,0.7);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    padding: 12px 14px;
-    grid-column: 1 / -1;
-}
-.rrc-ref {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.05);
-    border-radius: 6px;
-    padding: 8px 10px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-.rrc-ref-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-}
-.rrc-ref-icon { font-size: 0.85rem; }
-.rrc-ref-name {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #e8f2ff;
-    flex: 1;
-}
-.rrc-ref-strict {
-    font-size: 0.6rem;
-    font-weight: 700;
-    padding: 1px 6px;
-    border-radius: 3px;
-}
-.rrc-strict-strict   { background: rgba(248,113,113,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
-.rrc-strict-normal   { background: rgba(78,164,248,0.15); color: #4ea4f8; border: 1px solid rgba(78,164,248,0.3); }
-.rrc-strict-lenient  { background: rgba(123,237,159,0.15); color: #7bed9f; border: 1px solid rgba(123,237,159,0.3); }
-.rrc-ref-stats {
-    font-size: 0.62rem;
-    color: #8ab0d8;
-    font-variant-numeric: tabular-nums;
-}
-
 /* 세트피스 매치업 카드 */
 .pred-setpiece {
     background: rgba(18,29,54,0.7);
