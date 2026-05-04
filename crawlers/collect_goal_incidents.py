@@ -46,6 +46,26 @@ def init_table(conn):
         conn.execute("ALTER TABLE goal_events ADD COLUMN goal_type TEXT DEFAULT 'regular'")
     except Exception:
         pass
+
+    # 카드 이벤트 테이블 (옐로/레드/2nd yellow)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS card_events (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id    INTEGER NOT NULL,
+            team_id     INTEGER NOT NULL,
+            player_id   INTEGER,
+            player_name TEXT,
+            minute      INTEGER,
+            added_time  INTEGER DEFAULT 0,
+            is_home     INTEGER DEFAULT 0,
+            card_type   TEXT,         -- yellow / red / yellowRed
+            reason      TEXT,
+            UNIQUE(event_id, player_id, minute, added_time, card_type)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ce_event  ON card_events(event_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ce_player ON card_events(player_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ce_team   ON card_events(team_id)")
     conn.commit()
 
 async def api(page, path):
@@ -63,9 +83,13 @@ async def api(page, path):
 
 async def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--refetch", action="store_true", help="기수집 경기도 재수집 (goal_type 업데이트)")
+    parser.add_argument("--refetch", action="store_true", help="기수집 경기도 재수집 (goal_type / cards 업데이트)")
     parser.add_argument("--league", choices=["K1", "K2", "all"], default="K2",
                         help="대상 리그 (K1/K2/all, 기본 K2)")
+    parser.add_argument("--days", type=int, default=None,
+                        help="최근 N일 이내 경기만 대상 (백필용)")
+    parser.add_argument("--include-zero-zero", action="store_true",
+                        help="0-0 경기도 포함 (카드 수집용)")
     args = parser.parse_args()
 
     if args.league == "all":
@@ -79,26 +103,36 @@ async def main():
     init_table(conn)
     cur = conn.cursor()
 
-    # 수집 대상: 지정 리그 전경기
+    days_cond = ""
+    days_params = ()
+    if args.days:
+        days_cond = " AND date_ts > strftime('%s','now') - ? * 86400"
+        days_params = (args.days,)
+
     cur.execute(f"""
         SELECT id, home_team_id, away_team_id
-        FROM events WHERE tournament_id IN ({placeholders})
+        FROM events WHERE tournament_id IN ({placeholders}){days_cond}
         ORDER BY date_ts
-    """, tids)
+    """, tuple(tids) + days_params)
     all_events = cur.fetchall()
 
-    # 점수가 0-0인 경기는 골 없으므로 스킵
-    cur.execute(f"SELECT id FROM events WHERE tournament_id IN ({placeholders}) AND home_score=0 AND away_score=0", tids)
-    zero_zero = {r[0] for r in cur.fetchall()}
+    # 점수가 0-0인 경기는 골 없으므로 보통 스킵 (카드만 수집할 땐 --include-zero-zero)
+    if args.include_zero_zero:
+        zero_zero = set()
+    else:
+        cur.execute(f"SELECT id FROM events WHERE tournament_id IN ({placeholders}) AND home_score=0 AND away_score=0", tids)
+        zero_zero = {r[0] for r in cur.fetchall()}
 
     if args.refetch:
-        # 재수집: goal_type이 NULL이거나 'regular'인데 fromSetPiece가 있을 수 있는 경기 포함
-        # → 모든 경기 재처리 (DELETE 후 재삽입)
         targets = [e for e in all_events if e["id"] not in zero_zero]
-        log(f"[--refetch] 전체 재수집 모드")
+        log(f"[--refetch] 재수집 모드")
     else:
         cur.execute("SELECT DISTINCT event_id FROM goal_events")
-        done = {r[0] for r in cur.fetchall()}
+        done_g = {r[0] for r in cur.fetchall()}
+        cur.execute("SELECT DISTINCT event_id FROM card_events")
+        done_c = {r[0] for r in cur.fetchall()}
+        # 골/카드 둘 다 수집된 경기만 스킵 (둘 중 하나라도 없으면 다시)
+        done = done_g & done_c
         targets = [e for e in all_events if e["id"] not in done and e["id"] not in zero_zero]
 
     log(f"[{args.league}] 전체: {len(all_events)}경기 / 0-0스킵: {len(zero_zero)} / 수집대상: {len(targets)}경기")
@@ -134,10 +168,36 @@ async def main():
             # 재수집 모드: 기존 해당 경기 데이터 삭제 후 재삽입
             if args.refetch:
                 cur.execute("DELETE FROM goal_events WHERE event_id=?", (eid,))
+                cur.execute("DELETE FROM card_events WHERE event_id=?", (eid,))
 
             rows_inserted = 0
             for inc in data["incidents"]:
-                if inc.get("incidentType") != "goal":
+                inc_type = inc.get("incidentType")
+
+                # ── 카드 이벤트 처리 ──
+                if inc_type == "card":
+                    minute     = inc.get("time", 0)
+                    added_time = inc.get("addedTime", 0) or 0
+                    is_home    = 1 if inc.get("isHome") else 0
+                    inc_class  = inc.get("incidentClass", "")  # yellow/red/yellowRed
+                    reason     = inc.get("reason", "") or inc.get("rescinded", "")
+                    player     = inc.get("player") or {}
+                    pid        = player.get("id")
+                    pname      = player.get("name", "")
+                    team_id    = ev["home_team_id"] if is_home else ev["away_team_id"]
+                    try:
+                        cur.execute("""
+                            INSERT OR IGNORE INTO card_events
+                            (event_id, team_id, player_id, player_name, minute, added_time,
+                             is_home, card_type, reason)
+                            VALUES (?,?,?,?,?,?,?,?,?)
+                        """, (eid, team_id, pid, pname, minute, added_time,
+                              is_home, inc_class, reason))
+                    except Exception:
+                        pass
+                    continue
+
+                if inc_type != "goal":
                     continue
                 minute     = inc.get("time", 0)
                 added_time = inc.get("addedTime", 0) or 0
@@ -193,11 +253,18 @@ async def main():
     for r in cur.fetchall():
         log(f"  {r[0]}: {r[1]}개")
 
+    cur.execute("SELECT card_type, COUNT(*) as cnt FROM card_events GROUP BY card_type ORDER BY cnt DESC")
+    log("\n카드 종류별 집계:")
+    for r in cur.fetchall():
+        log(f"  {r[0]}: {r[1]}개")
+
     cur.execute("SELECT COUNT(*) FROM goal_events")
-    total = cur.fetchone()[0]
+    total_g = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM card_events")
+    total_c = cur.fetchone()[0]
     conn.close()
     log(f"\n완료: {ok}경기 처리 / 스킵: {skip}경기")
-    log(f"goal_events 총 레코드: {total}건")
+    log(f"goal_events 총 레코드: {total_g}건 / card_events 총: {total_c}건")
 
 if __name__ == "__main__":
     asyncio.run(main())

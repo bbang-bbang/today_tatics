@@ -4591,6 +4591,40 @@ body {
     font-weight: 700;
 }
 
+/* 카드 수령 순위 */
+.ins-card-mode-tab {
+    background: none; border: 1px solid transparent;
+    color: #667; font-size: 0.78rem; font-weight: 600;
+    padding: 4px 12px; border-radius: 5px; cursor: pointer;
+    transition: all 0.15s;
+}
+.ins-card-mode-tab:hover { color: #aac; }
+.ins-card-mode-tab.active {
+    background: rgba(252,204,21,0.12);
+    color: #facc15;
+    border-color: rgba(252,204,21,0.3);
+}
+.ins-card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.ins-card-half { min-width: 0; }
+.ins-card-subtitle {
+    font-size: 0.72rem; font-weight: 700; color: #c8d8f0;
+    margin-bottom: 6px; padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ins-card-table { font-size: 0.72rem; }
+.ins-card-table tbody td.ins-neg { color: #f87171; font-weight: 700; }
+.ins-card-foot {
+    color: #5a7a8a; font-size: 0.62rem; margin-top: 6px; text-align: center;
+    font-style: italic;
+}
+@media (max-width: 768px) {
+    .ins-card-grid { grid-template-columns: 1fr; }
+}
+
 /* 메인 탭 */
 .ld-tabs {
     display: flex;

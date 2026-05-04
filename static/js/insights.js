@@ -408,14 +408,109 @@
     }
   }
 
+  /* ── 카드 수령 순위 ── */
+  let currentCardMode = "player";  // "player" | "team"
+  let _cardCache = null;
+
+  function initCardModeTab() {
+    document.querySelectorAll(".ins-card-mode-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".ins-card-mode-tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentCardMode = btn.dataset.mode;
+        renderCardBody(_cardCache);
+      });
+    });
+  }
+
+  function loadCardRankings() {
+    return fetch(`/api/insights/card-rankings?year=${currentYear}&league=${currentLeague}`)
+      .then(r => r.json())
+      .then(d => {
+        _cardCache = d;
+        const has = (d.yellow_top?.length || d.red_top?.length || d.team_top?.length) > 0;
+        showBlock("ins-panel-cards", has);
+        if (has) renderCardBody(d);
+      });
+  }
+
+  function renderCardBody(d) {
+    const wrap = document.getElementById("ins-card-body");
+    if (!wrap || !d) return;
+
+    if (currentCardMode === "team") {
+      const teams = d.team_top || [];
+      if (!teams.length) { wrap.innerHTML = '<p class="ins-empty">팀별 데이터 없음</p>'; return; }
+      wrap.innerHTML = `
+        <table class="ins-table ins-card-table">
+          <thead><tr>
+            <th>#</th><th>팀</th><th>경기</th>
+            <th>🟨 옐로</th><th>🟥 레드</th>
+            <th>옐로/경기</th><th>점수</th>
+          </tr></thead>
+          <tbody>${teams.map((r, i) => `
+            <tr>
+              <td class="ins-rank">${i+1}</td>
+              <td class="ins-name">${r.team}</td>
+              <td>${r.games}</td>
+              <td><strong>${r.yellow}</strong></td>
+              <td class="${r.red > 0 ? 'ins-neg' : ''}">${r.red}</td>
+              <td>${r.yc_per_g}</td>
+              <td><strong>${r.score}</strong></td>
+            </tr>`).join("")}</tbody>
+        </table>
+        <div class="ins-card-foot">점수 = 옐로 + 레드×2 / 경기수. 카드 빈도 종합 지표.</div>
+      `;
+      return;
+    }
+
+    // 선수별 — 옐로 + 레드 두 표
+    const yel = d.yellow_top || [];
+    const red = d.red_top || [];
+    const yelHtml = yel.length ? `
+      <div class="ins-card-half">
+        <div class="ins-card-subtitle">🟨 옐로카드 TOP ${yel.length}</div>
+        <table class="ins-table ins-card-table">
+          <thead><tr><th>#</th><th>선수</th><th>구단</th><th>경기</th><th>🟨</th><th>🟥</th></tr></thead>
+          <tbody>${yel.map((r, i) => `
+            <tr>
+              <td class="ins-rank">${i+1}</td>
+              <td class="ins-name">${r.name}</td>
+              <td class="ins-team">${r.team || "-"}</td>
+              <td>${r.games}</td>
+              <td><strong>${r.yellow}</strong></td>
+              <td class="${r.red > 0 ? 'ins-neg' : ''}">${r.red}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+      </div>` : "";
+    const redHtml = red.length ? `
+      <div class="ins-card-half">
+        <div class="ins-card-subtitle">🟥 레드카드 TOP ${red.length}</div>
+        <table class="ins-table ins-card-table">
+          <thead><tr><th>#</th><th>선수</th><th>구단</th><th>🟨</th><th>🟥</th></tr></thead>
+          <tbody>${red.map((r, i) => `
+            <tr>
+              <td class="ins-rank">${i+1}</td>
+              <td class="ins-name">${r.name}</td>
+              <td class="ins-team">${r.team || "-"}</td>
+              <td>${r.yellow}</td>
+              <td class="ins-neg"><strong>${r.red}</strong></td>
+            </tr>`).join("")}</tbody>
+        </table>
+      </div>` : '<div class="ins-card-half"><div class="ins-empty">레드카드 0건</div></div>';
+    wrap.innerHTML = `<div class="ins-card-grid">${yelHtml}${redHtml}</div>`;
+  }
+
   /* ── 전체 로드 ── */
   function loadAll() {
     loadTopPerformers();
+    loadCardRankings();
   }
 
   function init() {
     initYearFilter();
     initPosTab();
+    initCardModeTab();
     document.getElementById("drawer-close")?.addEventListener("click", closeDrawer);
     document.getElementById("player-drawer-overlay")?.addEventListener("click", closeDrawer);
     loadAll();

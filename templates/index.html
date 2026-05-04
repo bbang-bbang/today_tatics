@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Today Tactics - 축구 전술판</title>
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=22">
+    <link rel="stylesheet" href="/static/css/style.css?v=23">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
     // 전역 에러 핸들링 + fetch 래퍼 + GET API 캐시
@@ -309,6 +309,16 @@
                 <button class="ins-pos-tab" data-pos="D">🛡 수비수</button>
             </div>
             <div id="ins-top-body"></div>
+        </div>
+
+        <!-- 카드 수령 순위 -->
+        <div class="ins-block" id="ins-panel-cards">
+            <div class="ins-block-title">🟨🟥 카드 수령 순위</div>
+            <div class="ins-pos-tabs" id="ins-card-mode-tabs">
+                <button class="ins-card-mode-tab active" data-mode="player">👤 선수별</button>
+                <button class="ins-card-mode-tab" data-mode="team">🛡 팀별</button>
+            </div>
+            <div id="ins-card-body"></div>
         </div>
 
         </div><!-- /insights-grid -->
@@ -740,7 +750,7 @@
 
     <script src="/static/js/player_analytics.js?v=1"></script>
     <script src="/static/js/player_report.js?v=3"></script>
-    <script src="/static/js/insights.js?v=3"></script>
+    <script src="/static/js/insights.js?v=4"></script>
 
     <!-- 온보딩 오버레이 -->
     <div id="onboarding-overlay" class="ob-overlay" style="display:none" aria-modal="true" role="dialog" aria-label="Today Tactics 소개">

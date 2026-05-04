@@ -3926,44 +3926,65 @@ def insights_card_rankings():
     date_cond, date_params = _year_date_params(year)
     league_cond, league_params = _league_team_filter(league)
 
+    # card_events엔 date 컬럼 없으니 events 조인. year 필터는 e.date_ts 기준.
+    ts_cond = ""
+    ts_params: tuple = ()
+    if year and year != "all":
+        try:
+            y = int(year)
+            ts_cond = "AND e.date_ts >= strftime('%s', ?) AND e.date_ts < strftime('%s', ?)"
+            ts_params = (f"{y}-01-01", f"{y+1}-01-01")
+        except (ValueError, TypeError):
+            pass
+    ce_league_cond = league_cond.replace("m.team_id", "c.team_id")
+
     # 선수별 옐로 TOP 10
     yellow_rows = conn.execute(f"""
-        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) AS name, m.team_id,
-               COUNT(*) AS games, SUM(m.minutes_played) AS mins,
-               SUM(COALESCE(m.yellow_cards,0)) AS yc,
-               SUM(COALESCE(m.red_cards,0))    AS rc
-        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
-        WHERE m.minutes_played>0 {date_cond} {league_cond}
-        GROUP BY m.player_id HAVING yc >= 1
+        SELECT c.player_id,
+               COALESCE(p.name_ko, c.player_name) AS name,
+               c.team_id,
+               COUNT(DISTINCT c.event_id) AS games,
+               SUM(CASE WHEN c.card_type IN ('yellow','yellowRed') THEN 1 ELSE 0 END) AS yc,
+               SUM(CASE WHEN c.card_type IN ('red','yellowRed') THEN 1 ELSE 0 END) AS rc
+        FROM card_events c
+        JOIN events e ON c.event_id = e.id
+        LEFT JOIN players p ON c.player_id = p.id
+        WHERE c.player_id IS NOT NULL {ts_cond} {ce_league_cond}
+        GROUP BY c.player_id HAVING yc >= 1
         ORDER BY yc DESC, rc DESC LIMIT 10
-    """, date_params + league_params).fetchall()
+    """, ts_params + league_params).fetchall()
 
     # 선수별 레드 TOP 5
     red_rows = conn.execute(f"""
-        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) AS name, m.team_id,
-               COUNT(*) AS games, SUM(m.minutes_played) AS mins,
-               SUM(COALESCE(m.yellow_cards,0)) AS yc,
-               SUM(COALESCE(m.red_cards,0))    AS rc
-        FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
-        WHERE m.minutes_played>0 {date_cond} {league_cond}
-        GROUP BY m.player_id HAVING rc >= 1
+        SELECT c.player_id,
+               COALESCE(p.name_ko, c.player_name) AS name,
+               c.team_id,
+               COUNT(DISTINCT c.event_id) AS games,
+               SUM(CASE WHEN c.card_type IN ('yellow','yellowRed') THEN 1 ELSE 0 END) AS yc,
+               SUM(CASE WHEN c.card_type IN ('red','yellowRed') THEN 1 ELSE 0 END) AS rc
+        FROM card_events c
+        JOIN events e ON c.event_id = e.id
+        LEFT JOIN players p ON c.player_id = p.id
+        WHERE c.player_id IS NOT NULL {ts_cond} {ce_league_cond}
+        GROUP BY c.player_id HAVING rc >= 1
         ORDER BY rc DESC, yc DESC LIMIT 5
-    """, date_params + league_params).fetchall()
+    """, ts_params + league_params).fetchall()
 
-    # 팀별 — 경기당 평균 카드 (옐로+레드)
+    # 팀별 — 카드 합계 / 경기수 (경기는 home/away 합산)
     team_rows = conn.execute(f"""
-        SELECT m.team_id,
-               COUNT(DISTINCT m.event_id) AS games,
-               SUM(COALESCE(m.yellow_cards,0)) AS yc,
-               SUM(COALESCE(m.red_cards,0))    AS rc
-        FROM match_player_stats m
-        WHERE m.minutes_played>0 {date_cond} {league_cond}
-        GROUP BY m.team_id HAVING games >= 3
+        SELECT c.team_id,
+               COUNT(DISTINCT c.event_id) AS games,
+               SUM(CASE WHEN c.card_type IN ('yellow','yellowRed') THEN 1 ELSE 0 END) AS yc,
+               SUM(CASE WHEN c.card_type IN ('red','yellowRed') THEN 1 ELSE 0 END) AS rc
+        FROM card_events c
+        JOIN events e ON c.event_id = e.id
+        WHERE 1=1 {ts_cond} {ce_league_cond}
+        GROUP BY c.team_id HAVING games >= 1
         ORDER BY (yc + rc * 2.0) / games DESC LIMIT 12
-    """, date_params + league_params).fetchall()
+    """, ts_params + league_params).fetchall()
 
     def player_row(r):
-        mins = r["mins"] or 0
+        games = r["games"] or 1
         return {
             "player_id":  r["player_id"],
             "name":       r["name"] or "",
@@ -3971,7 +3992,7 @@ def insights_card_rankings():
             "games":      r["games"],
             "yellow":     r["yc"] or 0,
             "red":        r["rc"] or 0,
-            "yc_per_90":  round((r["yc"] or 0) / mins * 90, 2) if mins else None,
+            "yc_per_g":   round((r["yc"] or 0) / games, 2),
         }
 
     def team_row(r):
