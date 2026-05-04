@@ -3822,10 +3822,10 @@ body {
     text-align: left !important; color: #c8d8f0; font-weight: 600;
     white-space: nowrap;
 }
-.rpp-h, .rpp-a { display: inline-block; min-width: 36px; }
-.rpp-h { color: #4ea4f8; }
-.rpp-a { color: #b87ef8; text-align: right; }
-.rpp-vs { color: #5a7a8a; font-size: 0.6rem; margin: 0 4px; }
+.rpp-mu > * { display: inline-block; vertical-align: middle; }
+.rpp-h { color: #4ea4f8; width: 56px; text-align: right; }
+.rpp-a { color: #b87ef8; width: 56px; text-align: left; }
+.rpp-vs { color: #5a7a8a; font-size: 0.6rem; width: 22px; text-align: center; }
 
 .rpp-pct { color: #6a8aa8; font-variant-numeric: tabular-nums; }
 .rpp-pick { color: #facc15; font-weight: 900; }
@@ -4249,37 +4249,6 @@ body {
     border-radius: 10px;
     padding: 12px 14px;
     grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-}
-.rrc-rest {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
-.rrc-rest-block {
-    text-align: center;
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.05);
-    border-radius: 6px;
-    padding: 8px 6px;
-}
-.rrc-rest-label {
-    font-size: 0.6rem;
-    color: #6a8aa8;
-    margin-bottom: 4px;
-}
-.rrc-rest-val {
-    font-size: 1.2rem;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.1;
-}
-.rrc-rest-tag {
-    margin-top: 3px;
-    font-size: 0.62rem;
-    color: #c8d8f0;
 }
 .rrc-ref {
     background: rgba(255,255,255,0.02);
@@ -4316,10 +4285,6 @@ body {
     font-size: 0.62rem;
     color: #8ab0d8;
     font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 768px) {
-    .pred-rest-ref { grid-template-columns: 1fr; }
 }
 
 /* 세트피스 매치업 카드 */
@@ -6242,207 +6207,6 @@ body.pr-expanded-lock {
 
 
 
-/* ── 다음 라운드 미리보기 (Pre-match prediction) ───────────────────── */
-.prn-wrap {
-    background: linear-gradient(180deg, rgba(15,23,42,0.92), rgba(15,23,42,0.85));
-    border: 1px solid rgba(99,179,237,0.18);
-    border-radius: 14px;
-    padding: 18px 18px 14px;
-    margin: 12px 0 16px;
-    color: #e8eef7;
-}
-.prn-header { margin-bottom: 14px; }
-.prn-title-row {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; margin-bottom: 8px; flex-wrap: wrap;
-}
-.prn-title {
-    font-size: 1.05rem; font-weight: 700;
-    background: linear-gradient(90deg, #63b3ed, #a78bfa);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.prn-tabs { display: inline-flex; gap: 4px; background: rgba(255,255,255,0.05); padding: 3px; border-radius: 8px; }
-.prn-tab {
-    padding: 5px 14px; font-size: 0.78rem; font-weight: 600;
-    background: transparent; border: 0; border-radius: 6px;
-    color: #94a3b8; cursor: pointer; transition: all 0.15s ease;
-}
-.prn-tab:hover { color: #e8eef7; }
-.prn-tab.active { background: rgba(99,179,237,0.22); color: #e8eef7; }
-.prn-acc { font-size: 0.82rem; color: #cbd5e1; margin-bottom: 4px; }
-.prn-acc b { color: #fcd34d; }
-.prn-disclaimer { font-size: 0.72rem; color: #94a3b8; opacity: 0.85; }
-
-.prn-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-    gap: 10px;
-}
-.prn-card {
-    background: rgba(30,41,59,0.6);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px;
-    padding: 12px 14px;
-    display: flex; flex-direction: column; gap: 8px;
-    transition: border-color 0.15s ease, transform 0.15s ease;
-}
-.prn-card:hover { border-color: rgba(99,179,237,0.35); transform: translateY(-1px); }
-.prn-card-skip { opacity: 0.55; }
-.prn-meta { font-size: 0.7rem; color: #94a3b8; }
-.prn-teams {
-    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-    gap: 8px; font-size: 0.92rem; font-weight: 600;
-}
-.prn-h { text-align: left; }
-.prn-a { text-align: right; }
-.prn-vs { color: #64748b; font-size: 0.72rem; font-weight: 500; }
-.prn-team.prn-pick { color: #fcd34d; }
-.prn-bars { display: flex; flex-direction: column; gap: 3px; }
-.prn-bar {
-    height: 18px; border-radius: 4px; position: relative;
-    background: rgba(99,179,237,0.18); overflow: hidden;
-}
-.prn-bar::before {
-    content: ''; position: absolute; inset: 0;
-    width: var(--w, 0%);
-    background: rgba(99,179,237,0.42);
-    transition: width 0.3s ease;
-}
-.prn-bar.prn-bar-d::before { background: rgba(148,163,184,0.42); }
-.prn-bar.prn-bar-a::before { background: rgba(244,114,182,0.42); }
-.prn-bar.prn-pick::before { background: rgba(252,211,77,0.55); }
-.prn-bar span {
-    position: relative; z-index: 1;
-    display: block; padding: 0 8px; line-height: 18px;
-    font-size: 0.7rem; font-weight: 600; color: #e8eef7;
-}
-.prn-score {
-    font-size: 0.78rem; color: #cbd5e1;
-    border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px;
-}
-.prn-score b { color: #fcd34d; font-weight: 700; }
-.prn-note { font-size: 0.78rem; color: #94a3b8; }
-.prn-loading, .prn-empty {
-    text-align: center; padding: 20px; color: #94a3b8; font-size: 0.85rem;
-    background: rgba(15,23,42,0.6); border-radius: 10px; margin: 12px 0;
-}
-
-@media (max-width: 768px) {
-    .prn-grid { grid-template-columns: 1fr; }
-    .prn-title-row { flex-direction: column; align-items: flex-start; }
-}
-
-/* top scores 3개 노출 */
-.prn-score {
-    font-size: 0.78rem; color: #cbd5e1;
-    border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px;
-    line-height: 1.55;
-}
-.prn-ts {
-    color: #94a3b8;
-    margin-right: 2px;
-}
-.prn-ts em {
-    font-style: normal;
-    color: #cbd5e1;
-    font-size: 0.72rem;
-}
-.prn-ts-pick {
-    color: #fcd34d;
-    font-weight: 700;
-}
-.prn-ts-pick em {
-    color: #fcd34d;
-}
-.prn-lambda {
-    font-size: 0.7rem; color: #64748b;
-    margin-top: 2px;
-}
-
-/* ── prn polish: 팀컬러 stripe / 엠블럼 / 모바일 ───────────────── */
-.prn-card {
-    position: relative;
-    overflow: hidden;
-}
-.prn-stripe {
-    position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, var(--home-col, #334) 0% 50%, var(--away-col, #334) 50% 100%);
-    opacity: 0.85;
-}
-.prn-meta {
-    display: flex; gap: 6px; align-items: baseline;
-    font-size: 0.7rem; color: #94a3b8;
-    margin-top: 4px;
-}
-.prn-meta .prn-venue {
-    color: #64748b;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    flex: 1; min-width: 0;
-}
-.prn-team {
-    display: flex; align-items: center; gap: 6px; min-width: 0;
-}
-.prn-h { justify-content: flex-start; }
-.prn-a { justify-content: flex-end; }
-.prn-emb {
-    width: 22px; height: 22px; object-fit: contain;
-    flex-shrink: 0;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
-}
-.prn-tname {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    min-width: 0;
-}
-.prn-team.prn-pick .prn-tname {
-    text-shadow: 0 0 12px rgba(252,211,77,0.4);
-}
-.prn-vs {
-    font-size: 0.65rem; font-weight: 600; color: #64748b;
-    letter-spacing: 0.08em; flex-shrink: 0;
-}
-
-/* 모바일 (768px 이하) — 카드 1열, 콤팩트 */
-@media (max-width: 768px) {
-    .prn-wrap { padding: 14px 12px 10px; }
-    .prn-grid { grid-template-columns: 1fr; gap: 8px; }
-    .prn-card { padding: 10px 12px; }
-    .prn-title { font-size: 0.95rem; }
-    .prn-teams { font-size: 0.85rem; }
-    .prn-emb { width: 18px; height: 18px; }
-    .prn-bars { gap: 2px; }
-    .prn-bar { height: 16px; }
-    .prn-bar span { line-height: 16px; font-size: 0.65rem; padding: 0 6px; }
-    .prn-score { font-size: 0.72rem; }
-    .prn-disclaimer { font-size: 0.65rem; }
-}
-
-/* 매우 좁은 화면 (480px 이하) */
-@media (max-width: 480px) {
-    .prn-meta .prn-venue { display: none; }
-    .prn-vs { font-size: 0.6rem; }
-}
-
-/* 직전 포메이션 칩 */
-.prn-formations {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 8px; padding: 4px 0;
-    font-size: 0.72rem;
-    border-top: 1px dashed rgba(255,255,255,0.06);
-    border-bottom: 1px dashed rgba(255,255,255,0.06);
-}
-.prn-form-h, .prn-form-a {
-    background: rgba(99,179,237,0.13);
-    color: #cbd5e1;
-    padding: 2px 8px; border-radius: 4px;
-    font-weight: 600; font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-}
-.prn-form-h { color: var(--home-col, #cbd5e1); background: color-mix(in srgb, var(--home-col, #94a3b8) 15%, transparent); }
-.prn-form-a { color: var(--away-col, #cbd5e1); background: color-mix(in srgb, var(--away-col, #94a3b8) 15%, transparent); }
-.prn-form-vs {
-    font-size: 0.62rem; color: #64748b;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    flex: 1; text-align: center;
-}
 
 /* ── 골 타이밍 패널 ──────────────────────────────────────── */
 .gt-half-labels {

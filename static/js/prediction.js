@@ -610,27 +610,10 @@
         </div>`;
     }
 
-    // ── 휴식일 + 심판 인포 카드 ──────────────────────────
-    function restRefereeCardHtml(home, away, referee) {
-        const hr = home.rest_days, ar = away.rest_days;
-        if (hr == null && ar == null && !referee) return "";
-
-        const restColor = (d) => {
-            if (d == null) return "#6a8aa8";
-            if (d <= 3) return "#f87171";
-            if (d <= 7) return "#7bed9f";
-            if (d <= 14) return "#facc15";
-            return "#fbbf24";
-        };
-        const restLabel = (d) => {
-            if (d == null) return "—";
-            if (d <= 3) return "🥱 연전";
-            if (d <= 7) return "✅ 적정";
-            if (d <= 14) return "⚡ 충분";
-            return "💤 길음";
-        };
-
-        const refHtml = referee ? `
+    // ── 심판 인포 카드 (휴식일은 사용자 요청으로 제거) ──────
+    function refereeCardHtml(referee) {
+        if (!referee) return "";
+        return `<div class="pred-rest-ref">
             <div class="rrc-ref">
                 <div class="rrc-ref-head">
                     <span class="rrc-ref-icon">👨‍⚖️</span>
@@ -640,22 +623,7 @@
                 <div class="rrc-ref-stats">
                     🟨 ${referee.yellow_per_game}/경기 · 🟥 ${referee.red_per_game}/경기 · 통산 ${referee.career_games}경기
                 </div>
-            </div>` : "";
-
-        return `<div class="pred-rest-ref">
-            <div class="rrc-rest">
-                <div class="rrc-rest-block">
-                    <div class="rrc-rest-label">${home.name} 휴식</div>
-                    <div class="rrc-rest-val" style="color:${restColor(hr)}">${hr != null ? hr + '일' : '—'}</div>
-                    <div class="rrc-rest-tag">${restLabel(hr)}</div>
-                </div>
-                <div class="rrc-rest-block">
-                    <div class="rrc-rest-label">${away.name} 휴식</div>
-                    <div class="rrc-rest-val" style="color:${restColor(ar)}">${ar != null ? ar + '일' : '—'}</div>
-                    <div class="rrc-rest-tag">${restLabel(ar)}</div>
-                </div>
             </div>
-            ${refHtml}
         </div>`;
     }
 
@@ -853,7 +821,7 @@
                 ${timingBarsHtml(home.goal_timing, home.name)}
                 ${timingBarsHtml(away.goal_timing, away.name)}
             </div>
-            ${restRefereeCardHtml(home, away, d.referee)}
+            ${refereeCardHtml(d.referee)}
             ${setpieceCardHtml(home, away)}
             ${(hLineup && hLineup.ready) || (aLineup && aLineup.ready) ? `
             <div class="pred-extras-row pred-lineup-row">
@@ -890,113 +858,8 @@
 
     let _lastHome = null, _lastAway = null;
 
-    // ── 다음 라운드 미리보기 ──────────────────────────────────────────────
-    async function loadNextRound(league = "k2") {
-        const wrap = document.getElementById("pred-next-round");
-        if (!wrap) return;
-        wrap.innerHTML = '<div class="prn-loading">⏳ 다음 라운드 예측 로딩...</div>';
-        try {
-            const r = await fetch(`/api/next-round?league=${league}`);
-            const d = await r.json();
-            wrap.innerHTML = renderNextRoundHtml(d);
-        } catch (e) { wrap.innerHTML = ''; console.warn("next-round fail", e); }
-    }
-
-    function renderNextRoundHtml(d) {
-        if (!d.matches || !d.matches.length) {
-            return `<div class="prn-empty">📅 ${d.league} 다음 라운드 일정 미정</div>`;
-        }
-        const acc = d.accuracy_to_date;
-        const accBanner = acc
-            ? `누적 적중률 <b>${acc.hit_1x2_pct}%</b> (${acc.n_total}경기 검증) · Brier ${acc.brier_score}`
-            : '누적 정확도 (백테스트 1회 호출 후 표시)';
-
-        const dayKr = ['일','월','화','수','목','금','토'];
-        const cards = d.matches.map(m => {
-            if (!m.pred) {
-                return `<div class="prn-card prn-card-skip">
-                    <div class="prn-teams">${m.home.name} vs ${m.away.name}</div>
-                    <div class="prn-note">${m.note || '예측 불가'}</div>
-                </div>`;
-            }
-            const p = m.pred;
-            const ts = p.top_score || {};
-            const dt = new Date(m.date_ts * 1000);
-            const dateStr = `${dt.getMonth()+1}/${dt.getDate()} ${dayKr[dt.getDay()]} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-            const vals = [p.home_pct, p.draw_pct, p.away_pct];
-            const max = Math.max(...vals);
-            const cls = v => v === max ? 'prn-pick' : '';
-            const hCol = koColor(m.home.name);
-            const aCol = koColor(m.away.name);
-            const hSlug = koSlug(m.home.name);
-            const aSlug = koSlug(m.away.name);
-            const venueShort = m.venue ? m.venue.replace(/Stadium|World Cup|Football|Sports|Center/gi, '').trim().replace(/\s+/g, ' ') : '';
-            return `<div class="prn-card" style="--home-col:${hCol.p};--away-col:${aCol.p}">
-                <div class="prn-stripe"></div>
-                <div class="prn-meta">
-                    <span class="prn-date">${dateStr}</span>
-                    ${venueShort ? `<span class="prn-venue">· ${venueShort}</span>` : ''}
-                </div>
-                <div class="prn-teams">
-                    <div class="prn-team prn-h ${cls(p.home_pct)}">
-                        ${hSlug ? `<img class="prn-emb" src="/static/img/emblems/${hCol.e}" alt="" loading="lazy">` : ''}
-                        <span class="prn-tname">${m.home.name}</span>
-                    </div>
-                    <span class="prn-vs">VS</span>
-                    <div class="prn-team prn-a ${cls(p.away_pct)}">
-                        <span class="prn-tname">${m.away.name}</span>
-                        ${aSlug ? `<img class="prn-emb" src="/static/img/emblems/${aCol.e}" alt="" loading="lazy">` : ''}
-                    </div>
-                </div>
-                ${(m.home.recent_formation || m.away.recent_formation) ? `
-                <div class="prn-formations">
-                    <span class="prn-form-h">${m.home.recent_formation || '—'}</span>
-                    <span class="prn-form-vs">최근</span>
-                    <span class="prn-form-a">${m.away.recent_formation || '—'}</span>
-                </div>` : ''}
-                <div class="prn-bars">
-                    <div class="prn-bar prn-bar-h ${cls(p.home_pct)}" style="--w:${p.home_pct}%"><span>홈 ${p.home_pct}%</span></div>
-                    <div class="prn-bar prn-bar-d ${cls(p.draw_pct)}" style="--w:${p.draw_pct}%"><span>무 ${p.draw_pct}%</span></div>
-                    <div class="prn-bar prn-bar-a ${cls(p.away_pct)}" style="--w:${p.away_pct}%"><span>원정 ${p.away_pct}%</span></div>
-                </div>
-                <div class="prn-score">
-                    예상 스코어 ${(p.top_scores || [ts]).map((s, i) =>
-                        `<span class="prn-ts ${i===0 ? 'prn-ts-pick' : ''}">${s.home}-${s.away} <em>${s.pct}%</em></span>`
-                    ).join(' · ')}
-                </div>
-                <div class="prn-lambda">λ ${p.lam_home}–${p.lam_away}</div>
-            </div>`;
-        }).join('');
-
-        return `<div class="prn-wrap">
-            <div class="prn-header">
-                <div class="prn-title-row">
-                    <span class="prn-title">📅 ${d.league} ${d.round_label} 모델 예측 미리보기</span>
-                    <div class="prn-tabs">
-                        <button class="prn-tab ${d.league === 'K1' ? 'active' : ''}" data-lg="k1">K1</button>
-                        <button class="prn-tab ${d.league === 'K2' ? 'active' : ''}" data-lg="k2">K2</button>
-                    </div>
-                </div>
-                <div class="prn-acc">${accBanner}</div>
-                <div class="prn-disclaimer">⚠ baseline 33% 대비 우위지만 완전하지 않습니다. 참고용 — 베팅 의사결정 권장 X</div>
-            </div>
-            <div class="prn-grid">${cards}</div>
-        </div>`;
-    }
-
-    // 탭 위임 클릭 (K1 ↔ K2 전환)
-    document.addEventListener("click", e => {
-        const tab = e.target.closest(".prn-tab");
-        if (!tab) return;
-        const lg = tab.dataset.lg;
-        if (lg) loadNextRound(lg);
-    });
-
-    // 페이지 로드 시 K2 일정 + 다음 라운드 불러오기
+    // 페이지 로드 시 K2 일정 불러오기 + 백테스트 캐시 워밍
     loadSchedule();
-    // 백테스트 캐시 워밍 (누적 정확도 표시용) → 약간의 지연 후 다음 라운드 갱신
     fetch("/api/prediction-backtest?league=k2&year=2026").catch(() => {});
     fetch("/api/prediction-backtest?league=k1&year=2026").catch(() => {});
-    loadNextRound("k2");
-    setTimeout(() => loadNextRound("k2"), 5000);  // 백테스트 캐시 hit 후 한 번 더 갱신
 })();
