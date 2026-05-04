@@ -172,10 +172,6 @@
             return;
         }
 
-        const summaryHtml = summary
-            ? `<span class="rpp-acc">1X2 적중 <b>${summary.hit_pct}%</b> (${summary.n_hit}/${summary.n_total})</span>`
-            : `<span class="rpp-acc rpp-acc-pre">미진행 라운드 — 적중 측정 전</span>`;
-
         const rows = predicted.map(m => {
             const p = m.pred;
             const max = Math.max(p.home_pct, p.draw_pct, p.away_pct);
@@ -202,8 +198,7 @@
         panel.innerHTML = `
             <div class="rpp-head">
                 <span class="rpp-title">📊 R${roundNum} 모델 사전 예측</span>
-                ${summaryHtml}
-                <span class="rpp-cutoff">cutoff ${asOf}</span>
+                <span class="rpp-cutoff">R${roundNum-1}까지의 데이터로 예측 · cutoff ${asOf}</span>
             </div>
             <table class="rpp-table">
                 <thead><tr>
@@ -211,7 +206,6 @@
                 </tr></thead>
                 <tbody>${rows}</tbody>
             </table>
-            <div class="rpp-foot">⚠ R${roundNum-1}까지의 데이터로 예측 (look-ahead bias 차단). 베팅 의사결정 권장 X</div>
         `;
     }
 

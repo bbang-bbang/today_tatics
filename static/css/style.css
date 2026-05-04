@@ -3797,13 +3797,6 @@ body {
     border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 .rpp-title { font-weight: 700; color: #c8d8f0; font-size: 0.78rem; }
-.rpp-acc {
-    background: rgba(74,222,128,0.1);
-    color: #4ade80; padding: 2px 8px; border-radius: 10px;
-    font-size: 0.7rem; font-weight: 600;
-}
-.rpp-acc b { font-size: 0.85rem; font-weight: 900; }
-.rpp-acc-pre { background: rgba(78,164,248,0.1); color: #4ea4f8; }
 .rpp-cutoff { color: #5a7a8a; font-size: 0.65rem; margin-left: auto; }
 
 .rpp-table {
@@ -3837,12 +3830,6 @@ body {
 .rpp-hit-ok { color: #4ade80; font-weight: 900; }
 .rpp-hit-no { color: #f87171; font-weight: 700; }
 .rpp-hit-na { color: #5a7a8a; }
-
-.rpp-foot {
-    color: #5a7a8a; font-size: 0.62rem; text-align: center;
-    margin-top: 6px; padding-top: 4px;
-    border-top: 1px dashed rgba(255,255,255,0.04);
-}
 
 @media (max-width: 640px) {
     .rpp-cutoff { width: 100%; margin-left: 0; }
