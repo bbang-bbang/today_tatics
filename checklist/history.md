@@ -2191,3 +2191,17 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-04 13:08:26 | ssh <REDACTED> 'cd /opt/today_tactics && git pull origin main && sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics'
 - 2026-05-04 15:11:26 | ssh <REDACTED> 'cd /opt/today_tactics && git pull origin main && sudo systemctl restart today_tactics && sudo systemctl is-active today_tactics'
 - 2026-05-04 16:55:25 | cat "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\8f374e00-9e34-4fb3-96c1-ca7f34a8aaf1\tasks\byg2pw82z.output" 2>&1 | tail -10 && echo "---size---" && ls -lh "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\8f374e00-9e34-4fb3-96c1-ca7f34a8aaf1\tasks\byg2pw82z.output"
+- 2026-05-06 15:47:30 | python -c "import sqlite3; c=sqlite3.connect('players.db'); rows=c.execute('PRAGMA table_info(events)').fetchall(); [print(r) for r in rows]"
+- 2026-05-06 15:47:44 | python -c " / import sqlite3 / c=sqlite3.connect('players.db') / rows=c.execute('SELECT id, home_team_name, away_team_name, datetime(date_ts, \"unixepoch\", \"+9 hours\") AS kst, home_score, away_score, tournament_id, round FROM events WHERE date_ts >= strftime(\"%s\", \"2026-05-01\") ORDER BY date_ts DESC').fetchall() / for r in rows: /     print(r) / print('---') / print('total rows:', len(rows)) / print('today_ts:', __import__('datetime').datetime.now()) / "
+- 2026-05-06 15:48:05 | python -c " / import json / with open('data/kleague_results_2026.json', encoding='utf-8') as f: /     data = json.load(f) / print('top type:', type(data).__name__) / if isinstance(data, dict): /     for k, v in list(data.items())[:3]: /         print(k, '->', type(v).__name__, str(v)[:200]) / elif isinstance(data, list): /     print('first:', data[0]) / "
+- 2026-05-06 15:48:15 | python -c " / import json / from collections import defaultdict / with open('data/kleague_results_2026.json', encoding='utf-8') as f: /     data = json.load(f) / by_date = defaultdict(list) / for team, matches in data.items(): /     for m in matches: /         d = m.get('date', '') /         if d >= '2026-05-01': /             by_date[d].append((team, m.get('opponent'), m.get('home'), m.get('score'), m.get('result'))) / for d in sorted(by_date.keys()): /     print(d, '|', len(by_date[d]), 'records') /     for r in by_date[d][:3]: /         print('  ', r) / "
+- 2026-05-06 15:48:50 | python crawlers/update_results_2026.py
+- 2026-05-06 15:49:03 | python crawlers/sync_results_to_events.py 2>&1 | tail -40
+- 2026-05-06 15:49:12 | python -c " / import sqlite3 / c = sqlite3.connect('players.db') / rows = c.execute('SELECT id, home_team_name, away_team_name, datetime(date_ts, \"unixepoch\", \"+9 hours\"), home_score, away_score FROM events WHERE id BETWEEN 90000000 AND 91000000 ORDER BY date_ts').fetchall() / print('synthetic events:', len(rows)) / for r in rows: /     print(r) / "
+- 2026-05-06 15:49:56 | python crawlers/replace_synthetic_events.py 2>&1 | tail -60
+- 2026-05-06 15:50:19 | python crawlers/crawl_lineups.py --days 4 2>&1 | tail -25
+- 2026-05-06 15:50:30 | python crawlers/collect_goal_incidents.py --days 4 --include-zero-zero 2>&1 | tail -30
+- 2026-05-06 15:50:38 | python crawlers/collect_goal_incidents.py --help 2>&1
+- 2026-05-06 15:50:50 | python crawlers/collect_goal_incidents.py --days 4 --include-zero-zero --league K1 2>&1 | tail -25
+- 2026-05-06 15:51:10 | git status --porcelain && echo "---" && git diff --stat
+- 2026-05-06 15:51:13 | git diff checklist/history.md
