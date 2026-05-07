@@ -2302,3 +2302,7 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-07 16:34:55 | scp -i <KEY-REDACTED> -o StrictHostKeyChecking=no players.db rocky@<IP-REDACTED>:/opt/today_tactics/players.db 2>&1 | grep -v "WARNING\|store now\|upgraded"
 - 2026-05-07 16:35:03 | python -c " / import re / path = 'checklist/history.md' / with open(path, encoding='utf-8') as f: /     c = f.read() / c = re.sub(r'1\.201\.126\.200', '<IP-REDACTED>', c) / c = re.sub(r'today-project\.pem', '<KEY-REDACTED>', c) / with open(path, 'w', encoding='utf-8') as f: /     f.write(c) / print('mask done') / "
 - 2026-05-07 16:35:34 | git push origin main && ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'cd /opt/today_tactics && git pull origin main 2>&1 | tail -5 && sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
+- 2026-05-07 16:55:39 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
+- 2026-05-07 17:03:25 | grep -n "section\|hidden\|hide\|clear" static/js/prediction.js | head -25
+- 2026-05-07 17:03:46 | grep -nE "menu|sidebar|view-switch|main-tab|active" static/js/info.js 2>&1 | head -15 / echo "---" / grep -nE "id=\"prediction-section\"|prediction-section" templates/index.html static/js/*.js 2>&1 | head -10
+- 2026-05-07 17:07:57 | git log --oneline 'main@{1 day ago}'..HEAD 2>&1 | head -25
