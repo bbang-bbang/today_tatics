@@ -911,8 +911,10 @@
         function redraw() {
             const filter = getCurrentFilter();
             const includeSubs = subCheckbox && subCheckbox.checked;
+            // is_starter 정보가 없으면(구버전 API) starter로 간주 → 모두 표시
+            const hasStarterInfo = allPositions.some(p => p.is_starter !== undefined);
             const positions = allPositions.filter(p => {
-                if (!includeSubs && p.is_starter !== 1) return false;
+                if (hasStarterInfo && !includeSubs && p.is_starter !== 1) return false;
                 if (filter === "home") return p.is_home === 1;
                 if (filter === "away") return p.is_home === 0;
                 return true;
@@ -991,7 +993,8 @@
             const color = p.is_home === 1 ? hColor : aColor;
 
             // 점 (교체 출전자는 작고 반투명 + 대시 테두리)
-            const isSub = p.is_starter !== 1;
+            // is_starter 정보 없으면 모두 starter 간주
+            const isSub = (p.is_starter !== undefined) && p.is_starter !== 1;
             const radius = isSub ? 9 : 13;
             ctx.fillStyle = color;
             ctx.globalAlpha = isSub ? 0.55 : 1;
