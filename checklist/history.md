@@ -2253,3 +2253,7 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-07 11:25:21 | scp -i <KEY-REDACTED> -o StrictHostKeyChecking=no players.db rocky@<IP-REDACTED>:/opt/today_tactics/players.db 2>&1 | grep -v "WARNING\|store now\|upgraded" && ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
 - 2026-05-07 11:25:27 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
 - 2026-05-07 13:03:00 | git status --porcelain
+- 2026-05-07 13:10:56 | grep -rE "kleague\.com|kleague-api|kleague\.kr|data\.go\.kr" crawlers/*.py 2>&1 | head -20
+- 2026-05-07 13:12:19 | python crawlers/fill_korean_names.py 2>&1 | tail -35
+- 2026-05-07 13:13:37 | scp -i <KEY-REDACTED> -o StrictHostKeyChecking=no players.db rocky@<IP-REDACTED>:/opt/today_tactics/players.db 2>&1 | grep -v "WARNING\|store now\|upgraded" && ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
+- 2026-05-07 13:13:45 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
