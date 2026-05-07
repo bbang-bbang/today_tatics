@@ -2245,3 +2245,11 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-07 11:14:34 | scp -i <KEY-REDACTED> -o StrictHostKeyChecking=no players.db rocky@<IP-REDACTED>:/opt/today_tactics/players.db 2>&1 | grep -v "WARNING\|store now\|upgraded" && ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
 - 2026-05-07 11:14:44 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
 - 2026-05-07 11:14:51 | git status --porcelain && python -c " / import re / path = 'checklist/history.md' / with open(path, encoding='utf-8') as f: /     content = f.read() / content = re.sub(r'1\.201\.126\.200', '<IP-REDACTED>', content) / content = re.sub(r'today-project\.pem', '<KEY-REDACTED>', content) / with open(path, 'w', encoding='utf-8') as f: /     f.write(content) / print('mask done') / "
+- 2026-05-07 11:15:20 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'cd /opt/today_tactics && git pull origin main 2>&1 | tail -5' 2>&1 | grep -v "WARNING\|store now\|upgraded"
+- 2026-05-07 11:18:55 | grep -l "name_ko\|name_ko" crawlers/fill_*.py 2>&1; echo "---"; head -20 crawlers/fill_ko_names_from_api.py 2>&1
+- 2026-05-07 11:18:59 | python crawlers/fill_ko_names_from_api.py 2>&1 | tail -25
+- 2026-05-07 11:23:10 | cat "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\8f374e00-9e34-4fb3-96c1-ca7f34a8aaf1\tasks\b68gktv1r.output" 2>&1 | tail -30
+- 2026-05-07 11:23:56 | python crawlers/fill_korean_names.py 2>&1 | tail -20
+- 2026-05-07 11:25:21 | scp -i <KEY-REDACTED> -o StrictHostKeyChecking=no players.db rocky@<IP-REDACTED>:/opt/today_tactics/players.db 2>&1 | grep -v "WARNING\|store now\|upgraded" && ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
+- 2026-05-07 11:25:27 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
+- 2026-05-07 13:03:00 | git status --porcelain
