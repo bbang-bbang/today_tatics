@@ -55,6 +55,14 @@
         closeBtn.addEventListener("click", () => section.classList.add("hidden"));
     }
 
+    // ── 매치 컨텍스트 초기화 (리그/라운드 전환 시 호출) ─────
+    function clearMatchContext() {
+        section.classList.add("hidden");
+        if (report) report.innerHTML = "";
+        _lastHome = null;
+        _lastAway = null;
+    }
+
     // ── 리그 탭 전환 ─────────────────────────────────────
     document.querySelectorAll(".league-tab-btn").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -65,6 +73,7 @@
             document.getElementById(`${league}-schedule-banner-wrap`).classList.add("active");
             if (league === "k1" && !k1Loaded) loadScheduleK1();
             if (league === "k2" && !k2Loaded) loadSchedule();
+            clearMatchContext();
         });
     });
 
