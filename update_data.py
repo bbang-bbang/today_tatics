@@ -107,6 +107,12 @@ def main():
         (8, f"K2 incidents (최근 {args.days}일)",
             [PYTHON, str(CRAWLERS/"collect_goal_incidents.py"),
              "--days", str(args.days), "--league", "K2", "--include-zero-zero"]),
+        (9, "venue 백필 (K1+K2)",
+            [PYTHON, str(CRAWLERS/"fetch_venues.py"), "--league", "all"]),
+        (10, "weather 백필 (K1+K2)",
+            [PYTHON, str(CRAWLERS/"fetch_weather.py"), "--league", "all"]),
+        (11, "player master 갱신",
+            [PYTHON, str(CRAWLERS/"fill_player_master.py")]),
     ]
 
     # STEP 0~2 실패 시 후속 의미 없음 → fail_ok=False (기본).
