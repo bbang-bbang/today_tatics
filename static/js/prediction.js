@@ -893,17 +893,24 @@
         const tooltip = card.querySelector(".pt-tooltip");
         const sct = card.querySelector(".pt-shotcount");
 
+        const allPositions = Array.isArray(extras.avg_positions) ? extras.avg_positions : [];
+        const allShots     = Array.isArray(extras.shots)         ? extras.shots         : [];
+
         function redraw(filter) {
-            const positions = extras.avg_positions.filter(p =>
+            const positions = allPositions.filter(p =>
                 filter === "all" ? true :
                 filter === "home" ? p.is_home === 1 : p.is_home === 0
             );
-            const shots = extras.shots.filter(s =>
+            const shots = allShots.filter(s =>
                 filter === "all" ? true :
                 filter === "home" ? s.is_home === 1 : s.is_home === 0
             );
-            drawAvgPositions(avgCanvas, positions, homeColor, awayColor);
-            drawShotmap(shotCanvas, shots, homeColor, awayColor, tooltip);
+            try {
+                drawAvgPositions(avgCanvas, positions, homeColor, awayColor);
+                drawShotmap(shotCanvas, shots, homeColor, awayColor, tooltip);
+            } catch (err) {
+                console.error("[전술 보기 redraw 실패]", err);
+            }
             if (sct) sct.textContent = `(${shots.length}슛)`;
         }
 
