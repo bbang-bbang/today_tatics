@@ -3,11 +3,14 @@
 K리그 데이터 포털에서 2026 시즌 팀별 선수 명단 수집
 """
 
+import os
 import re
 import json
 import time
 import subprocess
 import sys
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # 팀 ID 매핑 (K리그 포털 ID -> 우리 시스템 ID)
 K1_TEAMS = {
@@ -172,7 +175,8 @@ def main():
 
         time.sleep(0.3)
 
-    output_file = 'kleague_players_2026.json'
+    output_file = os.path.join(BASE_DIR, 'data', 'kleague_players_2026.json')
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(all_teams_data, f, ensure_ascii=False, indent=2)
 

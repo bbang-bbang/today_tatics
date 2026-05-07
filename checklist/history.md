@@ -2257,3 +2257,5 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-07 13:12:19 | python crawlers/fill_korean_names.py 2>&1 | tail -35
 - 2026-05-07 13:13:37 | scp -i <KEY-REDACTED> -o StrictHostKeyChecking=no players.db rocky@<IP-REDACTED>:/opt/today_tactics/players.db 2>&1 | grep -v "WARNING\|store now\|upgraded" && ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
 - 2026-05-07 13:13:45 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no rocky@<IP-REDACTED> 'sudo systemctl is-active today_tactics' 2>&1 | grep -v "WARNING\|store now\|upgraded"
+- 2026-05-07 13:19:48 | python crawlers/crawl_kleague.py 2>&1 | tail -10
+- 2026-05-07 13:19:59 | git status --porcelain && python -c " / import re / path = 'checklist/history.md' / with open(path, encoding='utf-8') as f: /     content = f.read() / content = re.sub(r'1\.201\.126\.200', '<IP-REDACTED>', content) / content = re.sub(r'today-project\.pem', '<KEY-REDACTED>', content) / with open(path, 'w', encoding='utf-8') as f: /     f.write(content) / print('mask ok') / "

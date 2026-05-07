@@ -113,6 +113,10 @@ def main():
             [PYTHON, str(CRAWLERS/"fetch_weather.py"), "--league", "all"]),
         (11, "player master 갱신",
             [PYTHON, str(CRAWLERS/"fill_player_master.py")]),
+        (12, "K리그 포털 JSON 갱신",
+            [PYTHON, str(CRAWLERS/"crawl_kleague.py")]),
+        (13, "K리그 포털 → 신체정보 + name_ko 백필",
+            [PYTHON, str(CRAWLERS/"fill_korean_names.py")]),
     ]
 
     # STEP 0~2 실패 시 후속 의미 없음 → fail_ok=False (기본).
