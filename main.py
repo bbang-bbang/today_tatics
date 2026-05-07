@@ -5624,12 +5624,13 @@ def match_extras():
     pos_rows = cur.execute("""
         SELECT ap.player_id, ap.is_home, ap.is_substitute, ap.x, ap.y,
                COALESCE(p.name_ko, ml.player_name, p.name) AS name,
-               ml.shirt_number, ml.position
+               ml.shirt_number, ml.position,
+               COALESCE(ml.is_starter, 0) AS is_starter
         FROM match_avg_positions ap
         LEFT JOIN match_lineups ml ON ml.event_id=ap.event_id AND ml.player_id=ap.player_id
         LEFT JOIN players p ON p.id=ap.player_id
         WHERE ap.event_id = ?
-        ORDER BY ap.is_home DESC, ap.is_substitute, ml.slot_order
+        ORDER BY ap.is_home DESC, ml.is_starter DESC, ml.slot_order
     """, (eid,)).fetchall()
 
     # 슛맵

@@ -6334,6 +6334,19 @@ body.pr-expanded-lock {
 .pt-filter-btn[data-filter="all"].active {
     background: #2a3550; color: #e3eaff;
 }
+.pt-filter-row {
+    display: flex; align-items: center; gap: 12px;
+}
+.pt-sub-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: #c8d2e8; cursor: pointer;
+    user-select: none;
+}
+.pt-sub-toggle input[type="checkbox"] {
+    accent-color: #4ea4f8;
+    cursor: pointer;
+    margin: 0;
+}
 .pt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .pt-panel {
     position: relative;

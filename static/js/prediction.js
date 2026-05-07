@@ -859,10 +859,16 @@
         <div class="pred-tactics">
             <div class="pt-header">
                 <span class="pt-title">전술 보기</span>
-                <div class="pt-filter" role="tablist">
-                    <button class="pt-filter-btn active" data-filter="all">전체</button>
-                    <button class="pt-filter-btn" data-filter="home" style="--c:${homeColor}">홈</button>
-                    <button class="pt-filter-btn" data-filter="away" style="--c:${awayColor}">원정</button>
+                <div class="pt-filter-row">
+                    <div class="pt-filter" role="tablist">
+                        <button class="pt-filter-btn active" data-filter="all">전체</button>
+                        <button class="pt-filter-btn" data-filter="home" style="--c:${homeColor}">홈</button>
+                        <button class="pt-filter-btn" data-filter="away" style="--c:${awayColor}">원정</button>
+                    </div>
+                    <label class="pt-sub-toggle">
+                        <input type="checkbox" class="pt-sub-checkbox" />
+                        <span>교체 포함</span>
+                    </label>
                 </div>
             </div>
             <div class="pt-grid">
@@ -895,12 +901,22 @@
 
         const allPositions = Array.isArray(extras.avg_positions) ? extras.avg_positions : [];
         const allShots     = Array.isArray(extras.shots)         ? extras.shots         : [];
+        const subCheckbox  = card.querySelector(".pt-sub-checkbox");
 
-        function redraw(filter) {
-            const positions = allPositions.filter(p =>
-                filter === "all" ? true :
-                filter === "home" ? p.is_home === 1 : p.is_home === 0
-            );
+        function getCurrentFilter() {
+            const active = card.querySelector(".pt-filter-btn.active");
+            return active ? active.dataset.filter : "all";
+        }
+
+        function redraw() {
+            const filter = getCurrentFilter();
+            const includeSubs = subCheckbox && subCheckbox.checked;
+            const positions = allPositions.filter(p => {
+                if (!includeSubs && p.is_starter !== 1) return false;
+                if (filter === "home") return p.is_home === 1;
+                if (filter === "away") return p.is_home === 0;
+                return true;
+            });
             const shots = allShots.filter(s =>
                 filter === "all" ? true :
                 filter === "home" ? s.is_home === 1 : s.is_home === 0
@@ -915,14 +931,15 @@
         }
 
         // 초기 렌더 + 토글 이벤트
-        redraw("all");
+        redraw();
         card.querySelectorAll(".pt-filter-btn").forEach(btn => {
             btn.addEventListener("click", () => {
                 card.querySelectorAll(".pt-filter-btn").forEach(b => b.classList.remove("active"));
                 btn.classList.add("active");
-                redraw(btn.dataset.filter);
+                redraw();
             });
         });
+        if (subCheckbox) subCheckbox.addEventListener("change", redraw);
     }
 
     // ── 필드 그리기 헬퍼 (가로 방향 풀 피치) ─────────────────
@@ -967,21 +984,26 @@
         const w = canvas.width, h = canvas.height;
         drawPitch(ctx, w, h);
 
-        // starters만 표시 (sub은 메인 시야 흐림). 필요 시 후속 토글 가능
-        const starters = positions.filter(p => !p.is_substitute);
-        for (const p of starters) {
+        // redraw()에서 이미 starter/교체 필터링됨. 여기선 그대로 그림
+        for (const p of positions) {
             if (p.x == null || p.y == null) continue;
             const [px, py] = mapPos(p.x, p.y, p.is_home === 1, w, h);
             const color = p.is_home === 1 ? hColor : aColor;
 
-            // 점
+            // 점 (교체 출전자는 작고 반투명 + 대시 테두리)
+            const isSub = p.is_starter !== 1;
+            const radius = isSub ? 9 : 13;
             ctx.fillStyle = color;
+            ctx.globalAlpha = isSub ? 0.55 : 1;
             ctx.beginPath();
-            ctx.arc(px, py, 13, 0, Math.PI * 2);
+            ctx.arc(px, py, radius, 0, Math.PI * 2);
             ctx.fill();
+            ctx.globalAlpha = 1;
             ctx.strokeStyle = "#fff";
             ctx.lineWidth = 1.2;
+            if (isSub) ctx.setLineDash([3, 3]);
             ctx.stroke();
+            ctx.setLineDash([]);
 
             // 등번호
             ctx.fillStyle = "#fff";
