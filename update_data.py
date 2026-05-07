@@ -120,6 +120,8 @@ def main():
         (14, f"avg_positions + shotmap (최근 {args.days}일)",
             [PYTHON, str(CRAWLERS/"fetch_match_extras.py"),
              "--days", str(args.days), "--league", "all"]),
+        (15, "K리그 포털 formation 덮어쓰기",
+            [PYTHON, str(CRAWLERS/"fill_formation_from_kleague.py")]),
     ]
 
     # STEP 0~2 실패 시 후속 의미 없음 → fail_ok=False (기본).
