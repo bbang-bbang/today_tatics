@@ -859,16 +859,17 @@
         <div class="pred-tactics">
             <div class="pt-header">
                 <span class="pt-title">전술 보기</span>
-                <span class="pt-legend">
-                    <span class="pt-leg-home" style="--c:${homeColor}"></span>홈
-                    <span class="pt-leg-away" style="--c:${awayColor}"></span>원정
-                </span>
+                <div class="pt-filter" role="tablist">
+                    <button class="pt-filter-btn active" data-filter="all">전체</button>
+                    <button class="pt-filter-btn" data-filter="home" style="--c:${homeColor}">홈</button>
+                    <button class="pt-filter-btn" data-filter="away" style="--c:${awayColor}">원정</button>
+                </div>
             </div>
             <div class="pt-grid">
                 <div class="pt-panel">
                     <div class="pt-panel-title">평균 포지션</div>
                     <canvas class="pt-canvas" id="pt-canvas-avg" width="520" height="340"></canvas>
-                    <div class="pt-hint">선수 등번호 위치 = 매치 평균 좌표 / 점 크기 = 활동량</div>
+                    <div class="pt-hint">등번호 점 = 매치 평균 좌표 (홈 좌→우 / 원정 우→좌 공격)</div>
                 </div>
                 <div class="pt-panel">
                     <div class="pt-panel-title">슛맵 <span class="pt-shotcount"></span></div>
@@ -887,10 +888,34 @@
         wrap.insertAdjacentHTML("beforeend", html);
         card = wrap.querySelector(".pred-tactics");
 
-        drawAvgPositions(card.querySelector("#pt-canvas-avg"), extras.avg_positions, homeColor, awayColor);
-        drawShotmap(card.querySelector("#pt-canvas-shot"), extras.shots, homeColor, awayColor, card.querySelector(".pt-tooltip"));
+        const avgCanvas = card.querySelector("#pt-canvas-avg");
+        const shotCanvas = card.querySelector("#pt-canvas-shot");
+        const tooltip = card.querySelector(".pt-tooltip");
         const sct = card.querySelector(".pt-shotcount");
-        if (sct) sct.textContent = `(${extras.shots.length}슛)`;
+
+        function redraw(filter) {
+            const positions = extras.avg_positions.filter(p =>
+                filter === "all" ? true :
+                filter === "home" ? p.is_home === 1 : p.is_home === 0
+            );
+            const shots = extras.shots.filter(s =>
+                filter === "all" ? true :
+                filter === "home" ? s.is_home === 1 : s.is_home === 0
+            );
+            drawAvgPositions(avgCanvas, positions, homeColor, awayColor);
+            drawShotmap(shotCanvas, shots, homeColor, awayColor, tooltip);
+            if (sct) sct.textContent = `(${shots.length}슛)`;
+        }
+
+        // 초기 렌더 + 토글 이벤트
+        redraw("all");
+        card.querySelectorAll(".pt-filter-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                card.querySelectorAll(".pt-filter-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                redraw(btn.dataset.filter);
+            });
+        });
     }
 
     // ── 필드 그리기 헬퍼 (가로 방향 풀 피치) ─────────────────
