@@ -275,6 +275,15 @@
                             }
                         })
                         .catch(() => {});
+
+                    fetch(`/api/match-extras?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data && data.ready) {
+                                renderTacticsCard(data, homeId, awayId);
+                            }
+                        })
+                        .catch(() => {});
                 }
             });
         });
@@ -833,6 +842,186 @@
     }
 
     let _lastHome = null, _lastAway = null;
+
+    // ── 전술 보기 카드 (평균 포지션 + 슛맵) ─────────────────
+    function renderTacticsCard(extras, homeId, awayId) {
+        const hc = tc(homeId), ac = tc(awayId);
+        const homeColor = hc.p || "#4ea4f8";
+        const awayColor = ac.p || "#b87ef8";
+
+        // 기존 pred-extras 안에 카드 삽입 (중복 방지)
+        const wrap = report.querySelector(".pred-extras");
+        if (!wrap) return;
+        let card = wrap.querySelector(".pred-tactics");
+        if (card) card.remove();
+
+        const html = `
+        <div class="pred-tactics">
+            <div class="pt-header">
+                <span class="pt-title">전술 보기</span>
+                <span class="pt-legend">
+                    <span class="pt-leg-home" style="--c:${homeColor}"></span>홈
+                    <span class="pt-leg-away" style="--c:${awayColor}"></span>원정
+                </span>
+            </div>
+            <div class="pt-grid">
+                <div class="pt-panel">
+                    <div class="pt-panel-title">평균 포지션</div>
+                    <canvas class="pt-canvas" id="pt-canvas-avg" width="520" height="340"></canvas>
+                    <div class="pt-hint">선수 등번호 위치 = 매치 평균 좌표 / 점 크기 = 활동량</div>
+                </div>
+                <div class="pt-panel">
+                    <div class="pt-panel-title">슛맵 <span class="pt-shotcount"></span></div>
+                    <canvas class="pt-canvas" id="pt-canvas-shot" width="520" height="340"></canvas>
+                    <div class="pt-shot-legend">
+                        <span class="pt-sl"><i class="psl-dot psl-goal"></i>골</span>
+                        <span class="pt-sl"><i class="psl-dot psl-save"></i>세이브</span>
+                        <span class="pt-sl"><i class="psl-dot psl-miss"></i>빗나감</span>
+                        <span class="pt-sl"><i class="psl-dot psl-block"></i>블록</span>
+                        <span class="pt-sl"><i class="psl-dot psl-post"></i>골대</span>
+                    </div>
+                    <div class="pt-tooltip" hidden></div>
+                </div>
+            </div>
+        </div>`;
+        wrap.insertAdjacentHTML("beforeend", html);
+        card = wrap.querySelector(".pred-tactics");
+
+        drawAvgPositions(card.querySelector("#pt-canvas-avg"), extras.avg_positions, homeColor, awayColor);
+        drawShotmap(card.querySelector("#pt-canvas-shot"), extras.shots, homeColor, awayColor, card.querySelector(".pt-tooltip"));
+        const sct = card.querySelector(".pt-shotcount");
+        if (sct) sct.textContent = `(${extras.shots.length}슛)`;
+    }
+
+    // ── 필드 그리기 헬퍼 (가로 방향 풀 피치) ─────────────────
+    function drawPitch(ctx, w, h) {
+        ctx.fillStyle = "#0d2b1a";
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = "#3a8c5a";
+        ctx.lineWidth = 1.4;
+        // 외곽
+        ctx.strokeRect(8, 8, w - 16, h - 16);
+        // 센터 라인
+        ctx.beginPath();
+        ctx.moveTo(w / 2, 8);
+        ctx.lineTo(w / 2, h - 8);
+        ctx.stroke();
+        // 센터 서클
+        ctx.beginPath();
+        ctx.arc(w / 2, h / 2, 35, 0, Math.PI * 2);
+        ctx.stroke();
+        // 페널티 박스 좌
+        ctx.strokeRect(8, h * 0.22, w * 0.14, h * 0.56);
+        // 페널티 박스 우
+        ctx.strokeRect(w - 8 - w * 0.14, h * 0.22, w * 0.14, h * 0.56);
+        // 골 박스 좌
+        ctx.strokeRect(8, h * 0.36, w * 0.05, h * 0.28);
+        // 골 박스 우
+        ctx.strokeRect(w - 8 - w * 0.05, h * 0.36, w * 0.05, h * 0.28);
+    }
+
+    // SofaScore 좌표(x: 0~100 자기진영→공격진영, y: 0~100) → 캔버스 변환
+    // 홈팀: 좌→우 공격 (x 그대로), 어웨이팀: 우→좌 공격 (x 반전)
+    function mapPos(x, y, isHome, w, h) {
+        const px = isHome ? x : (100 - x);
+        return [
+            8 + (px / 100) * (w - 16),
+            8 + (y / 100) * (h - 16),
+        ];
+    }
+
+    function drawAvgPositions(canvas, positions, hColor, aColor) {
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width, h = canvas.height;
+        drawPitch(ctx, w, h);
+
+        // starters만 표시 (sub은 메인 시야 흐림). 필요 시 후속 토글 가능
+        const starters = positions.filter(p => !p.is_substitute);
+        for (const p of starters) {
+            if (p.x == null || p.y == null) continue;
+            const [px, py] = mapPos(p.x, p.y, p.is_home === 1, w, h);
+            const color = p.is_home === 1 ? hColor : aColor;
+
+            // 점
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(px, py, 13, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            // 등번호
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 11px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(p.shirt_number || "·", px, py);
+
+            // 한글이름 (점 밑)
+            if (p.name) {
+                ctx.fillStyle = "#dde";
+                ctx.font = "10px sans-serif";
+                ctx.fillText(p.name, px, py + 22);
+            }
+        }
+    }
+
+    const SHOT_COLORS = {
+        goal:  "#fbbf24",
+        save:  "#60a5fa",
+        miss:  "#94a3b8",
+        block: "#f472b6",
+        post:  "#f87171",
+    };
+
+    function drawShotmap(canvas, shots, hColor, aColor, tooltip) {
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width, h = canvas.height;
+        drawPitch(ctx, w, h);
+
+        const drawShots = [];
+        for (const s of shots) {
+            if (s.x == null || s.y == null) continue;
+            const isHome = s.is_home === 1;
+            const [px, py] = mapPos(s.x, s.y, isHome, w, h);
+            const color = SHOT_COLORS[s.shot_type] || "#888";
+            const r = s.shot_type === "goal" ? 8 : 5.5;
+
+            ctx.fillStyle = color;
+            ctx.globalAlpha = 0.85;
+            ctx.beginPath();
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = isHome ? hColor : aColor;
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+
+            drawShots.push({ px, py, r: r + 2, data: s });
+        }
+
+        // 호버 툴팁
+        canvas.onmousemove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+            const hit = drawShots.find(d => Math.hypot(mx - d.px, my - d.py) <= d.r);
+            if (hit) {
+                const s = hit.data;
+                const xgStr = s.xg != null ? ` · xG ${s.xg.toFixed(2)}` : "";
+                tooltip.innerHTML = `<b>${s.name || "선수"}</b> · ${s.time_min}'<br>` +
+                    `${s.shot_type}${xgStr}<br>` +
+                    `<span style="opacity:0.75">${s.body_part || ""} / ${s.situation || ""}</span>`;
+                tooltip.style.left = (e.clientX - rect.left + 12) + "px";
+                tooltip.style.top  = (e.clientY - rect.top  + 12) + "px";
+                tooltip.hidden = false;
+            } else {
+                tooltip.hidden = true;
+            }
+        };
+        canvas.onmouseleave = () => { tooltip.hidden = true; };
+    }
 
     // 페이지 로드 시 K2 일정 불러오기 + 백테스트 캐시 워밍
     loadSchedule();

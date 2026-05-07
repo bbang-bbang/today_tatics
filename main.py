@@ -5566,6 +5566,93 @@ def goal_timing():
     })
 
 
+@app.route("/api/match-extras")
+def match_extras():
+    """
+    경기별 평균 포지션 + 슛맵 데이터 반환.
+    쿼리:
+      - ?event_id=<int>
+      - ?date=YYYY-MM-DD&home_slug=...&away_slug=...
+    """
+    event_id = request.args.get("event_id", "").strip()
+    date_str = request.args.get("date", "").strip()
+    home_slug = request.args.get("home_slug", "").strip()
+    away_slug = request.args.get("away_slug", "").strip()
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    ev = None
+    if event_id:
+        try:
+            event_id = int(event_id)
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "event_id must be int"}), 400
+        ev = cur.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+    elif date_str and home_slug and away_slug:
+        dt_str = date_str.replace(".", "-")
+        try:
+            dt = datetime.strptime(dt_str, "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "invalid date"}), 400
+        start_ts, end_ts = int(dt.timestamp()), int(dt.timestamp()) + 86400
+        home_team = next((t for t in TEAMS if t["id"] == home_slug), None)
+        away_team = next((t for t in TEAMS if t["id"] == away_slug), None)
+        if not home_team or not away_team:
+            conn.close()
+            return jsonify({"error": "unknown team slug"}), 400
+        ev = cur.execute("""
+            SELECT id FROM events
+            WHERE date_ts >= ? AND date_ts < ?
+              AND home_team_id = ? AND away_team_id = ?
+            LIMIT 1
+        """, (start_ts, end_ts, home_team["sofascore_id"], away_team["sofascore_id"])).fetchone()
+    else:
+        conn.close()
+        return jsonify({"error": "event_id or (date+home_slug+away_slug) required"}), 400
+
+    if not ev:
+        conn.close()
+        return jsonify({"ready": False, "reason": "event_not_found"}), 404
+
+    eid = ev["id"]
+
+    # 평균 포지션 + 라인업 join (한글이름·등번호·포지션 라벨)
+    pos_rows = cur.execute("""
+        SELECT ap.player_id, ap.is_home, ap.is_substitute, ap.x, ap.y,
+               COALESCE(p.name_ko, ml.player_name, p.name) AS name,
+               ml.shirt_number, ml.position
+        FROM match_avg_positions ap
+        LEFT JOIN match_lineups ml ON ml.event_id=ap.event_id AND ml.player_id=ap.player_id
+        LEFT JOIN players p ON p.id=ap.player_id
+        WHERE ap.event_id = ?
+        ORDER BY ap.is_home DESC, ap.is_substitute, ml.slot_order
+    """, (eid,)).fetchall()
+
+    # 슛맵
+    shot_rows = cur.execute("""
+        SELECT s.shot_id, s.player_id, s.is_home, s.x, s.y, s.target_x, s.target_y,
+               s.shot_type, s.body_part, s.situation, s.outcome, s.xg, s.time_min,
+               COALESCE(p.name_ko, p.name) AS name
+        FROM match_shotmap s
+        LEFT JOIN players p ON p.id=s.player_id
+        WHERE s.event_id = ?
+        ORDER BY s.time_min, s.shot_id
+    """, (eid,)).fetchall()
+
+    conn.close()
+
+    return jsonify({
+        "ready": True,
+        "event_id": eid,
+        "avg_positions": [dict(r) for r in pos_rows],
+        "shots": [dict(r) for r in shot_rows],
+    })
+
+
 @app.route("/api/update-status")
 def get_update_status():
     return jsonify(_UPDATE_STATUS)
