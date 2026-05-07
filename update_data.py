@@ -117,6 +117,9 @@ def main():
             [PYTHON, str(CRAWLERS/"crawl_kleague.py")]),
         (13, "K리그 포털 → 신체정보 + name_ko 백필",
             [PYTHON, str(CRAWLERS/"fill_korean_names.py")]),
+        (14, f"avg_positions + shotmap (최근 {args.days}일)",
+            [PYTHON, str(CRAWLERS/"fetch_match_extras.py"),
+             "--days", str(args.days), "--league", "all"]),
     ]
 
     # STEP 0~2 실패 시 후속 의미 없음 → fail_ok=False (기본).
