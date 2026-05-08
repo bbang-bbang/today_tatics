@@ -9,9 +9,12 @@ WorkingDirectory=/opt/today_tactics
 Environment="PATH=/opt/today_tactics/.venv/bin"
 Environment="FLASK_DEBUG=0"
 ExecStart=/opt/today_tactics/.venv/bin/gunicorn \
-    --workers 1 \
+    --workers 3 \
+    --worker-class gthread \
+    --threads 2 \
     --bind 127.0.0.1:5000 \
     --timeout 120 \
+    --keep-alive 5 \
     --access-logfile /var/log/today_tactics/access.log \
     --error-logfile /var/log/today_tactics/error.log \
     main:app

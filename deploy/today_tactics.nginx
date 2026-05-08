@@ -19,8 +19,16 @@ server {
 
 # ── HTTPS (443) ─────────────────────────────────────────────
 server {
-    listen 443 ssl default_server;
+    listen 443 ssl http2 default_server;
     server_name today-tactics.co.kr www.today-tactics.co.kr _;
+
+    # ── 압축 (P7×성능: 정적/JSON 70~80% 감소) ───────────────
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/javascript application/javascript application/json image/svg+xml;
 
     # cert (이미 certbot으로 발급됨 — today-tactics.co.kr + www)
     ssl_certificate     /etc/letsencrypt/live/today-tactics.co.kr/fullchain.pem;
@@ -44,8 +52,8 @@ server {
     # 정적 파일은 Nginx가 직접 서빙 (Flask 우회 → 빠름)
     location /static/ {
         alias /opt/today_tactics/static/;
-        expires 1h;
-        add_header Cache-Control "public";
+        expires 7d;
+        add_header Cache-Control "public, immutable";
         add_header X-Content-Type-Options "nosniff" always;
     }
 
