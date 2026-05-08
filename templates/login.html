@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인 — Today Tactics</title>
+    <link rel="icon" type="image/png" href="/static/img/favicon.png">
+    <style>
+        :root {
+            --bg: #0a1628;
+            --bg-2: #0e1f3a;
+            --card: rgba(20, 32, 58, 0.85);
+            --border: rgba(126,207,255,0.18);
+            --text: #e8f2ff;
+            --text-sub: #8aa0bb;
+            --accent: #7ecfff;
+        }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; height: 100%; }
+        body {
+            font-family: 'Noto Sans KR', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 100%);
+            color: var(--text);
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh;
+            letter-spacing: -0.01em;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 380px;
+            padding: 36px 32px 32px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+            backdrop-filter: blur(8px);
+        }
+        .brand {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .brand-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            margin-bottom: 4px;
+        }
+        .brand-sub {
+            font-size: 0.78rem;
+            color: var(--text-sub);
+        }
+        .login-msg {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text);
+            margin-bottom: 18px;
+            line-height: 1.5;
+        }
+        .login-error {
+            font-size: 0.78rem;
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.08);
+            border: 1px solid rgba(248, 113, 113, 0.25);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+        .btn-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+        .oauth-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+            color: #1a1a1a;
+        }
+        .oauth-btn:hover  { transform: translateY(-1px); filter: brightness(1.05); box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+        .oauth-btn:active { transform: translateY(0); }
+        .oauth-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        .btn-google { background: #ffffff; color: #1f1f1f; }
+        .btn-kakao  { background: #fee500; color: #1a1a1a; }
+        .btn-naver  { background: #03c75a; color: #ffffff; }
+
+        .oauth-icon {
+            width: 18px; height: 18px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 0.95rem;
+        }
+        .btn-disabled {
+            background: rgba(255,255,255,0.04);
+            color: #5a6b80;
+            border: 1px solid rgba(255,255,255,0.06);
+            cursor: not-allowed;
+        }
+        .btn-disabled:hover { transform: none; filter: none; box-shadow: none; }
+
+        .footer-note {
+            margin-top: 22px;
+            font-size: 0.7rem;
+            color: var(--text-sub);
+            text-align: center;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <main class="login-card" role="main">
+        <div class="brand">
+            <div class="brand-title">Today Tactics</div>
+            <div class="brand-sub">K리그 전술 분석</div>
+        </div>
+
+        <p class="login-msg">계속하려면 로그인이 필요합니다.</p>
+
+        {% if error %}
+        <div class="login-error">
+            {% if error == "invalid_provider" %}지원하지 않는 로그인 방식입니다.
+            {% elif error == "provider_disabled" %}이 로그인 방식은 현재 사용할 수 없습니다.
+            {% elif error == "oauth_error" %}로그인 처리 중 오류가 발생했습니다.
+            {% elif error == "profile_fetch_failed" %}프로필 정보를 가져오지 못했습니다.
+            {% elif error == "no_user_id" %}사용자 식별에 실패했습니다.
+            {% else %}로그인에 실패했습니다.
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="btn-row">
+            {% if google_enabled %}
+            <a class="oauth-btn btn-google" href="/auth/login/google?next={{ next_url|urlencode }}">
+                <span class="oauth-icon" aria-hidden="true">G</span>
+                <span>Google로 로그인</span>
+            </a>
+            {% else %}
+            <button class="oauth-btn btn-disabled" disabled>Google (설정 필요)</button>
+            {% endif %}
+
+            {% if kakao_enabled %}
+            <a class="oauth-btn btn-kakao" href="/auth/login/kakao?next={{ next_url|urlencode }}">
+                <span class="oauth-icon" aria-hidden="true">K</span>
+                <span>카카오로 로그인</span>
+            </a>
+            {% else %}
+            <button class="oauth-btn btn-disabled" disabled>카카오 (설정 필요)</button>
+            {% endif %}
+
+            {% if naver_enabled %}
+            <a class="oauth-btn btn-naver" href="/auth/login/naver?next={{ next_url|urlencode }}">
+                <span class="oauth-icon" aria-hidden="true">N</span>
+                <span>네이버로 로그인</span>
+            </a>
+            {% else %}
+            <button class="oauth-btn btn-disabled" disabled>네이버 (설정 필요)</button>
+            {% endif %}
+        </div>
+
+        <p class="footer-note">
+            로그인하면 즐겨 보는 매치 분석을 더 빠르게 이용할 수 있어요.<br>
+            세션은 30일간 유지됩니다.
+        </p>
+    </main>
+</body>
+</html>

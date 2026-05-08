@@ -3,15 +3,32 @@ import os
 import time
 import uuid
 import sqlite3
+import secrets as _secrets
 import subprocess
 import threading
 import urllib.request
 from datetime import datetime, timezone, timedelta
+from functools import wraps
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for, abort
+from authlib.integrations.flask_client import OAuth
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+# ── 세션 / 보안 설정 ─────────────────────────────────────────────
+# SECRET_KEY: 환경변수로 주입. 없으면 부팅 시 임시 키 생성 (재기동 시 모든 세션 무효).
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY") or _secrets.token_urlsafe(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,           # HTTPS 전용 (프로덕션 today-tactics.co.kr)
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
+
+# 로컬 개발(127.0.0.1, http) 접근 허용 — Secure 쿠키 비활성
+if os.environ.get("FLASK_DEV") == "1":
+    app.config["SESSION_COOKIE_SECURE"] = False
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 DB_PATH     = os.path.join(BASE_DIR, "players.db")
@@ -20,6 +37,242 @@ SQUADS_DIR  = os.path.join(BASE_DIR, "squads")
 STATUS_FILE = os.path.join(BASE_DIR, "data", "player_status.json")
 os.makedirs(SAVES_DIR,  exist_ok=True)
 os.makedirs(SQUADS_DIR, exist_ok=True)
+
+
+# ════════════════════════════════════════════════════════════════
+# 인증 / OAuth (Google, Kakao, Naver)
+# ════════════════════════════════════════════════════════════════
+oauth = OAuth(app)
+
+# Google — OpenID Connect (자동 메타데이터 fetch)
+oauth.register(
+    name="google",
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
+
+# Kakao — OpenID Connect 지원
+oauth.register(
+    name="kakao",
+    client_id=os.environ.get("KAKAO_CLIENT_ID"),
+    client_secret=os.environ.get("KAKAO_CLIENT_SECRET", ""),  # Kakao는 secret 선택사항
+    authorize_url="https://kauth.kakao.com/oauth/authorize",
+    access_token_url="https://kauth.kakao.com/oauth/token",
+    api_base_url="https://kapi.kakao.com/",
+    client_kwargs={"scope": "profile_nickname account_email profile_image"},
+)
+
+# Naver
+oauth.register(
+    name="naver",
+    client_id=os.environ.get("NAVER_CLIENT_ID"),
+    client_secret=os.environ.get("NAVER_CLIENT_SECRET"),
+    authorize_url="https://nid.naver.com/oauth2.0/authorize",
+    access_token_url="https://nid.naver.com/oauth2.0/token",
+    api_base_url="https://openapi.naver.com/",
+    client_kwargs={},
+)
+
+def _init_users_table():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider     TEXT NOT NULL,
+            provider_sub TEXT NOT NULL,
+            email        TEXT,
+            name         TEXT,
+            picture      TEXT,
+            created_at   TEXT NOT NULL,
+            last_login   TEXT NOT NULL,
+            UNIQUE(provider, provider_sub)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+    conn.commit()
+    conn.close()
+
+_init_users_table()
+
+
+def _upsert_user(provider, sub, email, name, picture):
+    """OAuth 콜백에서 사용자 정보 저장/갱신. user_id 반환."""
+    now = datetime.now().isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id FROM users WHERE provider=? AND provider_sub=?",
+        (provider, sub),
+    )
+    row = cur.fetchone()
+    if row:
+        user_id = row[0]
+        cur.execute(
+            "UPDATE users SET email=?, name=?, picture=?, last_login=? WHERE id=?",
+            (email, name, picture, now, user_id),
+        )
+    else:
+        cur.execute(
+            """INSERT INTO users (provider, provider_sub, email, name, picture, created_at, last_login)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (provider, sub, email, name, picture, now, now),
+        )
+        user_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return user_id
+
+
+def _login_user(user_id, provider, name, email, picture):
+    session.permanent = True
+    session["user"] = {
+        "id":       user_id,
+        "provider": provider,
+        "name":     name or email or "사용자",
+        "email":    email or "",
+        "picture":  picture or "",
+    }
+
+
+def login_required(view):
+    """페이지 라우트용 — 미인증 시 /login 리디렉트."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login_page", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def login_required_api(view):
+    """API 라우트용 — 미인증 시 401 JSON."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user"):
+            return jsonify({"error": "unauthorized"}), 401
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.before_request
+def _auth_gate():
+    """전체 사이트 잠금 — 로그인 페이지/auth 콜백/정적/health 만 무인증 허용."""
+    p = request.path
+    PUBLIC_PREFIXES = ("/static/", "/login", "/auth/", "/health", "/favicon")
+    if any(p.startswith(x) for x in PUBLIC_PREFIXES):
+        return None
+    if session.get("user"):
+        return None
+    # API는 401 JSON, 그 외는 /login 리디렉트
+    if p.startswith("/api/"):
+        return jsonify({"error": "unauthorized", "login_url": "/login"}), 401
+    return redirect(url_for("login_page", next=p))
+
+
+# ── 페이지 ─────────────────────────────────────
+@app.route("/login")
+def login_page():
+    if session.get("user"):
+        return redirect("/")
+    next_url = request.args.get("next", "/")
+    err = request.args.get("err", "")
+    return render_template(
+        "login.html",
+        next_url=next_url,
+        error=err,
+        google_enabled=bool(os.environ.get("GOOGLE_CLIENT_ID")),
+        kakao_enabled=bool(os.environ.get("KAKAO_CLIENT_ID")),
+        naver_enabled=bool(os.environ.get("NAVER_CLIENT_ID")),
+    )
+
+
+@app.route("/auth/login/<provider>")
+def oauth_login(provider):
+    if provider not in ("google", "kakao", "naver"):
+        return redirect(url_for("login_page", err="invalid_provider"))
+    client = getattr(oauth, provider, None)
+    if client is None or not os.environ.get(f"{provider.upper()}_CLIENT_ID"):
+        return redirect(url_for("login_page", err="provider_disabled"))
+    # next URL session에 저장 (CSRF 우회 방지 — 외부 URL 차단)
+    nxt = request.args.get("next", "/")
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        nxt = "/"
+    session["oauth_next"] = nxt
+    redirect_uri = url_for("oauth_callback", provider=provider, _external=True)
+    return client.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/callback/<provider>")
+def oauth_callback(provider):
+    if provider not in ("google", "kakao", "naver"):
+        return redirect(url_for("login_page", err="invalid_provider"))
+    client = getattr(oauth, provider)
+    try:
+        token = client.authorize_access_token()
+    except Exception as e:
+        return redirect(url_for("login_page", err="oauth_error"))
+
+    sub = email = name = picture = None
+    try:
+        if provider == "google":
+            info = token.get("userinfo") or client.parse_id_token(token, nonce=None)
+            sub     = str(info.get("sub"))
+            email   = info.get("email")
+            name    = info.get("name") or info.get("given_name")
+            picture = info.get("picture")
+        elif provider == "kakao":
+            r = client.get("v2/user/me", token=token)
+            data = r.json()
+            sub = str(data.get("id"))
+            kakao_account = data.get("kakao_account") or {}
+            profile = kakao_account.get("profile") or {}
+            email   = kakao_account.get("email")
+            name    = profile.get("nickname")
+            picture = profile.get("profile_image_url") or profile.get("thumbnail_image_url")
+        elif provider == "naver":
+            r = client.get("v1/nid/me", token=token)
+            data = r.json().get("response", {})
+            sub     = str(data.get("id"))
+            email   = data.get("email")
+            name    = data.get("nickname") or data.get("name")
+            picture = data.get("profile_image")
+    except Exception as e:
+        return redirect(url_for("login_page", err="profile_fetch_failed"))
+
+    if not sub:
+        return redirect(url_for("login_page", err="no_user_id"))
+
+    user_id = _upsert_user(provider, sub, email, name, picture)
+    _login_user(user_id, provider, name, email, picture)
+
+    nxt = session.pop("oauth_next", "/")
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        nxt = "/"
+    return redirect(nxt)
+
+
+@app.route("/auth/logout", methods=["GET", "POST"])
+def auth_logout():
+    session.pop("user", None)
+    session.pop("oauth_next", None)
+    return redirect(url_for("login_page"))
+
+
+@app.route("/auth/me")
+def auth_me():
+    """현재 로그인 사용자 정보 (헤더 표시용)."""
+    u = session.get("user")
+    if not u:
+        return jsonify({"authenticated": False}), 200
+    return jsonify({"authenticated": True, "user": u})
+
+
+@app.route("/health")
+def health():
+    return jsonify({"ok": True})
+
 
 def _init_default_squads():
     """kleague_players_2026.json 을 읽어 팀별 기본 스쿼드 파일을 생성한다."""
@@ -164,7 +417,7 @@ for name in POSITION_LABELS:
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", current_user=session.get("user"))
 
 
 @app.route("/api/formations")
