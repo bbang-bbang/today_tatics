@@ -3,12 +3,12 @@ Description=Today Tactics — K리그 전술 분석
 After=network.target
 
 [Service]
-User=tactics
-Group=tactics
+User=rocky
+Group=rocky
 WorkingDirectory=/opt/today_tactics
-Environment="PATH=/opt/today_tactics/.venv/bin"
+Environment="PATH=/opt/today_tactics/venv/bin"
 Environment="FLASK_DEBUG=0"
-ExecStart=/opt/today_tactics/.venv/bin/gunicorn \
+ExecStart=/opt/today_tactics/venv/bin/gunicorn \
     --workers 3 \
     --worker-class gthread \
     --threads 2 \
