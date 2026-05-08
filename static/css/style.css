@@ -4604,6 +4604,47 @@ body {
     color: #facc15;
     border-color: rgba(252,204,21,0.3);
 }
+
+/* 카드 패널 컨트롤 — mode 탭 + 자체 league 탭 */
+.ins-card-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+.ins-card-controls .ins-pos-tabs { margin-bottom: 0; }
+.ins-card-league-tabs {
+    display: flex;
+    gap: 4px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+    padding: 3px;
+}
+.ins-card-league-tab {
+    background: none;
+    border: none;
+    color: #6a8aa8;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: all 0.15s;
+}
+.ins-card-league-tab:hover { color: #c8d8f0; }
+.ins-card-league-tab:focus-visible {
+    outline: 2px solid rgba(126,207,255,0.5);
+    outline-offset: 1px;
+}
+.ins-card-league-tab.active {
+    background: rgba(126,207,255,0.16);
+    color: #7ecfff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
 .ins-card-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -5153,6 +5194,86 @@ body.pr-expanded-lock {
 
 .drawer-body { padding: 20px 24px 40px; }
 .drawer-section-title { font-size: 0.88rem; font-weight: 700; color: #7ecfff; margin-bottom: 10px; }
+
+/* 시즌 필터 (드로어 내부) */
+.drawer-year-filter {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.drawer-year-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #8aa0bb;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: all 0.15s ease;
+}
+.drawer-year-btn:hover {
+    background: rgba(126,207,255,0.08);
+    color: #c8d8f0;
+    border-color: rgba(126,207,255,0.2);
+}
+.drawer-year-btn:focus-visible {
+    outline: 2px solid rgba(126,207,255,0.5);
+    outline-offset: 1px;
+}
+.drawer-year-btn.active {
+    background: rgba(126,207,255,0.18);
+    color: #7ecfff;
+    border-color: rgba(126,207,255,0.4);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* 시즌 요약 KPI 카드 */
+.drawer-summary {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 22px;
+    padding: 14px 12px;
+    background: linear-gradient(135deg, rgba(20,32,58,0.55), rgba(15,24,42,0.35));
+    border: 1px solid rgba(126,207,255,0.1);
+    border-radius: 10px;
+}
+.kpi-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+}
+.kpi-val {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #e8f2ff;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+.kpi-val.kpi-pos { color: #4ade80; }
+.kpi-val.kpi-neg { color: #f87171; }
+.kpi-val.kpi-accent-g { color: #4ade80; }
+.kpi-val.kpi-accent-b { color: #7ecfff; }
+.kpi-val.kpi-accent-p { color: #c79ef8; }
+.kpi-lbl {
+    font-size: 0.6rem;
+    color: #7e92ad;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+@media (max-width: 600px) {
+    .drawer-summary { grid-template-columns: repeat(3, 1fr); }
+}
 
 /* ── 팀 비교 모달 (Team Compare) — 모닝 피치 & 스카이 파스텔 테마 ─────── */
 .tc-modal-content {

@@ -297,9 +297,16 @@
         <!-- 카드 수령 순위 -->
         <div class="ins-block" id="ins-panel-cards">
             <div class="ins-block-title">🟨🟥 카드 수령 순위</div>
-            <div class="ins-pos-tabs" id="ins-card-mode-tabs">
-                <button class="ins-card-mode-tab active" data-mode="player">👤 선수별</button>
-                <button class="ins-card-mode-tab" data-mode="team">🛡 팀별</button>
+            <div class="ins-card-controls">
+                <div class="ins-pos-tabs" id="ins-card-mode-tabs">
+                    <button class="ins-card-mode-tab active" data-mode="player">👤 선수별</button>
+                    <button class="ins-card-mode-tab" data-mode="team">🛡 팀별</button>
+                </div>
+                <div class="ins-card-league-tabs" id="ins-card-league-tabs">
+                    <button class="ins-card-league-tab active" data-card-league="all">전체</button>
+                    <button class="ins-card-league-tab" data-card-league="k1">K1</button>
+                    <button class="ins-card-league-tab" data-card-league="k2">K2</button>
+                </div>
             </div>
             <div id="ins-card-body"></div>
         </div>
@@ -718,15 +725,21 @@
             <button id="drawer-close" class="drawer-close">✕</button>
         </div>
         <div class="drawer-body">
-            <div class="drawer-section-title">📈 경기별 평점 추이</div>
-            <div style="position:relative;height:180px"><canvas id="drawer-chart-rating"></canvas></div>
+            <!-- 시즌 필터 -->
+            <div class="drawer-year-filter" id="drawer-year-filter"></div>
 
-            <div id="drawer-stat-section" style="margin-top:20px">
+            <!-- 시즌 요약 KPI -->
+            <div class="drawer-summary" id="drawer-summary"></div>
+
+            <div class="drawer-section-title">📈 경기별 평점 추이</div>
+            <div style="position:relative;height:230px"><canvas id="drawer-chart-rating"></canvas></div>
+
+            <div id="drawer-stat-section" style="margin-top:24px">
                 <div class="drawer-section-title" id="drawer-stat-title"></div>
-                <div style="position:relative;height:180px"><canvas id="drawer-chart-stat"></canvas></div>
+                <div style="position:relative;height:230px"><canvas id="drawer-chart-stat"></canvas></div>
             </div>
 
-            <div class="drawer-section-title" style="margin-top:20px">📋 최근 경기</div>
+            <div class="drawer-section-title" style="margin-top:24px">📋 최근 경기</div>
             <div id="drawer-match-table"></div>
         </div>
     </div>
