@@ -898,6 +898,26 @@
         let card = wrap.querySelector(".pred-tactics");
         if (card) card.remove();
 
+        const subs = Array.isArray(extras.subs) ? extras.subs : [];
+        const subRow = (s) => {
+            const out = s.out ? `<span class="pt-sub-out">${s.out.shirt ? '#' + s.out.shirt + ' ' : ''}${s.out.name || '-'}</span>` : '<span class="pt-sub-out pt-sub-empty">-</span>';
+            const inn = s.in  ? `<span class="pt-sub-in">${s.in.shirt ? '#' + s.in.shirt + ' ' : ''}${s.in.name || '-'}</span>`     : '<span class="pt-sub-in pt-sub-empty">-</span>';
+            return `<div class="pt-sub-item"><span class="pt-sub-min">${s.minute}'</span>${out}<span class="pt-sub-arrow">→</span>${inn}</div>`;
+        };
+        const homeSubs = subs.filter(s => s.is_home === 1).map(subRow).join("");
+        const awaySubs = subs.filter(s => s.is_home === 0).map(subRow).join("");
+        const subsPanelHtml = (homeSubs || awaySubs) ? `
+            <div class="pt-subs">
+                <div class="pt-subs-col">
+                    <div class="pt-subs-title" style="color:${homeColor}">↻ 홈 교체</div>
+                    ${homeSubs || '<div class="pt-subs-empty">교체 없음</div>'}
+                </div>
+                <div class="pt-subs-col">
+                    <div class="pt-subs-title" style="color:${awayColor}">↻ 원정 교체</div>
+                    ${awaySubs || '<div class="pt-subs-empty">교체 없음</div>'}
+                </div>
+            </div>` : "";
+
         const html = `
         <div class="pred-tactics">
             <div class="pt-header">
@@ -908,17 +928,18 @@
                         <button class="pt-filter-btn" data-filter="home" style="--c:${homeColor}">홈</button>
                         <button class="pt-filter-btn" data-filter="away" style="--c:${awayColor}">원정</button>
                     </div>
-                    <label class="pt-sub-toggle">
-                        <input type="checkbox" class="pt-sub-checkbox" />
-                        <span>교체 포함</span>
-                    </label>
+                    <span class="pt-legend">
+                        <span class="pt-legend-dot pt-legend-starter"></span>선발
+                        <span class="pt-legend-dot pt-legend-sub"></span>교체 IN
+                    </span>
                 </div>
             </div>
+            ${subsPanelHtml}
             <div class="pt-grid">
                 <div class="pt-panel">
                     <div class="pt-panel-title">평균 포지션</div>
                     <canvas class="pt-canvas" id="pt-canvas-avg" width="520" height="340"></canvas>
-                    <div class="pt-hint">등번호 점 = 매치 평균 좌표 (홈 좌→우 / 원정 우→좌 공격)</div>
+                    <div class="pt-hint">선발 = 진한 원, 교체 IN = 점선 작은 원 (홈 좌→우 / 원정 우→좌 공격)</div>
                 </div>
                 <div class="pt-panel">
                     <div class="pt-panel-title">슛맵 <span class="pt-shotcount"></span></div>
@@ -944,7 +965,6 @@
 
         const allPositions = Array.isArray(extras.avg_positions) ? extras.avg_positions : [];
         const allShots     = Array.isArray(extras.shots)         ? extras.shots         : [];
-        const subCheckbox  = card.querySelector(".pt-sub-checkbox");
 
         function getCurrentFilter() {
             const active = card.querySelector(".pt-filter-btn.active");
@@ -953,11 +973,8 @@
 
         function redraw() {
             const filter = getCurrentFilter();
-            const includeSubs = subCheckbox && subCheckbox.checked;
-            // is_starter 정보가 없으면(구버전 API) starter로 간주 → 모두 표시
-            const hasStarterInfo = allPositions.some(p => p.is_starter !== undefined);
+            // 항상 선발 + 교체 IN 모두 표시 (시각 구분으로 분리)
             const positions = allPositions.filter(p => {
-                if (hasStarterInfo && !includeSubs && p.is_starter !== 1) return false;
                 if (filter === "home") return p.is_home === 1;
                 if (filter === "away") return p.is_home === 0;
                 return true;
@@ -984,7 +1001,6 @@
                 redraw();
             });
         });
-        if (subCheckbox) subCheckbox.addEventListener("change", redraw);
     }
 
     // ── 필드 그리기 헬퍼 (가로 방향 풀 피치) ─────────────────
