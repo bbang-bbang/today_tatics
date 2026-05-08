@@ -108,13 +108,18 @@ async def main():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    # 종료 경기 중 mps row 없는 경기
+    # 종료 경기 중 mps row 없거나 minutes_played NULL인 경기
+    # (mins NULL은 SofaScore가 매치 직후 늦게 반영 — 후속 백필 필요)
     cur.execute("""
         SELECT e.id, e.date_ts, e.home_team_id, e.away_team_id
         FROM events e
         WHERE e.tournament_id = ?
           AND e.home_score IS NOT NULL AND e.away_score IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM match_player_stats mps WHERE mps.event_id = e.id)
+          AND e.id < 50000000
+          AND NOT EXISTS (
+            SELECT 1 FROM match_player_stats mps
+            WHERE mps.event_id = e.id AND mps.minutes_played IS NOT NULL
+          )
         ORDER BY e.date_ts DESC
     """, (tid_filter,))
     events_todo = cur.fetchall()
