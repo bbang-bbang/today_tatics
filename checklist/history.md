@@ -2379,3 +2379,7 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-08 15:36:01 | node --check static/js/prediction.js 2>&1 && echo "OK"
 - 2026-05-08 15:36:25 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o ConnectTimeout=10 rocky@<IP-REDACTED> "sudo tail -100 /var/log/today_tactics/access.log | grep -E 'match-extras|prediction.js' | tail -20" 2>&1 | grep -v "post-quantum\|store now\|openssh.com"
 - 2026-05-08 15:37:18 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o ConnectTimeout=10 rocky@<IP-REDACTED> "cd /opt/today_tactics && git pull -q && sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics; echo '---'; curl -sk -o /dev/null -D - --resolve today-tactics.co.kr:443:127.0.0.1 https://today-tactics.co.kr/ 2>&1 | grep -iE 'cache-control'" 2>&1 | grep -v "post-quantum\|store now\|openssh.com"
+- 2026-05-08 15:42:43 | ls crawlers/ | grep -iE "backfill|mps|match_stats" | head
+- 2026-05-08 15:42:48 | grep -n "missing\|NULL\|target\|where\|filter" crawlers/backfill_k1_mps.py | head -15
+- 2026-05-08 15:48:54 | node --check static/js/prediction.js 2>&1 && echo "OK" && grep -c "_pendingTactics\|tryRenderPendingTactics" static/js/prediction.js
+- 2026-05-08 15:49:21 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o ConnectTimeout=10 rocky@<IP-REDACTED> "cd /opt/today_tactics && git pull -q && echo OK" 2>&1 | grep -v "post-quantum\|store now\|openssh.com"
