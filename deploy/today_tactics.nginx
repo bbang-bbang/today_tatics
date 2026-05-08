@@ -1,7 +1,7 @@
 # Rate limit zone — IP당 분당 60 요청 (P7 권고, DoS 완화)
 limit_req_zone $binary_remote_addr zone=tt_general:10m rate=60r/m;
-# trigger-update는 더 엄격 — IP당 시간당 5회
-limit_req_zone $binary_remote_addr zone=tt_trigger:1m rate=5r/h;
+# trigger-update는 더 엄격 — IP당 분당 1회 (burst 2)
+limit_req_zone $binary_remote_addr zone=tt_trigger:1m rate=1r/m;
 
 server {
     listen 80;
