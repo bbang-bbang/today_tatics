@@ -156,9 +156,17 @@ def login_required_api(view):
     return wrapped
 
 
+# 로그인 강제 토글 — 환경변수 LOGIN_REQUIRED=1 일 때만 게이트 활성
+# (OAuth 앱 등록·secret 발급 전까지 OFF로 두어 사이트 공개 유지)
+LOGIN_REQUIRED = os.environ.get("LOGIN_REQUIRED", "0") == "1"
+
+
 @app.before_request
 def _auth_gate():
-    """전체 사이트 잠금 — 로그인 페이지/auth 콜백/정적/health 만 무인증 허용."""
+    """전체 사이트 잠금 — LOGIN_REQUIRED=1 일 때만 동작.
+    /login, /auth/*, /static/, /health, /favicon 은 항상 무인증 허용."""
+    if not LOGIN_REQUIRED:
+        return None
     p = request.path
     PUBLIC_PREFIXES = ("/static/", "/login", "/auth/", "/health", "/favicon")
     if any(p.startswith(x) for x in PUBLIC_PREFIXES):
