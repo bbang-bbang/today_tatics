@@ -61,7 +61,6 @@
         if (report) report.innerHTML = "";
         _lastHome = null;
         _lastAway = null;
-        _pendingTactics = null;
     }
 
     // ── 리그 탭 전환 ─────────────────────────────────────
@@ -271,30 +270,13 @@
                 const homeId = item.dataset.home;
                 const awayId = item.dataset.away;
                 if (!homeId || !awayId || homeId === "null" || awayId === "null") return;
-                // 매치 카드 active 시각 피드백 (선택 매치 명시)
                 list.querySelectorAll(".kmc.kmc-active").forEach(el => el.classList.remove("kmc-active"));
                 item.classList.add("kmc-active");
                 section.classList.remove("hidden");
-                loadPrediction(homeId, awayId);
-
+                const gameDate = item.dataset.fullDate || null;
                 const isFinished = item.dataset.finished === "true";
-                const gameDate   = item.dataset.fullDate || null;
-                // match-extras는 finished 여부 무관하게 시도 — 데이터 있으면 카드, 없으면 자연스럽게 미표시
-                if (gameDate) {
-                    fetch(`/api/match-extras?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
-                        .then(r => r.json())
-                        .then(data => {
-                            // race 방어
-                            if (homeId !== _lastHome || awayId !== _lastAway) return;
-                            if (data && data.ready) {
-                                // pending 보관 — render() 완료(=pred-extras 생성) 후 자동 적용
-                                _pendingTactics = { data, homeId, awayId };
-                                tryRenderPendingTactics();
-                            }
-                        })
-                        .catch(() => {});
-                }
-                // 메인 전술판 자동 적용은 finished 매치만 (사용자가 라인업 보려고 한 거니까)
+                loadPrediction(homeId, awayId, gameDate);
+                // 메인 전술판 자동 적용은 finished 매치만
                 if (isFinished && gameDate) {
                     fetch(`/api/match-lineup?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
                         .then(r => r.json())
@@ -317,7 +299,8 @@
             return;
         }
         section.classList.remove("hidden");
-        loadPrediction(e.detail.home.id, e.detail.away.id);
+        // 팀 선택만 → 매치 컨텍스트(=날짜) 없음, 전술 보기 카드 미표시
+        loadPrediction(e.detail.home.id, e.detail.away.id, null);
     });
 
 
@@ -421,22 +404,30 @@
         return "k2";
     }
 
-    function loadPrediction(homeId, awayId) {
+    function loadPrediction(homeId, awayId, gameDate) {
         _lastHome = homeId; _lastAway = awayId;
         report.innerHTML = `<div class="pred-loading">분석 중...</div>`;
         const league = _inferLeague(homeId, awayId);
+        // match-extras를 Promise.all에 통합 — render() 후 동기적으로 카드 추가, race 없음
+        const extrasFetch = gameDate
+            ? fetch(`/api/match-extras?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
+                .then(r => r.json())
+                .catch(() => null)
+            : Promise.resolve(null);
         Promise.all([
             fetch(`/api/match-prediction?homeTeam=${homeId}&awayTeam=${awayId}`).then(r => r.json()),
             loadBacktest(league),
             fetch(`/api/predicted-lineup?teamId=${homeId}`).then(r => r.json()).catch(() => null),
             fetch(`/api/predicted-lineup?teamId=${awayId}`).then(r => r.json()).catch(() => null),
+            extrasFetch,
         ])
-            .then(([data, bt, hLineup, aLineup]) => {
+            .then(([data, bt, hLineup, aLineup, extras]) => {
                 // race 방어: 응답 처리 시점에 다른 매치 선택됐다면 무시
                 if (homeId !== _lastHome || awayId !== _lastAway) return;
                 render(data, homeId, awayId, bt, hLineup, aLineup);
-                // render 완료(=pred-extras 생성) → pending 전술 카드가 있으면 즉시 반영
-                tryRenderPendingTactics();
+                if (extras && extras.ready) {
+                    renderTacticsCard(extras, homeId, awayId);
+                }
             })
             .catch(() => {
                 if (homeId === _lastHome && awayId === _lastAway) report.innerHTML = "";
@@ -871,20 +862,6 @@
     }
 
     let _lastHome = null, _lastAway = null;
-    // 전술 카드 펜딩 — match-extras 응답이 prediction render()보다 먼저 도착하는 케이스 처리
-    let _pendingTactics = null;
-    function tryRenderPendingTactics() {
-        if (!_pendingTactics) return;
-        const wrap = report.querySelector(".pred-extras");
-        if (!wrap) return; // 아직 render 전 — render 완료 후 다시 호출됨
-        const { data, homeId, awayId } = _pendingTactics;
-        if (homeId !== _lastHome || awayId !== _lastAway) {
-            _pendingTactics = null;
-            return;
-        }
-        renderTacticsCard(data, homeId, awayId);
-        _pendingTactics = null;
-    }
 
     // ── 전술 보기 카드 (평균 포지션 + 슛맵) ─────────────────
     function renderTacticsCard(extras, homeId, awayId) {
