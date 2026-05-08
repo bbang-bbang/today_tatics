@@ -4,8 +4,8 @@ limit_req_zone $binary_remote_addr zone=tt_general:10m rate=60r/m;
 limit_req_zone $binary_remote_addr zone=tt_trigger:1m rate=1r/m;
 
 server {
-    listen 80;
-    server_name _;   # IP 직접 접근 허용 (도메인 있으면 여기에 입력)
+    listen 80 default_server;
+    server_name _;   # default_server — IP 직접 접근 / 매칭 안 되는 호스트 모두 여기로
 
     # ── 보안 헤더 (P7 권고) ─────────────────────────────────
     add_header X-Frame-Options "SAMEORIGIN" always;
