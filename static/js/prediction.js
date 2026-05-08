@@ -61,6 +61,7 @@
         if (report) report.innerHTML = "";
         _lastHome = null;
         _lastAway = null;
+        _pendingTactics = null;
     }
 
     // ── 리그 탭 전환 ─────────────────────────────────────
@@ -296,7 +297,9 @@
                             // race 방어
                             if (homeId !== _lastHome || awayId !== _lastAway) return;
                             if (data && data.ready) {
-                                renderTacticsCard(data, homeId, awayId);
+                                // pending 보관 — render() 완료(=pred-extras 생성) 후 자동 적용
+                                _pendingTactics = { data, homeId, awayId };
+                                tryRenderPendingTactics();
                             }
                         })
                         .catch(() => {});
@@ -430,6 +433,8 @@
                 // race 방어: 응답 처리 시점에 다른 매치 선택됐다면 무시
                 if (homeId !== _lastHome || awayId !== _lastAway) return;
                 render(data, homeId, awayId, bt, hLineup, aLineup);
+                // render 완료(=pred-extras 생성) → pending 전술 카드가 있으면 즉시 반영
+                tryRenderPendingTactics();
             })
             .catch(() => {
                 if (homeId === _lastHome && awayId === _lastAway) report.innerHTML = "";
@@ -864,6 +869,20 @@
     }
 
     let _lastHome = null, _lastAway = null;
+    // 전술 카드 펜딩 — match-extras 응답이 prediction render()보다 먼저 도착하는 케이스 처리
+    let _pendingTactics = null;
+    function tryRenderPendingTactics() {
+        if (!_pendingTactics) return;
+        const wrap = report.querySelector(".pred-extras");
+        if (!wrap) return; // 아직 render 전 — render 완료 후 다시 호출됨
+        const { data, homeId, awayId } = _pendingTactics;
+        if (homeId !== _lastHome || awayId !== _lastAway) {
+            _pendingTactics = null;
+            return;
+        }
+        renderTacticsCard(data, homeId, awayId);
+        _pendingTactics = null;
+    }
 
     // ── 전술 보기 카드 (평균 포지션 + 슛맵) ─────────────────
     function renderTacticsCard(extras, homeId, awayId) {
