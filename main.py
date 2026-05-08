@@ -446,7 +446,7 @@ def get_h2h_matches():
         # 득점 선수 조회 (자책골 제외: 홈팀 득점자만 홈에, 원정팀 득점자만 원정에)
         cur.execute("""
             SELECT mps.team_id,
-                   COALESCE(p.name_ko, mps.player_name) as name,
+                   COALESCE(p.name_ko, mps.player_name, p.name) as name,
                    SUM(mps.goals) as g
             FROM match_player_stats mps
             LEFT JOIN players p ON mps.player_id = p.id
@@ -650,7 +650,7 @@ def get_team_top_players():
             raise ValueError(f"disallowed stat column: {stat_col}")
         cur.execute(f"""
             SELECT mps.player_id, mps.player_name,
-                   COALESCE(p.name_ko, mps.player_name) as display_name,
+                   COALESCE(p.name_ko, mps.player_name, p.name) as display_name,
                    SUM(mps.{stat_col}) as total
             FROM match_player_stats mps
             JOIN events e ON mps.event_id = e.id
@@ -1942,7 +1942,7 @@ def get_match_prediction():
         _row = cur.fetchone()
         latest_yr = _row[0] if _row and _row[0] else str(datetime.now().year)
         cur.execute("""
-            SELECT mps.player_id, COALESCE(p.name_ko, mps.player_name), SUM(mps.goals) g
+            SELECT mps.player_id, COALESCE(p.name_ko, mps.player_name, p.name), SUM(mps.goals) g
             FROM match_player_stats mps
             JOIN events e ON mps.event_id=e.id
             LEFT JOIN players p ON mps.player_id=p.id
@@ -3362,7 +3362,7 @@ def get_league_dashboard():
     # ── 랭킹 공통 쿼리 ─────────────────────────────────────────
     base_sql = f"""
         SELECT mps.player_id,
-               COALESCE(p.name_ko, mps.player_name) name,
+               COALESCE(p.name_ko, mps.player_name, p.name) name,
                mps.position pos,
                mps.team_id,
                COUNT(*)                   games,
@@ -3849,7 +3849,7 @@ def insights_top_performers():
     result = {}
 
     rows = conn.execute(f"""
-        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id,
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.player_name, m.team_id,
                COUNT(*) as games, SUM(m.minutes_played) as mins,
                SUM(m.goals) as goals, SUM(COALESCE(m.expected_goals,0)) as xg,
                AVG(m.rating) as avg_rating,
@@ -3875,7 +3875,7 @@ def insights_top_performers():
     } for r in rows]
 
     rows = conn.execute(f"""
-        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id,
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.player_name, m.team_id,
                COUNT(*) as games, SUM(m.minutes_played) as mins,
                SUM(m.total_passes) as tp, SUM(m.accurate_passes) as ap,
                SUM(m.tackles) as tkl, AVG(m.rating) as avg_rating
@@ -3892,7 +3892,7 @@ def insights_top_performers():
     } for r in rows]
 
     rows = conn.execute(f"""
-        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id,
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.player_name, m.team_id,
                COUNT(*) as games, SUM(m.minutes_played) as mins,
                SUM(m.tackles) as tkl, SUM(COALESCE(m.interceptions,0)) as intc,
                SUM(m.clearances) as clr, SUM(m.aerial_won) as aer,
@@ -3941,7 +3941,7 @@ def insights_card_rankings():
     # 선수별 옐로 TOP 10
     yellow_rows = conn.execute(f"""
         SELECT c.player_id,
-               COALESCE(p.name_ko, c.player_name) AS name,
+               COALESCE(p.name_ko, c.player_name, p.name) AS name,
                c.team_id,
                COUNT(DISTINCT c.event_id) AS games,
                SUM(CASE WHEN c.card_type IN ('yellow','yellowRed') THEN 1 ELSE 0 END) AS yc,
@@ -3957,7 +3957,7 @@ def insights_card_rankings():
     # 선수별 레드 TOP 5
     red_rows = conn.execute(f"""
         SELECT c.player_id,
-               COALESCE(p.name_ko, c.player_name) AS name,
+               COALESCE(p.name_ko, c.player_name, p.name) AS name,
                c.team_id,
                COUNT(DISTINCT c.event_id) AS games,
                SUM(CASE WHEN c.card_type IN ('yellow','yellowRed') THEN 1 ELSE 0 END) AS yc,
@@ -3970,18 +3970,37 @@ def insights_card_rankings():
         ORDER BY rc DESC, yc DESC LIMIT 5
     """, ts_params + league_params).fetchall()
 
-    # 팀별 — 카드 합계 / 경기수 (경기는 home/away 합산)
+    # 팀별 — 카드 합계 / 시즌 경기수
+    # events 기준 LEFT JOIN: 카드 0장 경기도 games에 포함, 시즌 카드 0회 팀도 결과에 포함.
+    # league 필터는 t.id IN (...) 형태로 변환 (TEAMS 마스터 기반).
+    team_league_cond = league_cond.replace("m.team_id", "t.id")
+    team_league_params = league_params
+    if league == "all":
+        # K3/컵 매치 혼입 방지 — K1+K2 팀만
+        kk_ids = [t["sofascore_id"] for t in TEAMS if t.get("league") in ("K1", "K2")]
+        ph = ",".join("?" * len(kk_ids))
+        team_league_cond = f"AND t.id IN ({ph})"
+        team_league_params = tuple(kk_ids)
+    # LIMIT 동적: K1=12, K2=17, all=29 (전체 노출)
+    team_limit = {"k1": 12, "k2": 17}.get(league, 29)
+    e_ts_cond = ts_cond  # e.date_ts 기준 (이미 e.* 참조)
+    # synthetic event(SofaScore 미매칭, 9자리 ID) 제외 — 정규 매치 ID는 8자리 1500만대
     team_rows = conn.execute(f"""
-        SELECT c.team_id,
-               COUNT(DISTINCT c.event_id) AS games,
-               SUM(CASE WHEN c.card_type IN ('yellow','yellowRed') THEN 1 ELSE 0 END) AS yc,
-               SUM(CASE WHEN c.card_type IN ('red','yellowRed') THEN 1 ELSE 0 END) AS rc
-        FROM card_events c
-        JOIN events e ON c.event_id = e.id
-        WHERE 1=1 {ts_cond} {ce_league_cond}
-        GROUP BY c.team_id HAVING games >= 1
-        ORDER BY (yc + rc * 2.0) / games DESC LIMIT 12
-    """, ts_params + league_params).fetchall()
+        SELECT t.id AS team_id,
+               COUNT(DISTINCT e.id) AS games,
+               COALESCE(SUM(CASE WHEN c.card_type IN ('yellow','yellowRed') THEN 1 ELSE 0 END), 0) AS yc,
+               COALESCE(SUM(CASE WHEN c.card_type IN ('red','yellowRed') THEN 1 ELSE 0 END), 0) AS rc
+        FROM teams t
+        JOIN events e ON (e.home_team_id = t.id OR e.away_team_id = t.id)
+        LEFT JOIN card_events c ON c.event_id = e.id AND c.team_id = t.id
+        WHERE e.home_score IS NOT NULL
+          AND e.id < 50000000
+          {e_ts_cond} {team_league_cond}
+        GROUP BY t.id
+        HAVING games >= 1
+        ORDER BY (CAST(yc + rc * 2 AS REAL) / games) DESC, yc DESC, rc DESC
+        LIMIT ?
+    """, ts_params + team_league_params + (team_limit,)).fetchall()
 
     def player_row(r):
         games = r["games"] or 1
@@ -4027,7 +4046,7 @@ def insights_xg_efficiency():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(f"""
-        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.team_id,
                COUNT(*) as games, SUM(m.goals) as goals,
                SUM(COALESCE(m.expected_goals,0)) as xg, SUM(m.total_shots) as shots,
                (SELECT COUNT(*) FROM goal_events g
@@ -4065,7 +4084,7 @@ def insights_forward_goals():
         conn.row_factory = sqlite3.Row
         date_cond, date_params = _year_date_params(year)
         rows = conn.execute(f"""
-            SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
+            SELECT m.player_id, COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.team_id,
                    SUM(m.goals) as total_goals,
                    (SELECT COUNT(*) FROM goal_events g
                     WHERE g.player_id=m.player_id AND g.is_penalty=1 AND g.is_own_goal=0
@@ -4109,7 +4128,7 @@ def insights_forward_goals():
     """, (player_id,)).fetchall()
 
     info = conn.execute("""
-        SELECT COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id
+        SELECT COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.team_id
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
         WHERE m.player_id=? AND m.player_name IS NOT NULL LIMIT 1
     """, (player_id,)).fetchone()
@@ -4134,7 +4153,7 @@ def insights_midfielder_pass():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(f"""
-        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.team_id,
                COUNT(*) as games, SUM(m.minutes_played) as mins,
                SUM(m.total_passes) as tp, SUM(m.accurate_passes) as ap,
                AVG(m.rating) as avg_rating
@@ -4163,7 +4182,7 @@ def insights_defender_score():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(f"""
-        SELECT m.player_id, COALESCE(p.name_ko, m.player_name) as name_ko, m.team_id,
+        SELECT m.player_id, COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.team_id,
                COUNT(*) as games, SUM(m.minutes_played) as mins,
                SUM(m.tackles) as tkl, SUM(COALESCE(m.interceptions,0)) as intc,
                SUM(m.clearances) as clr, SUM(m.aerial_won) as aer,
@@ -4193,6 +4212,7 @@ def insights_defender_score():
 def insights_player_detail():
     player_id = request.args.get("playerId", "").strip()
     pos       = request.args.get("pos", "F")
+    year      = request.args.get("year", "2026")
     if not player_id:
         return jsonify({"error": "playerId required"}), 400
 
@@ -4201,7 +4221,7 @@ def insights_player_detail():
 
     # 기본 정보
     info = conn.execute("""
-        SELECT COALESCE(p.name_ko, m.player_name) as name_ko, m.player_name, m.team_id, m.position
+        SELECT COALESCE(p.name_ko, m.player_name, p.name) as name_ko, m.player_name, m.team_id, m.position
         FROM match_player_stats m LEFT JOIN players p ON m.player_id = p.id
         WHERE m.player_id = ? LIMIT 1
     """, (player_id,)).fetchone()
@@ -4210,8 +4230,28 @@ def insights_player_detail():
         conn.close()
         return jsonify({"error": "not found"}), 404
 
-    # 경기별 스탯 (최신순, 최대 30경기)
-    rows = conn.execute("""
+    # year 필터 (m.match_date 기준)
+    year_cond = ""
+    year_params: tuple = ()
+    if year and year != "all":
+        try:
+            y = int(year)
+            year_cond = "AND m.match_date >= ? AND m.match_date < ?"
+            year_params = (f"{y}-01-01", f"{y+1}-01-01")
+        except (ValueError, TypeError):
+            year = "all"
+
+    # 사용 가능한 시즌 목록 (UI 필터 옵션용)
+    seasons = conn.execute("""
+        SELECT DISTINCT substr(match_date, 1, 4) AS yr
+        FROM match_player_stats
+        WHERE player_id = ? AND minutes_played > 0 AND match_date IS NOT NULL
+        ORDER BY yr DESC
+    """, (player_id,)).fetchall()
+    season_list = [r["yr"] for r in seasons if r["yr"]]
+
+    # 경기별 스탯 (최신순, 최대 30경기, year 필터)
+    rows = conn.execute(f"""
         SELECT m.match_date,
                e.home_team_id, e.away_team_id, e.home_team_name, e.away_team_name,
                e.home_score, e.away_score, m.is_home,
@@ -4224,9 +4264,9 @@ def insights_player_detail():
                m.total_shots, m.shots_on_target
         FROM match_player_stats m
         JOIN events e ON m.event_id = e.id
-        WHERE m.player_id = ? AND m.minutes_played > 0
+        WHERE m.player_id = ? AND m.minutes_played > 0 {year_cond}
         ORDER BY m.match_date DESC LIMIT 30
-    """, (player_id,)).fetchall()
+    """, (player_id,) + year_params).fetchall()
 
     matches = []
     for r in rows:
@@ -4255,16 +4295,31 @@ def insights_player_detail():
             "shots":      r["total_shots"] or 0,
         })
 
-    # 포지션 평균 (비교용)
-    avg = conn.execute("""
+    # 포지션 평균 (비교용) — year 일치
+    avg = conn.execute(f"""
         SELECT ROUND(AVG(rating), 2) as avg_rating,
                ROUND(AVG(goals), 2) as avg_goals,
                ROUND(AVG(COALESCE(expected_goals,0)), 2) as avg_xg,
                ROUND(AVG(CAST(accurate_passes AS REAL)/NULLIF(total_passes,0)*100), 1) as avg_pass_acc,
                ROUND(AVG(tackles), 2) as avg_tackles
-        FROM match_player_stats
-        WHERE position = ? AND minutes_played >= 45
-    """, (pos,)).fetchone()
+        FROM match_player_stats m
+        WHERE position = ? AND minutes_played >= 45 {year_cond}
+    """, (pos,) + year_params).fetchone()
+
+    # 본인 시즌 요약 (KPI) — 평균/합계
+    own = conn.execute(f"""
+        SELECT COUNT(*) as games,
+               SUM(minutes_played) as mins,
+               ROUND(AVG(rating), 2) as avg_rating,
+               SUM(goals) as goals,
+               ROUND(SUM(COALESCE(expected_goals,0)), 2) as xg_sum,
+               SUM(assists) as assists,
+               SUM(key_passes) as key_passes,
+               SUM(tackles) as tackles,
+               ROUND(AVG(CAST(accurate_passes AS REAL)/NULLIF(total_passes,0)*100), 1) as pass_acc_avg
+        FROM match_player_stats m
+        WHERE player_id = ? AND minutes_played > 0 {year_cond}
+    """, (player_id,) + year_params).fetchone()
 
     conn.close()
     return jsonify({
@@ -4272,6 +4327,8 @@ def insights_player_detail():
         "name":  info["name_ko"] or info["player_name"] or "",
         "team":  _ko_team(info["team_id"], ""),
         "pos":   pos,
+        "year":  year,
+        "seasons": season_list,
         "matches": matches,
         "pos_avg": {
             "rating":   avg["avg_rating"],
@@ -4279,6 +4336,17 @@ def insights_player_detail():
             "xg":       avg["avg_xg"],
             "pass_acc": avg["avg_pass_acc"],
             "tackles":  avg["avg_tackles"],
+        },
+        "own_summary": {
+            "games":        own["games"] or 0,
+            "mins":         own["mins"] or 0,
+            "avg_rating":   own["avg_rating"],
+            "goals":        own["goals"] or 0,
+            "xg":           own["xg_sum"] or 0,
+            "assists":      own["assists"] or 0,
+            "key_passes":   own["key_passes"] or 0,
+            "tackles":      own["tackles"] or 0,
+            "pass_acc":     own["pass_acc_avg"],
         },
     })
 
@@ -5066,7 +5134,7 @@ def get_predicted_lineup():
         eid, ts = re_row["id"], re_row["date_ts"]
         cur.execute("""
             SELECT mps.player_id,
-                   COALESCE(p.name_ko, mps.player_name) AS name,
+                   COALESCE(p.name_ko, mps.player_name, p.name) AS name,
                    mps.position, mps.shirt_number, mps.minutes_played, mps.rating
             FROM match_player_stats mps
             LEFT JOIN players p ON mps.player_id = p.id
@@ -5339,7 +5407,7 @@ def match_lineup():
         SELECT ml.is_home, ml.team_id, ml.formation, ml.player_id, ml.player_name,
                ml.shirt_number, ml.position, ml.is_starter, ml.slot_order,
                ml.confirmed,
-               COALESCE(p.name_ko, ml.player_name) AS name_display,
+               COALESCE(p.name_ko, ml.player_name, p.name) AS name_display,
                p.height
         FROM match_lineups ml
         LEFT JOIN players p ON p.id = ml.player_id

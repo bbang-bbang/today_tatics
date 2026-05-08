@@ -12,13 +12,27 @@
 
 ## 🟡 P2 — 시간 날 때 처리
 
-### [ ] 5/22 K1 미래 매치 1건 매칭 실패
-**왜**: replace_synthetic_events.py 첫 실행 시 1건 매칭 실패 (Jeonbuk vs Daejeon, ts=1771642800). 미래 매치라 SofaScore 미등록.
-**무엇**: 5/22 이후 또는 경기 종료 후 재실행
+### [x] ~~5/22 K1 미래 매치 1건 매칭 실패~~ — 5/8 처리 완료
+events.id=90333089 (Jeonbuk vs Daejeon, 슈퍼컵 추정)을 DB에서 직접 삭제. 백업: `players_pre_synthetic_delete_20260508_101752.db`. K1 12팀 모두 12경기로 일관성 회복.
+
+---
+
+### [ ] mps.player_name NULL 73% — 데이터 수집 단계 결손
+**왜**: `match_player_stats.player_name` 67K row 중 49K(73%)가 NULL. 5/8 fallback으로 영문 이름 표시는 즉시 해결됐지만 근본 원인은 수집 코드.
+**무엇**: `crawlers/crawl_sofascore.py` / `crawl_match_stats.py` 점검 — SofaScore 응답 파싱 시 player.name이 어디서 빠지는지 추적.
+**비용**: 1~2h
+**효과**: 한국 선수 영문 이름 의존 해소, 한글 표시 일관성
+
+---
+
+### [ ] players row 누락 1,200명+ 백필
+**왜**: mps에는 player_id가 있지만 `players` 테이블에 해당 id row 자체가 없는 케이스 12,498 mps row(약 1,200명+). 인사이트/카드 순위에서 이름 빈 값으로 표시. 예: pid=1046525 (인천 해 FC).
+**무엇**: 누락 player_id 목록 추출 → `crawl_sofascore.py` player API로 개별 fetch → players 테이블 INSERT.
 ```bash
-python crawlers/replace_synthetic_events.py
+# 누락 ID 추출
+sqlite3 players.db "SELECT DISTINCT m.player_id FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id WHERE p.id IS NULL"
 ```
-**비용**: 30초
+**비용**: 30분~1h (Playwright 안정성 변수)
 
 ---
 
