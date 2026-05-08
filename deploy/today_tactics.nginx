@@ -3,16 +3,37 @@ limit_req_zone $binary_remote_addr zone=tt_general:10m rate=60r/m;
 # trigger-update는 더 엄격 — IP당 분당 1회 (burst 2)
 limit_req_zone $binary_remote_addr zone=tt_trigger:1m rate=1r/m;
 
+# ── HTTP (80) → HTTPS (443) redirect + IP 직접 접근도 HTTPS로 강제 ─
 server {
     listen 80 default_server;
-    server_name _;   # default_server — IP 직접 접근 / 매칭 안 되는 호스트 모두 여기로
+    server_name today-tactics.co.kr www.today-tactics.co.kr _;
+    server_tokens off;
+    # certbot challenge 경로는 평문 유지 (cert 갱신 시 필요)
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / {
+        return 301 https://today-tactics.co.kr$request_uri;
+    }
+}
+
+# ── HTTPS (443) ─────────────────────────────────────────────
+server {
+    listen 443 ssl default_server;
+    server_name today-tactics.co.kr www.today-tactics.co.kr _;
+
+    # cert (이미 certbot으로 발급됨 — today-tactics.co.kr + www)
+    ssl_certificate     /etc/letsencrypt/live/today-tactics.co.kr/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/today-tactics.co.kr/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
     # ── 보안 헤더 (P7 권고) ─────────────────────────────────
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-    # HSTS는 HTTPS 적용 후 활성화: add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     # 서버 정보 노출 최소화
     server_tokens off;
@@ -35,6 +56,7 @@ server {
         proxy_set_header   Host $host;
         proxy_set_header   X-Real-IP $remote_addr;
         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout 120s;
     }
 
@@ -45,6 +67,7 @@ server {
         proxy_set_header   Host $host;
         proxy_set_header   X-Real-IP $remote_addr;
         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout 120s;
     }
 }
