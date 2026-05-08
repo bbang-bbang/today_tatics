@@ -8,6 +8,12 @@ Group=rocky
 WorkingDirectory=/opt/today_tactics
 Environment="PATH=/opt/today_tactics/venv/bin"
 Environment="FLASK_DEBUG=0"
+
+# CPU 우선순위 — 같은 서버의 다른 프로세스(bunting 봇) 폭주 시
+# today_tactics가 사용자 응답 우선으로 CPU 받도록 비례 가중치 + nice 조정
+# cgroup v2의 CPUWeight 기본값 100, 300은 약 3배 가중. Nice -5는 priority 약간 상향.
+CPUWeight=300
+Nice=-5
 ExecStart=/opt/today_tactics/venv/bin/gunicorn \
     --workers 3 \
     --worker-class gthread \
