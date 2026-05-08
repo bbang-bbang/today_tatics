@@ -60,6 +60,21 @@ python crawlers/fetch_event_heatmap.py 15372989 15372991 15372995
 
 ---
 
+### [ ] HTTPS 적용 (Let's Encrypt + 도메인)
+**왜**: 5/8 P7 보안 감사. 현재 nginx 80 평문, 가로채기 가능. (보안 헤더는 이미 적용됨, HSTS만 HTTPS 후 활성화)
+**무엇**:
+- 도메인 확정 (today_alarms은 today-tactics.co.kr 사용 중 → today_tactics.today-tactics.co.kr 또는 메인 도메인)
+- certbot으로 cert 발급, nginx 443 listen 추가, 80 → 443 redirect
+- nginx config의 HSTS 라인 주석 해제
+**비용**: 30분
+**효과**: 평문 통신 제거, MITM 차단, HSTS preload 가능
+
+---
+
+### [ ] mps.player_name NULL 73% — 데이터 수집 단계 결손
+
+---
+
 ### [ ] 매치 상세 — 카드 통계 노출
 **왜**: 카드 데이터 6,988건이 인사이트 패널에만 노출. 매치 상세에 양 팀 카드 추세도 보여주면 유용.
 **무엇**: prediction.js render()에서 home.cards / away.cards 표시. /api/match-prediction에서 card_events JOIN.
