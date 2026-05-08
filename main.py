@@ -425,7 +425,10 @@ for name in POSITION_LABELS:
 
 @app.route("/")
 def index():
-    return render_template("index.html", current_user=session.get("user"))
+    resp = app.make_response(render_template("index.html", current_user=session.get("user")))
+    # index.html은 cache-bust 위해 항상 새로 받게 — query(?v=N)는 정적 파일에서 immutable 캐시
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 @app.route("/api/formations")
