@@ -279,18 +279,8 @@
 
                 const isFinished = item.dataset.finished === "true";
                 const gameDate   = item.dataset.fullDate || null;
-                if (isFinished && gameDate) {
-                    fetch(`/api/match-lineup?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
-                        .then(r => r.json())
-                        .then(data => {
-                            // race 방어
-                            if (homeId !== _lastHome || awayId !== _lastAway) return;
-                            if (data && data.ready) {
-                                document.dispatchEvent(new CustomEvent("matchLineupLoaded", { detail: data }));
-                            }
-                        })
-                        .catch(() => {});
-
+                // match-extras는 finished 여부 무관하게 시도 — 데이터 있으면 카드, 없으면 자연스럽게 미표시
+                if (gameDate) {
                     fetch(`/api/match-extras?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
                         .then(r => r.json())
                         .then(data => {
@@ -300,6 +290,18 @@
                                 // pending 보관 — render() 완료(=pred-extras 생성) 후 자동 적용
                                 _pendingTactics = { data, homeId, awayId };
                                 tryRenderPendingTactics();
+                            }
+                        })
+                        .catch(() => {});
+                }
+                // 메인 전술판 자동 적용은 finished 매치만 (사용자가 라인업 보려고 한 거니까)
+                if (isFinished && gameDate) {
+                    fetch(`/api/match-lineup?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (homeId !== _lastHome || awayId !== _lastAway) return;
+                            if (data && data.ready) {
+                                document.dispatchEvent(new CustomEvent("matchLineupLoaded", { detail: data }));
                             }
                         })
                         .catch(() => {});
