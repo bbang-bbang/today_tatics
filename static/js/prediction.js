@@ -270,6 +270,9 @@
                 const homeId = item.dataset.home;
                 const awayId = item.dataset.away;
                 if (!homeId || !awayId || homeId === "null" || awayId === "null") return;
+                // 매치 카드 active 시각 피드백 (선택 매치 명시)
+                list.querySelectorAll(".kmc.kmc-active").forEach(el => el.classList.remove("kmc-active"));
+                item.classList.add("kmc-active");
                 section.classList.remove("hidden");
                 loadPrediction(homeId, awayId);
 
@@ -279,6 +282,8 @@
                     fetch(`/api/match-lineup?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
                         .then(r => r.json())
                         .then(data => {
+                            // race 방어
+                            if (homeId !== _lastHome || awayId !== _lastAway) return;
                             if (data && data.ready) {
                                 document.dispatchEvent(new CustomEvent("matchLineupLoaded", { detail: data }));
                             }
@@ -288,6 +293,8 @@
                     fetch(`/api/match-extras?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
                         .then(r => r.json())
                         .then(data => {
+                            // race 방어
+                            if (homeId !== _lastHome || awayId !== _lastAway) return;
                             if (data && data.ready) {
                                 renderTacticsCard(data, homeId, awayId);
                             }
@@ -419,8 +426,14 @@
             fetch(`/api/predicted-lineup?teamId=${homeId}`).then(r => r.json()).catch(() => null),
             fetch(`/api/predicted-lineup?teamId=${awayId}`).then(r => r.json()).catch(() => null),
         ])
-            .then(([data, bt, hLineup, aLineup]) => render(data, homeId, awayId, bt, hLineup, aLineup))
-            .catch(() => { report.innerHTML = ""; });
+            .then(([data, bt, hLineup, aLineup]) => {
+                // race 방어: 응답 처리 시점에 다른 매치 선택됐다면 무시
+                if (homeId !== _lastHome || awayId !== _lastAway) return;
+                render(data, homeId, awayId, bt, hLineup, aLineup);
+            })
+            .catch(() => {
+                if (homeId === _lastHome && awayId === _lastAway) report.innerHTML = "";
+            });
     }
 
     // ── 예상 라인업 카드 ───────────────────────────────────

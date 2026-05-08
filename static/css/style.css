@@ -3707,6 +3707,11 @@ body {
     border-color: var(--border-subtle);
 }
 .kmc:active { transform: scale(0.98); }
+.kmc.kmc-active {
+    border-color: #7ecfff;
+    box-shadow: 0 0 0 2px rgba(126,207,255,0.35), 0 4px 12px rgba(0,0,0,0.3);
+    background: linear-gradient(180deg, rgba(126,207,255,0.06), transparent);
+}
 .kmc-upcoming { border-color: rgba(78,164,248,0.25); }
 .kmc-done     { opacity: 0.75; }
 .kmc-done:hover { opacity: 1; }
