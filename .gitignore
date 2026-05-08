@@ -31,3 +31,4 @@ Thumbs.db
 # SSH keys
 *.pem
 *.key
+.update_secret_local.txt

@@ -5729,11 +5729,15 @@ def get_update_status():
 
 @app.route("/api/trigger-update", methods=["POST"])
 def trigger_update():
+    # fail-closed: UPDATE_SECRET 미설정이면 엔드포인트 자체를 비활성화 (P7 권고)
     secret = os.environ.get("UPDATE_SECRET")
-    if secret:
-        token = request.headers.get("X-Update-Secret") or request.args.get("secret", "")
-        if token != secret:
-            return jsonify({"ok": False, "msg": "인증 실패"}), 403
+    if not secret:
+        return jsonify({"ok": False, "msg": "서비스 비활성화 (관리자 설정 필요)"}), 503
+    token = request.headers.get("X-Update-Secret") or request.args.get("secret", "")
+    # 상수 시간 비교로 타이밍 공격 방지
+    import hmac
+    if not hmac.compare_digest(token, secret):
+        return jsonify({"ok": False, "msg": "인증 실패"}), 403
     if _UPDATE_STATUS["running"]:
         return jsonify({"ok": False, "msg": "이미 실행 중입니다"})
     t = threading.Thread(target=_run_update_pipeline, kwargs={"triggered_by": "manual"}, daemon=True)

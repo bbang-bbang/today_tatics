@@ -1,16 +1,46 @@
+# Rate limit zone — IP당 분당 60 요청 (P7 권고, DoS 완화)
+limit_req_zone $binary_remote_addr zone=tt_general:10m rate=60r/m;
+# trigger-update는 더 엄격 — IP당 시간당 5회
+limit_req_zone $binary_remote_addr zone=tt_trigger:1m rate=5r/h;
+
 server {
     listen 80;
     server_name _;   # IP 직접 접근 허용 (도메인 있으면 여기에 입력)
+
+    # ── 보안 헤더 (P7 권고) ─────────────────────────────────
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    # HSTS는 HTTPS 적용 후 활성화: add_header Strict-Transport-Security "max-age=31536000" always;
+
+    # 서버 정보 노출 최소화
+    server_tokens off;
+
+    # 요청 본문 크기 제한 (saves/squads JSON, DoS 완화)
+    client_max_body_size 1m;
 
     # 정적 파일은 Nginx가 직접 서빙 (Flask 우회 → 빠름)
     location /static/ {
         alias /opt/today_tactics/static/;
         expires 1h;
         add_header Cache-Control "public";
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # 트리거 엔드포인트 — 강한 rate limit
+    location = /api/trigger-update {
+        limit_req zone=tt_trigger burst=2 nodelay;
+        proxy_pass         http://127.0.0.1:5000;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
     }
 
     # 나머지는 Gunicorn(Flask)으로 프록시
     location / {
+        limit_req zone=tt_general burst=20 nodelay;
         proxy_pass         http://127.0.0.1:5000;
         proxy_set_header   Host $host;
         proxy_set_header   X-Real-IP $remote_addr;
