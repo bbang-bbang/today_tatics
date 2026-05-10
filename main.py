@@ -2589,6 +2589,11 @@ def get_match_prediction():
     # 세트피스 분석 (fromSetPiece + penalty = 세트피스, regular = 오픈플레이, ownGoal = 별도)
     # ──────────────────────────────────────────────────────────────
     def setpiece_analysis(ss_id):
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='goal_events'")
+        if not cur.fetchone():
+            return {"goals_total": 0, "setpiece_goals": 0, "setpiece_pct": None,
+                    "penalty_goals": 0, "freekick_goals": 0,
+                    "conceded_total": 0, "setpiece_conceded": 0, "setpiece_conceded_pct": None}
         # 득점
         cur.execute("""
             SELECT COUNT(*),
@@ -5916,6 +5921,7 @@ def match_extras():
     cur = conn.cursor()
 
     ev = None
+    home_team = away_team = None
     if event_id:
         try:
             event_id = int(event_id)
@@ -5945,6 +5951,94 @@ def match_extras():
     else:
         conn.close()
         return jsonify({"error": "event_id or (date+home_slug+away_slug) required"}), 400
+
+    # ── Fallback 1: H2H 직전 맞대결 ───────────────────────────
+    fallback_date = None
+    fallback_type = None   # "h2h" | "recent"
+    fallback_reversed = False
+    each_fallback_data = None   # Fallback 2 결과 보관
+
+    if not ev and home_team and away_team:
+        h_ss = home_team["sofascore_id"]
+        a_ss = away_team["sofascore_id"]
+        ev_fb = cur.execute("""
+            SELECT e.id, e.date_ts, e.home_team_id
+            FROM events e
+            WHERE ((e.home_team_id = ? AND e.away_team_id = ?)
+                OR (e.home_team_id = ? AND e.away_team_id = ?))
+              AND e.home_score IS NOT NULL
+              AND EXISTS (SELECT 1 FROM match_avg_positions ap WHERE ap.event_id = e.id)
+            ORDER BY e.date_ts DESC
+            LIMIT 1
+        """, (h_ss, a_ss, a_ss, h_ss)).fetchone()
+        if ev_fb:
+            ev = ev_fb
+            fallback_date = datetime.fromtimestamp(ev_fb["date_ts"]).strftime("%Y-%m-%d")
+            fallback_type = "h2h"
+            fallback_reversed = (ev_fb["home_team_id"] != h_ss)
+        else:
+            # ── Fallback 2: 각 팀 최근 경기 개별 조합 ──────────────
+            def _team_recent_data(ss_id, want_is_home):
+                """팀의 최근 경기 avg_positions + shots, is_home을 want_is_home으로 정규화."""
+                row = cur.execute("""
+                    SELECT e.id, e.home_team_id FROM events e
+                    WHERE (e.home_team_id=? OR e.away_team_id=?)
+                      AND EXISTS(SELECT 1 FROM match_avg_positions ap WHERE ap.event_id=e.id)
+                    ORDER BY e.date_ts DESC LIMIT 1
+                """, (ss_id, ss_id)).fetchone()
+                if not row:
+                    return [], []
+                eid_r = row["id"]
+                src_ih = 1 if row["home_team_id"] == ss_id else 0
+                positions = [{
+                    **dict(p),
+                    "is_home": want_is_home,
+                } for p in cur.execute("""
+                    SELECT ap.player_id, ap.is_home, ap.is_substitute, ap.x, ap.y,
+                           COALESCE(p.name_ko, ml.player_name, p.name) AS name,
+                           ml.shirt_number, ml.position,
+                           COALESCE(ml.is_starter, 0) AS is_starter
+                    FROM match_avg_positions ap
+                    LEFT JOIN match_lineups ml ON ml.event_id=ap.event_id AND ml.player_id=ap.player_id
+                    LEFT JOIN players p ON p.id=ap.player_id
+                    WHERE ap.event_id=? AND ap.is_home=?
+                """, (eid_r, src_ih)).fetchall()]
+                shots = [{
+                    **dict(s),
+                    "is_home": want_is_home,
+                } for s in cur.execute("""
+                    SELECT s.shot_id, s.player_id, s.is_home, s.x, s.y,
+                           s.target_x, s.target_y, s.shot_type, s.body_part,
+                           s.situation, s.outcome, s.xg, s.time_min,
+                           COALESCE(p.name_ko, p.name) AS name
+                    FROM match_shotmap s
+                    LEFT JOIN players p ON p.id=s.player_id
+                    WHERE s.event_id=? AND s.is_home=?
+                """, (eid_r, src_ih)).fetchall()]
+                return positions, shots
+
+            h_pos, h_shots = _team_recent_data(h_ss, 1)
+            a_pos, a_shots = _team_recent_data(a_ss, 0)
+            if h_pos or a_pos:
+                each_fallback_data = {
+                    "avg_positions": h_pos + a_pos,
+                    "shots":         h_shots + a_shots,
+                }
+                fallback_type = "recent"
+
+    # Fallback 2 경로: ev 없이 각 팀 최근 경기 데이터로 직접 반환
+    if not ev and each_fallback_data:
+        conn.close()
+        return jsonify({
+            "ready":         True,
+            "event_id":      None,
+            "avg_positions": each_fallback_data["avg_positions"],
+            "shots":         each_fallback_data["shots"],
+            "subs":          [],
+            "fallback":      True,
+            "fallback_date": None,
+            "fallback_type": "recent",
+        })
 
     if not ev:
         conn.close()
@@ -6034,12 +6128,30 @@ def match_extras():
 
     conn.close()
 
+    def flip_home(rows, key="is_home"):
+        out = []
+        for r in rows:
+            d = dict(r) if not isinstance(r, dict) else r.copy()
+            d[key] = 0 if d.get(key) == 1 else 1
+            out.append(d)
+        return out
+
+    avg_positions = [dict(r) for r in pos_rows]
+    shots         = [dict(r) for r in shot_rows]
+    if fallback_reversed:
+        avg_positions = flip_home(avg_positions)
+        shots         = flip_home(shots)
+        subs = [{**s, "is_home": 0 if s["is_home"] == 1 else 1} for s in subs]
+
     return jsonify({
-        "ready": True,
-        "event_id": eid,
-        "avg_positions": [dict(r) for r in pos_rows],
-        "shots": [dict(r) for r in shot_rows],
-        "subs": subs,
+        "ready":         True,
+        "event_id":      eid,
+        "avg_positions": avg_positions,
+        "shots":         shots,
+        "subs":          subs,
+        "fallback":      fallback_date is not None,
+        "fallback_date": fallback_date,
+        "fallback_type": fallback_type,
     })
 
 

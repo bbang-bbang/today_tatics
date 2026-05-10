@@ -406,6 +406,7 @@
 
     function loadPrediction(homeId, awayId, gameDate) {
         _lastHome = homeId; _lastAway = awayId;
+        console.log(`[예측 시작] ${homeId} vs ${awayId} date=${gameDate}`);
         report.innerHTML = `<div class="pred-loading">분석 중...</div>`;
         const league = _inferLeague(homeId, awayId);
         // match-extras를 Promise.all에 통합 — render() 후 동기적으로 카드 추가, race 없음
@@ -415,22 +416,43 @@
                 .catch(() => null)
             : Promise.resolve(null);
         Promise.all([
-            fetch(`/api/match-prediction?homeTeam=${homeId}&awayTeam=${awayId}`).then(r => r.json()),
+            fetch(`/api/match-prediction?homeTeam=${homeId}&awayTeam=${awayId}`)
+                .then(r => { if (!r.ok) throw new Error(`prediction ${r.status}`); return r.json(); })
+                .catch(e => { console.error("[예측 API 실패]", e); return null; }),
             loadBacktest(league),
             fetch(`/api/predicted-lineup?teamId=${homeId}`).then(r => r.json()).catch(() => null),
             fetch(`/api/predicted-lineup?teamId=${awayId}`).then(r => r.json()).catch(() => null),
             extrasFetch,
         ])
             .then(([data, bt, hLineup, aLineup, extras]) => {
-                // race 방어: 응답 처리 시점에 다른 매치 선택됐다면 무시
                 if (homeId !== _lastHome || awayId !== _lastAway) return;
-                render(data, homeId, awayId, bt, hLineup, aLineup);
+                console.log("[예측 응답]", { data: !!data, home: !!data?.home, extras: !!extras });
+                if (!data || !data.home || !data.away) {
+                    console.error("[예측] data 누락:", data);
+                    report.innerHTML = `<div class="pred-loading" style="color:#f87171">예측 데이터 로드 실패 — 잠시 후 다시 시도해주세요.</div>`;
+                    return;
+                }
+                try {
+                    render(data, homeId, awayId, bt, hLineup, aLineup);
+                } catch (err) {
+                    console.error("[render 실패]", err);
+                    report.innerHTML = `<div class="pred-loading" style="color:#f87171">렌더 오류: ${err.message}</div>`;
+                    return;
+                }
                 if (extras && extras.ready) {
-                    renderTacticsCard(extras, homeId, awayId);
+                    try {
+                        renderTacticsCard(extras, homeId, awayId);
+                    } catch (err) {
+                        console.error("[전술보기 렌더 실패]", err);
+                    }
+                } else {
+                    console.warn("[전술보기] extras:", extras);
                 }
             })
-            .catch(() => {
-                if (homeId === _lastHome && awayId === _lastAway) report.innerHTML = "";
+            .catch(err => {
+                console.error("[Promise.all 실패]", err);
+                if (homeId === _lastHome && awayId === _lastAway)
+                    report.innerHTML = `<div class="pred-loading" style="color:#f87171">오류: ${err.message}</div>`;
             });
     }
 
@@ -895,10 +917,19 @@
                 </div>
             </div>` : "";
 
+        const fallbackBadge = extras.fallback
+            ? extras.fallback_type === "recent"
+                ? `<span class="pt-fallback-badge pt-fallback-recent">각 팀 최근 경기 기준</span>`
+                : `<span class="pt-fallback-badge">직전 H2H · ${extras.fallback_date}</span>`
+            : "";
+
         const html = `
         <div class="pred-tactics">
             <div class="pt-header">
-                <span class="pt-title">전술 보기</span>
+                <div class="pt-title-row">
+                    <span class="pt-title">전술 보기</span>
+                    ${fallbackBadge}
+                </div>
                 <div class="pt-filter-row">
                     <div class="pt-filter" role="tablist">
                         <button class="pt-filter-btn active" data-filter="all">전체</button>
