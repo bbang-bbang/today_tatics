@@ -917,18 +917,11 @@
                 </div>
             </div>` : "";
 
-        const fallbackBadge = extras.fallback
-            ? extras.fallback_type === "recent"
-                ? `<span class="pt-fallback-badge pt-fallback-recent">각 팀 최근 경기 기준</span>`
-                : `<span class="pt-fallback-badge">직전 H2H · ${extras.fallback_date}</span>`
-            : "";
-
         const html = `
         <div class="pred-tactics">
             <div class="pt-header">
                 <div class="pt-title-row">
                     <span class="pt-title">전술 보기</span>
-                    ${fallbackBadge}
                 </div>
                 <div class="pt-filter-row">
                     <div class="pt-filter" role="tablist">
