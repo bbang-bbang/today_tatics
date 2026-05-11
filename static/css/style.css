@@ -6439,6 +6439,62 @@ body.pr-expanded-lock {
 .ob-start-btn:hover  { background: #c73652; }
 .ob-start-btn:active { transform: scale(0.98); }
 
+/* === 예측 사후 분석 카드 =============================================== */
+.pred-retro {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: rgba(18,29,54,0.7);
+    border: 1px solid #2a3550;
+    border-radius: 10px;
+}
+.retro-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+}
+.retro-title { font-size: 14px; font-weight: 600; color: #e3eaff; }
+.retro-verdict {
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.retro-hit  { background: rgba(74,222,128,0.16); color: #4ade80; border: 1px solid rgba(74,222,128,0.35); }
+.retro-miss { background: rgba(248,113,113,0.16); color: #f87171; border: 1px solid rgba(248,113,113,0.35); }
+
+.retro-rows {
+    display: flex; flex-direction: column; gap: 7px;
+    padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.06);
+}
+.retro-row {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12.5px; line-height: 1.4;
+}
+.rr-label  { min-width: 92px; color: #8a96b8; font-size: 11px; letter-spacing: 0.02em; }
+.rr-pred   { color: #c8d2e8; }
+.rr-pred em { font-style: normal; color: #7a8aaf; font-size: 11px; }
+.rr-arrow  { color: #4a5670; font-size: 11px; }
+.rr-actual { color: #fff; font-weight: 600; }
+.rr-tag    {
+    margin-left: 6px;
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 10.5px; font-weight: 600;
+}
+.rr-tag-exact { background: rgba(74,222,128,0.18); color: #4ade80; }
+.rr-tag-top3  { background: rgba(251,191,36,0.18); color: #facc15; }
+.rr-tag-near  { background: rgba(120,140,180,0.18); color: #aab4cf; }
+
+.retro-pins {
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; flex-direction: column; gap: 5px;
+}
+.retro-pin {
+    font-size: 12px; color: #c8d2e8;
+    padding: 4px 0;
+    line-height: 1.4;
+}
+
 /* === 전술 보기 (avg_positions + shotmap) ============================== */
 .pred-tactics {
     margin-top: 14px;

@@ -421,10 +421,15 @@
         console.log(`[예측 시작] ${homeId} vs ${awayId} date=${gameDate} finished=${isFinished}`);
         report.innerHTML = `<div class="pred-loading">분석 중...</div>`;
         const league = _inferLeague(homeId, awayId);
-        // 전술 보기는 종료된 과거 경기에서만 — 예정 경기는 SofaScore 데이터 없음
+        // 전술 보기 + 사후 분석은 종료된 과거 경기에서만
         const extrasFetch = (isFinished && gameDate)
             ? fetch(`/api/match-extras?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
                 .then(r => r.json())
+                .catch(() => null)
+            : Promise.resolve(null);
+        const retroFetch = (isFinished && gameDate)
+            ? fetch(`/api/match-retrospective?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
+                .then(r => r.ok ? r.json() : null)
                 .catch(() => null)
             : Promise.resolve(null);
         Promise.all([
@@ -435,10 +440,10 @@
             fetch(`/api/predicted-lineup?teamId=${homeId}`).then(r => r.json()).catch(() => null),
             fetch(`/api/predicted-lineup?teamId=${awayId}`).then(r => r.json()).catch(() => null),
             extrasFetch,
+            retroFetch,
         ])
-            .then(([data, bt, hLineup, aLineup, extras]) => {
+            .then(([data, bt, hLineup, aLineup, extras, retro]) => {
                 if (homeId !== _lastHome || awayId !== _lastAway) return;
-                console.log("[예측 응답]", { data: !!data, home: !!data?.home, extras: !!extras });
                 if (!data || !data.home || !data.away) {
                     console.error("[예측] data 누락:", data);
                     report.innerHTML = `<div class="pred-loading" style="color:#f87171">예측 데이터 로드 실패 — 잠시 후 다시 시도해주세요.</div>`;
@@ -451,14 +456,13 @@
                     report.innerHTML = `<div class="pred-loading" style="color:#f87171">렌더 오류: ${err.message}</div>`;
                     return;
                 }
+                if (retro && retro.ready) {
+                    try { renderRetroCard(data, retro, homeId, awayId); }
+                    catch (err) { console.error("[사후분석 렌더 실패]", err); }
+                }
                 if (extras && extras.ready) {
-                    try {
-                        renderTacticsCard(extras, homeId, awayId);
-                    } catch (err) {
-                        console.error("[전술보기 렌더 실패]", err);
-                    }
-                } else {
-                    console.warn("[전술보기] extras:", extras);
+                    try { renderTacticsCard(extras, homeId, awayId); }
+                    catch (err) { console.error("[전술보기 렌더 실패]", err); }
                 }
             })
             .catch(err => {
@@ -896,6 +900,109 @@
     }
 
     let _lastHome = null, _lastAway = null;
+
+    // ── 예측 사후 분석 카드 ─────────────────────────────────
+    function renderRetroCard(predData, retro, homeId, awayId) {
+        const wrap = report.querySelector(".pred-extras");
+        if (!wrap) return;
+        const old = wrap.querySelector(".pred-retro");
+        if (old) old.remove();
+
+        const home = predData.home, away = predData.away, pred = predData.prediction;
+        const result = retro.result;
+        const xg = retro.xg;
+
+        // 1X2 적중 판정
+        const predMax = Math.max(pred.home, pred.draw, pred.away);
+        const predOut = pred.home === predMax ? "home" : pred.draw === predMax ? "draw" : "away";
+        const actOut = result.home > result.away ? "home" : result.home < result.away ? "away" : "draw";
+        const hit1x2 = predOut === actOut;
+        const labelMap = { home: home.name + " 승", draw: "무승부", away: away.name + " 승" };
+        const predPctMap = { home: pred.home, draw: pred.draw, away: pred.away };
+
+        // 스코어 적중
+        const exp = predictedScore(home, away, pred.home, predData.poisson);
+        const topScores = predData.top_scores || [];
+        const exactHit = topScores.length > 0
+            && topScores[0].home === result.home && topScores[0].away === result.away;
+        const top3Hit = topScores.slice(0, 3).some(s => s.home === result.home && s.away === result.away);
+        const expGap = Math.abs((parseFloat(exp.home) + parseFloat(exp.away)) - (result.home + result.away));
+
+        // 핀인 생성
+        const pins = [];
+        // xG-실득 괴리
+        if (xg.home > 0 && result.home - xg.home >= 0.8)
+            pins.push(`⚡ ${home.name} 결정력 폭발 — xG ${xg.home.toFixed(1)} 대비 ${result.home}득점`);
+        else if (xg.home > 0 && xg.home - result.home >= 0.8 && result.home === 0)
+            pins.push(`💧 ${home.name} 마무리 부진 — xG ${xg.home.toFixed(1)} 만들고도 무득점`);
+        if (xg.away > 0 && result.away - xg.away >= 0.8)
+            pins.push(`⚡ ${away.name} 결정력 폭발 — xG ${xg.away.toFixed(1)} 대비 ${result.away}득점`);
+        else if (xg.away > 0 && xg.away - result.away >= 0.8 && result.away === 0)
+            pins.push(`💧 ${away.name} 마무리 부진 — xG ${xg.away.toFixed(1)} 만들고도 무득점`);
+        // 세트피스
+        if (retro.setpiece.home > 0)
+            pins.push(`🎯 ${home.name} 세트피스 ${retro.setpiece.home}골`);
+        if (retro.setpiece.away > 0)
+            pins.push(`🎯 ${away.name} 세트피스 ${retro.setpiece.away}골`);
+        // PK / 자책골
+        if (retro.penalty.home > 0)
+            pins.push(`⚽ ${home.name} PK ${retro.penalty.home}골`);
+        if (retro.penalty.away > 0)
+            pins.push(`⚽ ${away.name} PK ${retro.penalty.away}골`);
+        if (retro.owngoal.home > 0)
+            pins.push(`💔 ${away.name} 자책골로 ${home.name} 득점`);
+        if (retro.owngoal.away > 0)
+            pins.push(`💔 ${home.name} 자책골로 ${away.name} 득점`);
+        // 조기 퇴장
+        if (retro.redcard.earliest_min != null && retro.redcard.earliest_min < 70) {
+            const side = retro.redcard.home > 0 ? home.name : away.name;
+            pins.push(`🟥 ${side} ${retro.redcard.earliest_min}' 퇴장 — 인원 우위/열세 영향`);
+        }
+        // 무승부에 예측 빗나간 케이스
+        if (!hit1x2 && actOut === "draw")
+            pins.push(`🤝 무승부 가능성(${pred.draw}%) 빗나감 — 양 팀 결정력 균형`);
+
+        // 스코어 태그
+        let scoreTag, scoreTagClass;
+        if (exactHit) { scoreTag = "정확"; scoreTagClass = "rr-tag-exact"; }
+        else if (top3Hit) { scoreTag = "TOP3"; scoreTagClass = "rr-tag-top3"; }
+        else { scoreTag = `±${expGap.toFixed(1)}골`; scoreTagClass = "rr-tag-near"; }
+
+        const html = `
+        <div class="pred-retro">
+            <div class="retro-header">
+                <span class="retro-title">🎯 예측 후기</span>
+                <span class="retro-verdict ${hit1x2 ? "retro-hit" : "retro-miss"}">
+                    ${hit1x2 ? "✅ 적중" : "❌ 빗나감"}
+                </span>
+            </div>
+            <div class="retro-rows">
+                <div class="retro-row">
+                    <span class="rr-label">1X2</span>
+                    <span class="rr-pred">${labelMap[predOut]} <em>(${predPctMap[predOut]}%)</em></span>
+                    <span class="rr-arrow">→</span>
+                    <span class="rr-actual">${labelMap[actOut]}</span>
+                </div>
+                <div class="retro-row">
+                    <span class="rr-label">스코어</span>
+                    <span class="rr-pred">${exp.home}-${exp.away} 예상</span>
+                    <span class="rr-arrow">→</span>
+                    <span class="rr-actual">${result.home}-${result.away} 실제</span>
+                    <span class="rr-tag ${scoreTagClass}">${scoreTag}</span>
+                </div>
+                ${(xg.home || xg.away) ? `
+                <div class="retro-row">
+                    <span class="rr-label">xG (실제 슛 ${xg.shots_home + xg.shots_away}개)</span>
+                    <span class="rr-actual">${xg.home.toFixed(2)} - ${xg.away.toFixed(2)}</span>
+                </div>` : ""}
+            </div>
+            ${pins.length ? `
+            <div class="retro-pins">
+                ${pins.map(p => `<div class="retro-pin">${p}</div>`).join("")}
+            </div>` : ""}
+        </div>`;
+        wrap.insertAdjacentHTML("beforeend", html);
+    }
 
     // ── 전술 보기 카드 (평균 포지션 + 슛맵) ─────────────────
     function renderTacticsCard(extras, homeId, awayId) {

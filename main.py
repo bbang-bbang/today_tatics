@@ -6095,6 +6095,115 @@ def match_extras():
     })
 
 
+@app.route("/api/match-retrospective")
+def match_retrospective():
+    """finished 매치 사후 분석 — 실제 결과 + xG/세트피스/PK/자책골/레드카드.
+    프론트가 prediction 응답과 비교해 적중·실패 핀인을 생성한다.
+    """
+    event_id = request.args.get("event_id", "").strip()
+    date_str = request.args.get("date", "").strip()
+    home_slug = request.args.get("home_slug", "").strip()
+    away_slug = request.args.get("away_slug", "").strip()
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    ev = None
+    if event_id:
+        try:
+            event_id = int(event_id)
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "event_id must be int"}), 400
+        ev = cur.execute("""
+            SELECT id, home_score, away_score FROM events WHERE id = ?
+        """, (event_id,)).fetchone()
+    elif date_str and home_slug and away_slug:
+        dt_str = date_str.replace(".", "-")
+        try:
+            dt = datetime.strptime(dt_str, "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "invalid date"}), 400
+        start_ts, end_ts = int(dt.timestamp()), int(dt.timestamp()) + 86400
+        home_team = next((t for t in TEAMS if t["id"] == home_slug), None)
+        away_team = next((t for t in TEAMS if t["id"] == away_slug), None)
+        if not home_team or not away_team:
+            conn.close()
+            return jsonify({"error": "unknown team slug"}), 400
+        ev = cur.execute("""
+            SELECT id, home_score, away_score FROM events
+            WHERE date_ts >= ? AND date_ts < ?
+              AND home_team_id = ? AND away_team_id = ?
+            LIMIT 1
+        """, (start_ts, end_ts, home_team["sofascore_id"], away_team["sofascore_id"])).fetchone()
+    else:
+        conn.close()
+        return jsonify({"error": "event_id or (date+home_slug+away_slug) required"}), 400
+
+    if not ev or ev["home_score"] is None or ev["away_score"] is None:
+        conn.close()
+        return jsonify({"ready": False, "reason": "not_finished"}), 404
+
+    eid = ev["id"]
+
+    # xG sum (shotmap 기반, K1/K2 공통)
+    xg_row = cur.execute("""
+        SELECT
+            ROUND(SUM(CASE WHEN is_home=1 THEN COALESCE(xg,0) ELSE 0 END), 2) AS xg_home,
+            ROUND(SUM(CASE WHEN is_home=0 THEN COALESCE(xg,0) ELSE 0 END), 2) AS xg_away,
+            SUM(CASE WHEN is_home=1 THEN 1 ELSE 0 END) AS shots_home,
+            SUM(CASE WHEN is_home=0 THEN 1 ELSE 0 END) AS shots_away,
+            SUM(CASE WHEN is_home=1 AND shot_type='goal' THEN 1 ELSE 0 END) AS goals_home_shotmap,
+            SUM(CASE WHEN is_home=0 AND shot_type='goal' THEN 1 ELSE 0 END) AS goals_away_shotmap
+        FROM match_shotmap WHERE event_id = ?
+    """, (eid,)).fetchone()
+
+    # 골 incidents
+    g_row = cur.execute("""
+        SELECT
+            SUM(CASE WHEN is_home=1 AND goal_type='fromSetPiece' THEN 1 ELSE 0 END) AS sp_home,
+            SUM(CASE WHEN is_home=0 AND goal_type='fromSetPiece' THEN 1 ELSE 0 END) AS sp_away,
+            SUM(CASE WHEN is_home=1 AND goal_type='penalty' THEN 1 ELSE 0 END) AS pk_home,
+            SUM(CASE WHEN is_home=0 AND goal_type='penalty' THEN 1 ELSE 0 END) AS pk_away,
+            SUM(CASE WHEN is_home=1 AND is_own_goal=1 THEN 1 ELSE 0 END) AS og_home,
+            SUM(CASE WHEN is_home=0 AND is_own_goal=1 THEN 1 ELSE 0 END) AS og_away
+        FROM goal_events WHERE event_id = ?
+    """, (eid,)).fetchone()
+
+    # 레드카드 (조기 퇴장이 매치 흐름에 영향)
+    rc_row = cur.execute("""
+        SELECT
+            SUM(CASE WHEN is_home=1 AND card_type IN ('red','yellowRed') THEN 1 ELSE 0 END) AS rc_home,
+            SUM(CASE WHEN is_home=0 AND card_type IN ('red','yellowRed') THEN 1 ELSE 0 END) AS rc_away,
+            MIN(CASE WHEN card_type IN ('red','yellowRed') THEN minute END) AS earliest_min
+        FROM card_events WHERE event_id = ?
+    """, (eid,)).fetchone()
+
+    conn.close()
+
+    return jsonify({
+        "ready": True,
+        "event_id": eid,
+        "result": {"home": ev["home_score"], "away": ev["away_score"]},
+        "xg": {
+            "home": xg_row["xg_home"] or 0,
+            "away": xg_row["xg_away"] or 0,
+            "shots_home": xg_row["shots_home"] or 0,
+            "shots_away": xg_row["shots_away"] or 0,
+        },
+        "setpiece": {"home": g_row["sp_home"] or 0, "away": g_row["sp_away"] or 0},
+        "penalty":  {"home": g_row["pk_home"] or 0, "away": g_row["pk_away"] or 0},
+        "owngoal":  {"home": g_row["og_home"] or 0, "away": g_row["og_away"] or 0},
+        "redcard":  {
+            "home": rc_row["rc_home"] or 0,
+            "away": rc_row["rc_away"] or 0,
+            "earliest_min": rc_row["earliest_min"],
+        },
+    })
+
+
 @app.route("/api/update-status")
 def get_update_status():
     return jsonify(_UPDATE_STATUS)
