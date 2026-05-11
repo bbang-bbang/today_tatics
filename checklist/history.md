@@ -2603,3 +2603,5 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-11 15:49:52 | git push origin main 2>&1 | tail -3
 - 2026-05-11 15:50:06 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o ConnectTimeout=15 rocky@<IP-REDACTED> "cd /opt/today_tactics && git pull -q && git log -1 --oneline && sudo systemctl restart today_tactics && sleep 2 && sudo systemctl is-active today_tactics" 2>&1 | grep -v "post-quantum\|store now\|openssh.com"
 - 2026-05-11 15:54:24 | node -e "new Function(require('fs').readFileSync('static/js/prediction.js','utf8')); console.log('JS OK')" && python -c "import py_compile; py_compile.compile('main.py', doraise=True); print('PY OK')"
+- 2026-05-11 15:55:13 | curl -sm 10 "https://today-tactics.co.kr/api/match-retrospective?date=2026-05-03&home_slug=suwon_fc&away_slug=suwon" | python -m json.tool 2>&1 | head -40
+- 2026-05-11 15:55:26 | curl -sm 10 "https://today-tactics.co.kr/api/match-retrospective?date=2026-05-09&home_slug=jeju&away_slug=fcseoul" | python -m json.tool 2>&1 | head -30
