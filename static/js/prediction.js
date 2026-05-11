@@ -298,6 +298,10 @@
             section.classList.add("hidden");
             return;
         }
+        // 매치 카드로 이미 같은 매치 로딩 중이면 무시 (race로 extras를 null로 덮어쓰는 것 방지).
+        // 흐름: 매치 클릭 → matchLineupLoaded → fhud-name textContent 변경 → MutationObserver → 여기.
+        // 이 경로로 들어오면 gameDate=null로 재호출되어 전술보기 카드 사라짐.
+        if (e.detail.home.id === _lastHome && e.detail.away.id === _lastAway) return;
         section.classList.remove("hidden");
         // 팀 선택만 → 매치 컨텍스트(=날짜) 없음, 전술 보기 카드 미표시
         loadPrediction(e.detail.home.id, e.detail.away.id, null, false);
