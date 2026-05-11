@@ -69,6 +69,23 @@ sqlite3 players.db "SELECT DISTINCT m.player_id FROM match_player_stats m LEFT J
 
 ---
 
+### [ ] synthetic event `90333089` 정리 — 2026-02-21 Jeonbuk vs Daejeon
+**왜**: 90- prefix는 synthetic event. score(2-0)는 들어가있지만 lineup/avg_positions/shotmap 모두 0. SofaScore에 매치 페이지 자체가 없어 데이터 회복 불가. 슈퍼컵 추정. 사용자가 클릭하면 finished인데 전술 카드 미표시 → 혼란.
+**무엇**: events.id=90333089 DB에서 직접 삭제 또는 `replace_synthetic_events.py` 재실행으로 정상 ID 교체 시도. (5/8에 동명의 매치 1건 처리한 적 있음 — 그건 다른 미래 매치였음)
+**비용**: 5분 (확인 후 DELETE)
+
+---
+
+### [ ] 5/9 K1 2매치 전술 데이터 — Gimcheon vs Incheon, Gwangju vs Gangwon
+**왜**: 5/9 K1 R12 2매치 SofaScore avg_positions/shotmap 아직 미공개. lineup만 있음. 5/11 백필 시도해도 SofaScore 자체 데이터 없어 skip됨.
+**무엇**: 며칠 후(SofaScore 처리 후) 수동 재실행 또는 다음 cron 자동 재시도:
+```bash
+ssh ... "cd /opt/today_tactics && /opt/today_tactics/venv/bin/python crawlers/fetch_match_extras.py --league K1 --days 7"
+```
+**비용**: 1분
+
+---
+
 ### [ ] 5/5 K1 R11 3매치 히트맵
 **왜**: 강원-포항, 대전-인천, 김천-울산 — SofaScore 처리 지연으로 0 pts.
 **무엇**: 다음 월요일 cron이 STEP 6에서 자동 재시도. 안 될 경우 수동:
