@@ -5984,18 +5984,18 @@ def match_extras():
         ORDER BY s.time_min, s.shot_id
     """, (eid,)).fetchall()
 
-    # 교체 추정 — match_player_stats(minutes_played) + match_lineups(is_starter)
-    # 정확한 substitution_events 테이블이 없어 시각은 90-mins 근사. 같은 시각·팀 그룹 내
-    # OUT/IN 페어 매칭(zip).
+    # 교체 추정 — match_lineups 기반(모든 등록 선수) + mps LEFT JOIN으로 mins 부여.
+    # mps row 없는 sub도 lineup에 있으면 잡힘 (mins=0이면 안 들어간 케이스라 IN 분류 제외).
+    # 정확한 substitution_events 테이블이 없어 시각은 OUT mins 또는 90-IN mins 근사.
     sub_rows = cur.execute("""
-        SELECT mps.player_id, mps.team_id, mps.is_home, mps.minutes_played,
+        SELECT ml.player_id, ml.is_home,
+               COALESCE(mps.minutes_played, 0) AS minutes_played,
                COALESCE(p.name_ko, ml.player_name, p.name) AS name,
-               ml.shirt_number, ml.position,
-               COALESCE(ml.is_starter, 0) AS is_starter
-        FROM match_player_stats mps
-        LEFT JOIN match_lineups ml ON ml.event_id=mps.event_id AND ml.player_id=mps.player_id
-        LEFT JOIN players p ON p.id=mps.player_id
-        WHERE mps.event_id = ? AND mps.minutes_played > 0
+               ml.shirt_number, ml.position, ml.is_starter
+        FROM match_lineups ml
+        LEFT JOIN match_player_stats mps ON mps.event_id=ml.event_id AND mps.player_id=ml.player_id
+        LEFT JOIN players p ON p.id=ml.player_id
+        WHERE ml.event_id = ?
     """, (eid,)).fetchall()
 
     # is_home별로 OUT/IN 분리 후 mins으로 페어 매칭 (out.mins + in.mins ≈ 90)
