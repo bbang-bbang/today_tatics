@@ -35,6 +35,14 @@
     };
     function tc(slug) { return SLUG_COLOR[slug] || { p:"#334", a:"#aaa", e:"" }; }
 
+    // 전술 보기 키트 색: /api/teams로 main.py의 TEAMS 직접 가져옴.
+    // primary/secondary/accent/border_home/border_away 포함 — 메인 전술판과 동일 시스템.
+    const _teamKit = {};
+    fetch("/api/teams").then(r => r.json()).then(arr => {
+        if (Array.isArray(arr)) arr.forEach(t => { _teamKit[t.id] = t; });
+    }).catch(() => {});
+    function kit(slug) { return _teamKit[slug] || null; }
+
     // 한글 short_name → slug (29팀, K1+K2)
     const KO_TO_SLUG = {
         "울산":"ulsan","포항":"pohang","제주":"jeju","전북":"jeonbuk","FC서울":"fcseoul",
@@ -892,8 +900,17 @@
     // ── 전술 보기 카드 (평균 포지션 + 슛맵) ─────────────────
     function renderTacticsCard(extras, homeId, awayId) {
         const hc = tc(homeId), ac = tc(awayId);
-        const homeColor = hc.p || "#4ea4f8";
-        const awayColor = ac.p || "#b87ef8";
+        // 키트 색 (메인 전술판과 동일 규칙): 홈 팀=home 키트(primary), 어웨이=away 키트(흰색 + border_away)
+        const hKit = kit(homeId), aKit = kit(awayId);
+        const homeFill   = (hKit && hKit.primary) || hc.p || "#4ea4f8";
+        const homeStroke = (hKit && (hKit.border_home || hKit.secondary)) || "#ffffff";
+        const homeText   = "#ffffff";
+        const awayFill   = "#ffffff";
+        const awayStroke = (aKit && (aKit.border_away || aKit.primary)) || ac.p || "#b87ef8";
+        const awayText   = "#000000";
+        // 헤더/패널 색 표기는 fill 색 사용 (홈=team primary, 어웨이=흰색은 가독성 떨어져 stroke 색으로)
+        const homeColor = homeFill;
+        const awayColor = awayStroke;
 
         // 기존 pred-extras 안에 카드 삽입 (중복 방지)
         const wrap = report.querySelector(".pred-extras");
@@ -1007,8 +1024,10 @@
                 filter === "home" ? s.is_home === 1 : s.is_home === 0
             );
             try {
-                drawAvgPositions(avgCanvas, positions, homeColor, awayColor);
-                drawShotmap(shotCanvas, shots, homeColor, awayColor, tooltip);
+                const homeKit = { fill: homeFill, stroke: homeStroke, text: homeText };
+                const awayKit = { fill: awayFill, stroke: awayStroke, text: awayText };
+                drawAvgPositions(avgCanvas, positions, homeKit, awayKit);
+                drawShotmap(shotCanvas, shots, homeKit, awayKit, tooltip);
             } catch (err) {
                 console.error("[전술 보기 redraw 실패]", err);
             }
@@ -1070,27 +1089,27 @@
         ];
     }
 
-    function drawAvgPositions(canvas, positions, hColor, aColor) {
+    function drawAvgPositions(canvas, positions, homeKit, awayKit) {
         const ctx = canvas.getContext("2d");
         const w = canvas.width, h = canvas.height;
         drawPitch(ctx, w, h);
 
-        // 토글로 분리하므로 점 스타일은 선발/교체 IN 동일하게 통일 (모두 현재 출장 선수)
+        // 홈=home 키트(primary fill + border_home), 어웨이=away 키트(흰색 fill + border_away)
         for (const p of positions) {
             if (p.x == null || p.y == null) continue;
             const [px, py] = mapPos(p.x, p.y, p.is_home === 1, w, h);
-            const color = p.is_home === 1 ? hColor : aColor;
+            const k = p.is_home === 1 ? homeKit : awayKit;
 
-            ctx.fillStyle = color;
+            ctx.fillStyle = k.fill;
             ctx.beginPath();
             ctx.arc(px, py, 13, 0, Math.PI * 2);
             ctx.fill();
-            ctx.strokeStyle = "#fff";
-            ctx.lineWidth = 1.2;
+            ctx.strokeStyle = k.stroke;
+            ctx.lineWidth = p.is_home === 1 ? 1.4 : 2.2;  // 어웨이 흰색 fill은 border 두껍게
             ctx.stroke();
 
-            // 등번호
-            ctx.fillStyle = "#fff";
+            // 등번호 — fill 명도에 따라 자동 (홈=흰색, 어웨이=검은색)
+            ctx.fillStyle = k.text;
             ctx.font = "bold 11px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
@@ -1113,13 +1132,14 @@
         post:  "#f87171",
     };
 
-    function drawShotmap(canvas, shots, hColor, aColor, tooltip) {
+    function drawShotmap(canvas, shots, homeKit, awayKit, tooltip) {
         const ctx = canvas.getContext("2d");
         const w = canvas.width, h = canvas.height;
         drawPitch(ctx, w, h);
 
         // SofaScore shotmap 좌표는 "공격 골 = x=0"이라 avg_positions(자기 골=x=0)과 반대.
         // shot.x를 (100 - shot.x)로 뒤집어 같은 좌표계로 맞춘 뒤 mapPos에 전달.
+        // 슛 ring = 키트 stroke 색 (홈/어웨이 구분)
         const drawShots = [];
         for (const s of shots) {
             if (s.x == null || s.y == null) continue;
@@ -1134,7 +1154,7 @@
             ctx.arc(px, py, r, 0, Math.PI * 2);
             ctx.fill();
             ctx.globalAlpha = 1;
-            ctx.strokeStyle = isHome ? hColor : aColor;
+            ctx.strokeStyle = isHome ? homeKit.stroke : awayKit.stroke;
             ctx.lineWidth = 1.6;
             ctx.stroke();
 
