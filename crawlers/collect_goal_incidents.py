@@ -66,6 +66,27 @@ def init_table(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ce_event  ON card_events(event_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ce_player ON card_events(player_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ce_team   ON card_events(team_id)")
+
+    # 교체 이벤트 테이블 — SofaScore incidents의 substitution 직접 적재
+    # mins 추정 기반 페어 매칭 대체 (정확도 ↑)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sub_events (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id       INTEGER NOT NULL,
+            team_id        INTEGER NOT NULL,
+            is_home        INTEGER DEFAULT 0,
+            minute         INTEGER,
+            added_time     INTEGER DEFAULT 0,
+            player_in_id   INTEGER,
+            player_in_name TEXT,
+            player_out_id  INTEGER,
+            player_out_name TEXT,
+            injury         INTEGER DEFAULT 0,
+            UNIQUE(event_id, player_in_id, player_out_id, minute)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_se_event ON sub_events(event_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_se_team  ON sub_events(team_id)")
     conn.commit()
 
 async def api(page, path):
@@ -169,6 +190,7 @@ async def main():
             if args.refetch:
                 cur.execute("DELETE FROM goal_events WHERE event_id=?", (eid,))
                 cur.execute("DELETE FROM card_events WHERE event_id=?", (eid,))
+                cur.execute("DELETE FROM sub_events  WHERE event_id=?", (eid,))
 
             rows_inserted = 0
             for inc in data["incidents"]:
@@ -193,6 +215,28 @@ async def main():
                             VALUES (?,?,?,?,?,?,?,?,?)
                         """, (eid, team_id, pid, pname, minute, added_time,
                               is_home, inc_class, reason))
+                    except Exception:
+                        pass
+                    continue
+
+                # ── 교체 이벤트 처리 ──
+                if inc_type == "substitution":
+                    minute     = inc.get("time", 0) or 0
+                    added_time = inc.get("addedTime", 0) or 0
+                    is_home    = 1 if inc.get("isHome") else 0
+                    p_in       = inc.get("playerIn")  or {}
+                    p_out      = inc.get("playerOut") or {}
+                    injury     = 1 if inc.get("injury") else 0
+                    team_id    = ev["home_team_id"] if is_home else ev["away_team_id"]
+                    try:
+                        cur.execute("""
+                            INSERT OR IGNORE INTO sub_events
+                            (event_id, team_id, is_home, minute, added_time,
+                             player_in_id, player_in_name, player_out_id, player_out_name, injury)
+                            VALUES (?,?,?,?,?,?,?,?,?,?)
+                        """, (eid, team_id, is_home, minute, added_time,
+                              p_in.get("id"), p_in.get("name", ""),
+                              p_out.get("id"), p_out.get("name", ""), injury))
                     except Exception:
                         pass
                     continue

@@ -5984,65 +5984,105 @@ def match_extras():
         ORDER BY s.time_min, s.shot_id
     """, (eid,)).fetchall()
 
-    # 교체 추정 — match_lineups 기반(모든 등록 선수) + mps LEFT JOIN으로 mins 부여.
-    # mps row 없는 sub도 lineup에 있으면 잡힘 (mins=0이면 안 들어간 케이스라 IN 분류 제외).
-    # 정확한 substitution_events 테이블이 없어 시각은 OUT mins 또는 90-IN mins 근사.
-    sub_rows = cur.execute("""
-        SELECT ml.player_id, ml.is_home,
-               COALESCE(mps.minutes_played, 0) AS minutes_played,
-               COALESCE(p.name_ko, ml.player_name, p.name) AS name,
-               ml.shirt_number, ml.position, ml.is_starter
-        FROM match_lineups ml
-        LEFT JOIN match_player_stats mps ON mps.event_id=ml.event_id AND mps.player_id=ml.player_id
-        LEFT JOIN players p ON p.id=ml.player_id
-        WHERE ml.event_id = ?
-    """, (eid,)).fetchall()
+    # 교체 — SofaScore /incidents의 substitution event 직접 사용 (정확).
+    # sub_events 테이블이 비어있는 옛 매치는 mins 추정 fallback.
+    sub_events_check = cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='sub_events'"
+    ).fetchone()
+    real_subs = []
+    if sub_events_check:
+        real_subs = cur.execute("""
+            SELECT se.is_home, se.minute, se.added_time,
+                   se.player_in_id,  COALESCE(p_in.name_ko,  se.player_in_name,  p_in.name)  AS in_name,
+                   ml_in.shirt_number  AS in_shirt,  ml_in.position  AS in_pos,
+                   se.player_out_id, COALESCE(p_out.name_ko, se.player_out_name, p_out.name) AS out_name,
+                   ml_out.shirt_number AS out_shirt, ml_out.position AS out_pos
+            FROM sub_events se
+            LEFT JOIN players p_in  ON p_in.id  = se.player_in_id
+            LEFT JOIN players p_out ON p_out.id = se.player_out_id
+            LEFT JOIN match_lineups ml_in
+                ON ml_in.event_id  = se.event_id AND ml_in.player_id  = se.player_in_id
+            LEFT JOIN match_lineups ml_out
+                ON ml_out.event_id = se.event_id AND ml_out.player_id = se.player_out_id
+            WHERE se.event_id = ?
+            ORDER BY se.minute, se.added_time
+        """, (eid,)).fetchall()
 
-    # is_home별로 OUT/IN 분리 후 mins으로 페어 매칭 (out.mins + in.mins ≈ 90)
-    # 가드:
-    #  - mins=0 starter: mps 미수집 매치(특히 직전 일 K1) → 모든 starter가 mins=0이라
-    #    잘못 OUT 분류되는 것을 방지. 이 경우 sub 리스트 비우는 게 정확.
-    #  - 임계값 90: 풀타임 출장은 mins=90 또는 90+(추가시간). 89↓이면 실제 교체됨.
-    from collections import defaultdict
-    side_groups = defaultdict(lambda: {"out": [], "in": []})
-    for r in sub_rows:
-        mins = r["minutes_played"] or 0
-        info = {
-            "mins": mins,
-            "player_id": r["player_id"],
-            "name": r["name"] or "",
-            "shirt": r["shirt_number"],
-            "position": r["position"],
-        }
-        if r["is_starter"] and 0 < mins < 90:
-            side_groups[r["is_home"]]["out"].append(info)
-        elif not r["is_starter"] and mins > 0:
-            side_groups[r["is_home"]]["in"].append(info)
-
-    subs = []
-    for is_home, grp in side_groups.items():
-        # OUT 일찍 교체된 순(mins 큰 순), IN 짧게 들어온 순(mins 작은 순) — 합 ≈ 90
-        outs = sorted(grp["out"], key=lambda x: -x["mins"])
-        ins  = sorted(grp["in"],  key=lambda x:  x["mins"])
-        n = max(len(outs), len(ins))
-        for k in range(n):
-            o = outs[k] if k < len(outs) else None
-            i = ins[k]  if k < len(ins)  else None
-            # 교체 시각: OUT 기준 mins (= 교체 시각). IN만 있으면 90-mins 근사.
-            if o:
-                minute = max(1, o["mins"])
-            elif i:
-                minute = max(1, 90 - i["mins"])
-            else:
-                minute = 0
+    if real_subs:
+        # SofaScore 직접 데이터 사용 — OUT/IN/시각 정확
+        subs = []
+        for r in real_subs:
+            minute = int(r["minute"] or 0)
             subs.append({
-                "is_home": int(is_home),
-                "minute":  int(minute),
-                "out":     o,
-                "in":      i,
+                "is_home": int(r["is_home"] or 0),
+                "minute":  minute,
+                "out": {
+                    "player_id": r["player_out_id"],
+                    "name":      r["out_name"] or "",
+                    "shirt":     r["out_shirt"],
+                    "position":  r["out_pos"],
+                    "mins":      minute,
+                } if r["player_out_id"] else None,
+                "in": {
+                    "player_id": r["player_in_id"],
+                    "name":      r["in_name"] or "",
+                    "shirt":     r["in_shirt"],
+                    "position":  r["in_pos"],
+                    "mins":      max(0, 90 - minute),
+                } if r["player_in_id"] else None,
             })
+        subs.sort(key=lambda s: (s["minute"], -s["is_home"]))
+    else:
+        # Fallback — sub_events 미수집 매치는 mps mins 추정 페어 매칭
+        sub_rows = cur.execute("""
+            SELECT ml.player_id, ml.is_home,
+                   COALESCE(mps.minutes_played, 0) AS minutes_played,
+                   COALESCE(p.name_ko, ml.player_name, p.name) AS name,
+                   ml.shirt_number, ml.position, ml.is_starter
+            FROM match_lineups ml
+            LEFT JOIN match_player_stats mps ON mps.event_id=ml.event_id AND mps.player_id=ml.player_id
+            LEFT JOIN players p ON p.id=ml.player_id
+            WHERE ml.event_id = ?
+        """, (eid,)).fetchall()
 
-    subs.sort(key=lambda s: (s["minute"], -s["is_home"]))
+        from collections import defaultdict
+        side_groups = defaultdict(lambda: {"out": [], "in": []})
+        for r in sub_rows:
+            mins = r["minutes_played"] or 0
+            info = {
+                "mins": mins,
+                "player_id": r["player_id"],
+                "name": r["name"] or "",
+                "shirt": r["shirt_number"],
+                "position": r["position"],
+            }
+            if r["is_starter"] and 0 < mins < 90:
+                side_groups[r["is_home"]]["out"].append(info)
+            elif not r["is_starter"] and mins > 0:
+                side_groups[r["is_home"]]["in"].append(info)
+
+        subs = []
+        for is_home, grp in side_groups.items():
+            outs = sorted(grp["out"], key=lambda x: -x["mins"])
+            ins  = sorted(grp["in"],  key=lambda x:  x["mins"])
+            n = max(len(outs), len(ins))
+            for k in range(n):
+                o = outs[k] if k < len(outs) else None
+                i = ins[k]  if k < len(ins)  else None
+                if o:
+                    minute = max(1, o["mins"])
+                elif i:
+                    minute = max(1, 90 - i["mins"])
+                else:
+                    minute = 0
+                subs.append({
+                    "is_home": int(is_home),
+                    "minute":  int(minute),
+                    "out":     o,
+                    "in":      i,
+                })
+
+        subs.sort(key=lambda s: (s["minute"], -s["is_home"]))
 
     conn.close()
 
