@@ -933,10 +933,10 @@
                         <button class="pt-filter-btn" data-filter="home" style="--c:${homeColor}">홈</button>
                         <button class="pt-filter-btn" data-filter="away" style="--c:${awayColor}">원정</button>
                     </div>
-                    <span class="pt-legend">
-                        <span class="pt-legend-dot pt-legend-starter"></span>선발
-                        <span class="pt-legend-dot pt-legend-sub"></span>교체 IN
-                    </span>
+                    <div class="pt-mode" role="tablist">
+                        <button class="pt-mode-btn active" data-mode="starter">선발</button>
+                        <button class="pt-mode-btn" data-mode="sub">교체</button>
+                    </div>
                 </div>
             </div>
             ${subsPanelHtml}
@@ -944,7 +944,7 @@
                 <div class="pt-panel">
                     <div class="pt-panel-title">평균 포지션</div>
                     <canvas class="pt-canvas" id="pt-canvas-avg" width="520" height="340"></canvas>
-                    <div class="pt-hint">선발 = 진한 원, 교체 IN = 점선 작은 원 (홈 좌→우 / 원정 우→좌 공격)</div>
+                    <div class="pt-hint">홈 좌→우 / 원정 우→좌 공격</div>
                 </div>
                 <div class="pt-panel">
                     <div class="pt-panel-title">슛맵 <span class="pt-shotcount"></span></div>
@@ -975,15 +975,24 @@
             const active = card.querySelector(".pt-filter-btn.active");
             return active ? active.dataset.filter : "all";
         }
+        function getCurrentMode() {
+            const active = card.querySelector(".pt-mode-btn.active");
+            return active ? active.dataset.mode : "starter";
+        }
 
         function redraw() {
             const filter = getCurrentFilter();
-            // 항상 선발 + 교체 IN 모두 표시 (시각 구분으로 분리)
+            const mode   = getCurrentMode();
+            // 출전 종류 필터 (선발/교체) + 팀 필터 동시 적용
             const positions = allPositions.filter(p => {
-                if (filter === "home") return p.is_home === 1;
-                if (filter === "away") return p.is_home === 0;
+                if (filter === "home" && p.is_home !== 1) return false;
+                if (filter === "away" && p.is_home !== 0) return false;
+                const isStarter = p.is_starter === 1 || p.is_starter === true;
+                if (mode === "starter" && !isStarter) return false;
+                if (mode === "sub"     &&  isStarter) return false;
                 return true;
             });
+            // 슛맵은 출전 종류와 무관 (선수가 누구건 슛은 슛)
             const shots = allShots.filter(s =>
                 filter === "all" ? true :
                 filter === "home" ? s.is_home === 1 : s.is_home === 0
@@ -1002,6 +1011,13 @@
         card.querySelectorAll(".pt-filter-btn").forEach(btn => {
             btn.addEventListener("click", () => {
                 card.querySelectorAll(".pt-filter-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                redraw();
+            });
+        });
+        card.querySelectorAll(".pt-mode-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                card.querySelectorAll(".pt-mode-btn").forEach(b => b.classList.remove("active"));
                 btn.classList.add("active");
                 redraw();
             });
@@ -1050,27 +1066,19 @@
         const w = canvas.width, h = canvas.height;
         drawPitch(ctx, w, h);
 
-        // redraw()에서 이미 starter/교체 필터링됨. 여기선 그대로 그림
+        // 선발/교체는 토글로 분리되어 표시되므로 점 스타일은 통일 (가독성 우선)
         for (const p of positions) {
             if (p.x == null || p.y == null) continue;
             const [px, py] = mapPos(p.x, p.y, p.is_home === 1, w, h);
             const color = p.is_home === 1 ? hColor : aColor;
 
-            // 점 (교체 출전자는 작고 반투명 + 대시 테두리)
-            // is_starter 정보 없으면 모두 starter 간주
-            const isSub = (p.is_starter !== undefined) && p.is_starter !== 1;
-            const radius = isSub ? 9 : 13;
             ctx.fillStyle = color;
-            ctx.globalAlpha = isSub ? 0.55 : 1;
             ctx.beginPath();
-            ctx.arc(px, py, radius, 0, Math.PI * 2);
+            ctx.arc(px, py, 13, 0, Math.PI * 2);
             ctx.fill();
-            ctx.globalAlpha = 1;
             ctx.strokeStyle = "#fff";
             ctx.lineWidth = 1.2;
-            if (isSub) ctx.setLineDash([3, 3]);
             ctx.stroke();
-            ctx.setLineDash([]);
 
             // 등번호
             ctx.fillStyle = "#fff";

@@ -5999,6 +5999,10 @@ def match_extras():
     """, (eid,)).fetchall()
 
     # is_home별로 OUT/IN 분리 후 mins으로 페어 매칭 (out.mins + in.mins ≈ 90)
+    # 가드:
+    #  - mins=0 starter: mps 미수집 매치(특히 직전 일 K1) → 모든 starter가 mins=0이라
+    #    잘못 OUT 분류되는 것을 방지. 이 경우 sub 리스트 비우는 게 정확.
+    #  - 임계값 90: 풀타임 출장은 mins=90 또는 90+(추가시간). 89↓이면 실제 교체됨.
     from collections import defaultdict
     side_groups = defaultdict(lambda: {"out": [], "in": []})
     for r in sub_rows:
@@ -6010,7 +6014,7 @@ def match_extras():
             "shirt": r["shirt_number"],
             "position": r["position"],
         }
-        if r["is_starter"] and mins < 88:
+        if r["is_starter"] and 0 < mins < 90:
             side_groups[r["is_home"]]["out"].append(info)
         elif not r["is_starter"] and mins > 0:
             side_groups[r["is_home"]]["in"].append(info)

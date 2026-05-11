@@ -6487,25 +6487,23 @@ body.pr-expanded-lock {
     display: flex; align-items: center; gap: 12px;
 }
 
-/* 범례 — 선발 vs 교체 IN */
-.pt-legend {
-    display: inline-flex; align-items: center; gap: 10px;
-    font-size: 10.5px; color: #aab4cf;
-    user-select: none;
+/* 선발/교체 토글 (pt-filter와 동일 스타일) */
+.pt-mode {
+    display: inline-flex; gap: 0; border: 1px solid #2a3550;
+    border-radius: 6px; overflow: hidden;
 }
-.pt-legend-dot {
-    display: inline-block;
-    width: 11px; height: 11px;
-    border-radius: 50%;
-    vertical-align: middle;
-    margin-right: 4px;
-    background: #4ea4f8;
-    border: 1.5px solid #fff;
+.pt-mode-btn {
+    padding: 5px 14px; font-size: 11px; font-weight: 500;
+    background: transparent; color: #8a96b8; border: none;
+    cursor: pointer; transition: background 0.15s, color 0.15s;
+    border-right: 1px solid #2a3550;
 }
-.pt-legend-sub {
-    background: rgba(78,164,248,0.55);
-    border: 1.5px dashed #fff;
-    width: 9px; height: 9px;
+.pt-mode-btn:last-child { border-right: none; }
+.pt-mode-btn:hover { background: rgba(255,255,255,0.04); color: #c8d2e8; }
+.pt-mode-btn.active {
+    background: #2a3550;
+    color: #fff;
+    font-weight: 600;
 }
 
 /* 교체 패널 — 평균 포지션 위 */
