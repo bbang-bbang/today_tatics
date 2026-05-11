@@ -135,17 +135,52 @@ for team_slug, tdata in all_players.items():
 print(f"\n완료(phase1): 총 신규 {total_inserted}건, 업데이트 {total_updated}건")
 
 
-# ── Phase 2: lineup 기반 fallback ────────────────────────────
-# phase1은 mps.team_id로만 매칭하므로 player의 team_id가 외부(2군/유스/K3 등)로
-# 등록된 케이스를 놓침. 예: Ann Juwan(player.team_id=241802=Seoul E-Land 2군 추정)
-# 이지만 K2 매치엔 #70 등번호로 seouland 소속처럼 출장.
+# ── Phase 2a: players.team_id 기반 매핑 ──────────────────────
+# player의 master team_id가 K1/K2 SS_ID인 경우(=정상 등록 외국인 포함) 그 팀 portal의
+# #shirt_number 매칭 우선. lineup historic(2b)보다 정확 — 예: Leonard Pllana
+# (team_id=hwaseong, shirt=11)는 historic으로는 gimpo #11(35경기)이 빈도 최다라
+# 잘못된 "이시헌"이 매핑될 위험. master team_id 기준이면 hwaseong #11 = "플라나" 정답.
+
+ss_id_to_slug = {v: k for k, v in ss_id_map.items()}
+ss_ids_csv = ",".join(str(v) for v in ss_id_map.values())
+
+cur.execute(f"""
+    SELECT id, team_id, shirt_number, name, name_ko
+    FROM players
+    WHERE team_id IN ({ss_ids_csv})
+      AND shirt_number IS NOT NULL
+      AND (name_ko IS NULL OR name_ko='' OR name_ko GLOB '*[a-zA-Z]*')
+""")
+phase2a_targets = cur.fetchall()
+phase2a_updated = 0
+for pid, tid, shirt, name, name_ko in phase2a_targets:
+    slug = ss_id_to_slug.get(tid)
+    if not slug:
+        continue
+    portal = all_players.get(slug, {}).get("players", [])
+    match = next((p for p in portal if p.get("number") == shirt and p.get("name")), None)
+    if not match:
+        continue
+    cur.execute(
+        "UPDATE players SET name_ko=? WHERE id=? AND ("
+        " name_ko IS NULL OR name_ko='' OR name_ko GLOB '*[a-zA-Z]*')",
+        (match["name"], pid)
+    )
+    if cur.rowcount:
+        phase2a_updated += 1
+conn.commit()
+print(f"완료(phase2a master team_id 기반): name_ko {phase2a_updated}건")
+
+
+# ── Phase 2b: lineup 기반 fallback ───────────────────────────
+# phase2a로도 못 잡은 케이스 — player.team_id가 외부(2군/유스/K3) 또는 NULL.
+# 예: Ann Juwan(player.team_id=241802=Seoul E-Land 2군 추정)이지만 K2 매치엔
+# #70 등번호로 seouland 소속처럼 출장.
 #
-# Phase 2는 lineup에서 실제 출장한 매치 정보를 통해 K1/K2 소속 팀을 역추적:
+# lineup에서 실제 출장한 매치 정보를 통해 K1/K2 소속 팀을 역추적:
 #   - is_home=1 → events.home_team_id (K1/K2 SS_ID)
 #   - is_home=0 → events.away_team_id
 # 같은 선수가 여러 매치 출장 시 빈도 최다 팀 사용.
-
-ss_id_to_slug = {v: k for k, v in ss_id_map.items()}
 
 cur.execute(f"""
     SELECT
@@ -156,10 +191,11 @@ cur.execute(f"""
     FROM match_lineups ml
     JOIN events e ON e.id = ml.event_id
     LEFT JOIN players p ON p.id = ml.player_id
-    WHERE (p.name_ko IS NULL OR p.name_ko = '')
+    WHERE (p.name_ko IS NULL OR p.name_ko = '' OR p.name_ko GLOB '*[a-zA-Z]*')
       AND ml.shirt_number IS NOT NULL
+      AND (p.team_id IS NULL OR p.team_id NOT IN ({ss_ids_csv}))
       AND (CASE WHEN ml.is_home=1 THEN e.home_team_id ELSE e.away_team_id END)
-          IN ({','.join(str(v) for v in ss_id_map.values())})
+          IN ({ss_ids_csv})
     GROUP BY ml.player_id, ml.shirt_number, k_team_ss
     ORDER BY ml.player_id, cnt DESC
 """)
@@ -171,7 +207,7 @@ for pid, shirt, k_team_ss, cnt in rows:
     if pid not in best_for_pid:
         best_for_pid[pid] = (k_team_ss, shirt, cnt)
 
-phase2_updated = 0
+phase2b_updated = 0
 for pid, (k_team_ss, shirt, _) in best_for_pid.items():
     slug = ss_id_to_slug.get(k_team_ss)
     if not slug:
@@ -190,8 +226,8 @@ for pid, (k_team_ss, shirt, _) in best_for_pid.items():
         (match["name"], pid)
     )
     if cur.rowcount:
-        phase2_updated += 1
+        phase2b_updated += 1
 
 conn.commit()
-print(f"완료(phase2 lineup 기반): name_ko {phase2_updated}건")
+print(f"완료(phase2b lineup historic fallback): name_ko {phase2b_updated}건")
 conn.close()
