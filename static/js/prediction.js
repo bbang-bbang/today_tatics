@@ -934,8 +934,8 @@
                         <button class="pt-filter-btn" data-filter="away" style="--c:${awayColor}">원정</button>
                     </div>
                     <div class="pt-mode" role="tablist">
-                        <button class="pt-mode-btn active" data-mode="starter">선발만</button>
-                        <button class="pt-mode-btn" data-mode="all">교체 포함</button>
+                        <button class="pt-mode-btn active" data-mode="starter">선발</button>
+                        <button class="pt-mode-btn" data-mode="post">교체 후</button>
                     </div>
                 </div>
             </div>
@@ -970,6 +970,12 @@
 
         const allPositions = Array.isArray(extras.avg_positions) ? extras.avg_positions : [];
         const allShots     = Array.isArray(extras.shots)         ? extras.shots         : [];
+        // 교체 후 모드용 — OUT된 선발 player_id 집합 (교체로 빠진 사람 제외)
+        const outPids = new Set();
+        (Array.isArray(extras.subs) ? extras.subs : []).forEach(s => {
+            const pid = s && s.out && s.out.player_id;
+            if (pid) outPids.add(pid);
+        });
 
         function getCurrentFilter() {
             const active = card.querySelector(".pt-filter-btn.active");
@@ -984,13 +990,15 @@
             const filter = getCurrentFilter();
             const mode   = getCurrentMode();
             // 팀 필터 + 출전 종류 필터
-            //   - starter 모드: 선발 11명만 (기본, 가시성 우선)
-            //   - all     모드: 선발 + 교체 IN 모두 (점선·반투명으로 교체 시각 구분)
+            //   - starter 모드: 선발 11명만 (시작 라인업)
+            //   - post    모드: 선발 - OUT + 교체 IN = 현재 11명 (교체 반영 후)
             const positions = allPositions.filter(p => {
                 if (filter === "home" && p.is_home !== 1) return false;
                 if (filter === "away" && p.is_home !== 0) return false;
                 const isStarter = p.is_starter === 1 || p.is_starter === true;
-                if (mode === "starter" && !isStarter) return false;
+                if (mode === "starter") return isStarter;
+                // post: 선발 중 OUT 안 된 사람 + 교체로 들어온 sub
+                if (isStarter && outPids.has(p.player_id)) return false;
                 return true;
             });
             // 슛맵은 출전 종류와 무관 (선수가 누구건 슛은 슛)
