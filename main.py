@@ -2166,10 +2166,11 @@ def get_match_prediction():
         home_wr = hw / (hg or 1) * 100
         away_wr = aw / (ag or 1) * 100
 
-        # 최근 5경기 폼
+        # 최근 5경기 폼 — score NULL(미래 매치/취소 매치) 제외
         cur.execute("""
             SELECT home_score, away_score, home_team_id FROM events
             WHERE tournament_id=? AND (home_team_id=? OR away_team_id=?)
+              AND home_score IS NOT NULL AND away_score IS NOT NULL
             ORDER BY date_ts DESC LIMIT 5
         """, (tid_filter, ss_id, ss_id))
         recent = cur.fetchall()
