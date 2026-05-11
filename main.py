@@ -2295,10 +2295,11 @@ def get_match_prediction():
         xg_sum_val = (xg_row[1] or 0) if xg_row else 0
         xg_efficiency = (xg_actual / xg_sum_val) if xg_sum_val >= 3 else None
 
-        # ── 연속 기록 (최근 15경기 기준)
+        # ── 연속 기록 (최근 15경기 기준) — score NULL(미래 매치) 제외
         cur.execute("""
             SELECT home_score, away_score, home_team_id FROM events
             WHERE tournament_id=? AND (home_team_id=? OR away_team_id=?)
+              AND home_score IS NOT NULL AND away_score IS NOT NULL
             ORDER BY date_ts DESC LIMIT 15
         """, (tid_filter, ss_id, ss_id))
         streak_rows = cur.fetchall()
