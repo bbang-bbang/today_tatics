@@ -32,3 +32,4 @@ Thumbs.db
 *.pem
 *.key
 .update_secret_local.txt
+flask_test.log

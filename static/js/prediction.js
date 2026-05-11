@@ -275,7 +275,7 @@
                 section.classList.remove("hidden");
                 const gameDate = item.dataset.fullDate || null;
                 const isFinished = item.dataset.finished === "true";
-                loadPrediction(homeId, awayId, gameDate);
+                loadPrediction(homeId, awayId, gameDate, isFinished);
                 // 메인 전술판 자동 적용은 finished 매치만
                 if (isFinished && gameDate) {
                     fetch(`/api/match-lineup?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
@@ -300,7 +300,7 @@
         }
         section.classList.remove("hidden");
         // 팀 선택만 → 매치 컨텍스트(=날짜) 없음, 전술 보기 카드 미표시
-        loadPrediction(e.detail.home.id, e.detail.away.id, null);
+        loadPrediction(e.detail.home.id, e.detail.away.id, null, false);
     });
 
 
@@ -404,13 +404,13 @@
         return "k2";
     }
 
-    function loadPrediction(homeId, awayId, gameDate) {
+    function loadPrediction(homeId, awayId, gameDate, isFinished) {
         _lastHome = homeId; _lastAway = awayId;
-        console.log(`[예측 시작] ${homeId} vs ${awayId} date=${gameDate}`);
+        console.log(`[예측 시작] ${homeId} vs ${awayId} date=${gameDate} finished=${isFinished}`);
         report.innerHTML = `<div class="pred-loading">분석 중...</div>`;
         const league = _inferLeague(homeId, awayId);
-        // match-extras를 Promise.all에 통합 — render() 후 동기적으로 카드 추가, race 없음
-        const extrasFetch = gameDate
+        // 전술 보기는 종료된 과거 경기에서만 — 예정 경기는 SofaScore 데이터 없음
+        const extrasFetch = (isFinished && gameDate)
             ? fetch(`/api/match-extras?date=${encodeURIComponent(gameDate)}&home_slug=${encodeURIComponent(homeId)}&away_slug=${encodeURIComponent(awayId)}`)
                 .then(r => r.json())
                 .catch(() => null)

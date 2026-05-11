@@ -4,6 +4,32 @@
 
 ---
 
+## 2026-05-11 | 전술보기 H2H fallback — 예정 경기도 직전 맞대결 전술 표시
+
+### 진단
+- 예정 경기 클릭 시 `match-extras` → `event_not_found` → 전술보기 카드 미표시
+- events 테이블에 2026-05-05 이후 경기 0건 (아직 치러지지 않은 경기)
+- avg_positions/shotmap 데이터는 57,496/44,577건 정상 보유
+
+### 변경 내용
+**main.py** `/api/match-extras`:
+- 정확한 날짜+팀 이벤트 없으면 → avg_positions 있는 가장 최근 H2H 경기로 fallback
+- fallback 경기의 홈/원정이 요청과 반대이면 `is_home` 자동 반전 (공격 방향 보정)
+- 응답에 `fallback: true`, `fallback_date: "YYYY-MM-DD"` 추가
+
+**prediction.js** (v=28):
+- `extras.fallback` 시 헤더에 `직전 H2H · YYYY-MM-DD` 배지 표시
+
+**style.css** (v=32):
+- `.pt-fallback-badge` — amber 색상 배지 (사용자에게 fallback 임을 명확히 전달)
+
+### 검증
+- jeonbuk vs ulsan: 2026-04-04 fallback, reversed=False ✓
+- fcseoul vs pohang: 2026-03-18 fallback, reversed=True → is_home 반전 ✓
+- gangwon vs gimcheon: 2026-04-21 fallback, reversed=True → is_home 반전 ✓
+
+---
+
 ## 2026-05-01 | 성능 최적화 6종 — 인덱스·쿼리·캐싱·프론트
 
 ### PM 판단 근거
@@ -2383,3 +2409,103 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-08 15:42:48 | grep -n "missing\|NULL\|target\|where\|filter" crawlers/backfill_k1_mps.py | head -15
 - 2026-05-08 15:48:54 | node --check static/js/prediction.js 2>&1 && echo "OK" && grep -c "_pendingTactics\|tryRenderPendingTactics" static/js/prediction.js
 - 2026-05-08 15:49:21 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o ConnectTimeout=10 rocky@<IP-REDACTED> "cd /opt/today_tactics && git pull -q && echo OK" 2>&1 | grep -v "post-quantum\|store now\|openssh.com"
+- 2026-05-09 12:44:20 | git log --oneline -10
+- 2026-05-11 00:21:55 | which python3 2>/dev/null || which python 2>/dev/null; python3 --version 2>/dev/null || python --version 2>/dev/null
+- 2026-05-11 00:22:59 | ls /c/Users/BangEunHo/AppData/Local/Programs/Python/ 2>/dev/null && echo "---" ; ls /c/Python* 2>/dev/null ; find /c/Users/BangEunHo -name "flask" -maxdepth 6 2>/dev/null | head -5
+- 2026-05-11 00:23:08 | ls /c/Users/BangEunHo/anaconda3/Lib/site-packages/ | grep -i authlib; echo "---"; /c/Users/BangEunHo/anaconda3/python.exe --version
+- 2026-05-11 00:23:47 | find /c/Users/BangEunHo -name "authlib" -type d 2>/dev/null | head -5; find /c/Users/BangEunHo -name "python.exe" 2>/dev/null | grep -v "__pycache__" | head -10
+- 2026-05-11 00:24:31 | find /c/Users/BangEunHo -path "*/site-packages/authlib" -type d 2>/dev/null | head -5
+- 2026-05-11 00:24:37 | ls "/c/Users/BangEunHo/AppData/Local/Programs/"
+- 2026-05-11 00:25:44 | curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/
+- 2026-05-11 00:27:47 | curl -s "http://127.0.0.1:5000/api/k1/rounds" | python3 -c " / import sys, json / d = json.load(sys.stdin) / cur = d.get('current_round') / print('current_round:', cur) / rounds = d.get('rounds', []) / # current round 寃쎄린 異쒕젰 / for r in rounds: /     if r['round'] == cur: /         for g in r['games'][:5]: /             print(f\"  {g['date']} {g['home_id']} vs {g['away_id']} finished={g['finished']}\") /         break / " 2>&1
+- 2026-05-11 00:29:04 | curl -s "http://127.0.0.1:5000/api/match-extras?date=2026.05.09&home_slug=jeju&away_slug=fcseoul" | python3 -c " / import sys, json / d = json.load(sys.stdin) / print('ready:', d.get('ready')) / print('reason:', d.get('reason', '-')) / print('fallback:', d.get('fallback')) / print('fallback_date:', d.get('fallback_date')) / print('avg_positions:', len(d.get('avg_positions', []))) / " 2>&1
+- 2026-05-11 00:36:27 | python3 << 'EOF' / import urllib.request, json, sys /  / def check(date, home, away): /     url = f"http://127.0.0.1:5000/api/match-extras?date={date}&home_slug={home}&away_slug={away}" /     try: /         with urllib.request.urlopen(url, timeout=5) as r: /             d = json.loads(r.read()) /         if d.get("ready"): /             fb = f"H2H {d['fallback_date']}" if d.get("fallback") else "exact" /             return f"OK {fb} ({len(d.get('avg_positions',[]))})" /         else: /             return f"NO {d.get('reason','')}" /     except Exception as e: /         return f"ERR {e}" /  / rows = [ /     ("K1 R13","2026.05.09","jeju","fcseoul"), /     ("K1 R13","2026.05.09","gimcheon","incheon"), /     ("K1 R13","2026.05.09","gwangju","gangwon"), /     ("K1 R13","2026.05.09","daejeon","pohang"), /     ("K1 R13","2026.05.10","ulsan","bucheon"), /     ("K1 R13","2026.05.10","jeonbuk","anyang"), /     ("K1 R14","2026.05.12","gangwon","daejeon"), /     ("K1 R14","2026.05.12","gwangju","fcseoul"), /     ("K1 R14","2026.05.12","incheon","pohang"), /     ("K1 R14","2026.05.13","ulsan","jeju"), /     ("K1 R14","2026.05.13","anyang","gimcheon"), /     ("K1 R14","2026.05.13","bucheon","jeonbuk"), / ] / for label,d,h,a in rows: /     print(f"{label} {h} vs {a}: {check(d,h,a)}") / EOF
+- 2026-05-11 00:36:41 | python3 << 'EOF' / import urllib.request, json /  / def check(date, home, away): /     url = f"http://127.0.0.1:5000/api/match-extras?date={date}&home_slug={home}&away_slug={away}" /     try: /         with urllib.request.urlopen(url, timeout=5) as r: /             dd = json.loads(r.read()) /         if dd.get("ready"): /             fb = f"H2H {dd['fallback_date']}" if dd.get("fallback") else "exact" /             return f"OK {fb} ({len(dd.get('avg_positions',[]))})" /         else: /             return f"NO {dd.get('reason','')}" /     except Exception as e: /         return f"ERR {e}" /  / with urllib.request.urlopen("http://127.0.0.1:5000/api/k2/rounds", timeout=5) as r: /     d = json.loads(r.read()) /  / cur = d.get("current_round") / print(f"K2 current_round: {cur}") / for rnd in d.get("rounds", []): /     if rnd["round"] == cur: /         for g in rnd["games"]: /             res = check(g["date"], g["home_id"], g["away_id"]) /             print(f"  {g['home_id']} vs {g['away_id']}: {res}") /         break / EOF
+- 2026-05-11 01:32:15 | curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/api/match-extras?date=2026.05.05&home_slug=jeonbuk&away_slug=gwangju" / echo "" / curl -s "http://127.0.0.1:5000/api/match-extras?date=2026.05.05&home_slug=jeonbuk&away_slug=gwangju" | python3 -c "import sys,json; d=json.load(sys.stdin); print('ready:',d.get('ready'),'fallback:',d.get('fallback'),'avg:',len(d.get('avg_positions',[])))"
+- 2026-05-11 01:36:04 | curl -s "http://127.0.0.1:5000/api/match-extras?date=2026-05-10&slug=jeonbuk-gwangju" | python3 -c " / import sys, json / d = json.load(sys.stdin) / print('ready:', d.get('ready')) / print('fallback:', d.get('fallback')) / print('fallback_type:', d.get('fallback_type')) / print('fallback_date:', d.get('fallback_date')) / print('avg_positions count:', len(d.get('avg_positions', []))) / print('shots count:', len(d.get('shots', []))) / "
+- 2026-05-11 01:36:08 | curl -s "http://127.0.0.1:5000/api/match-extras?date=2026-05-10&slug=jeonbuk-gwangju" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))" | head -50
+- 2026-05-11 01:36:17 | curl -s "http://127.0.0.1:5000/api/teams" | python3 -c " / import sys, json / teams = json.load(sys.stdin) / k1 = [t for t in teams if t.get('league') == 'K1'] / for t in k1[:5]: /     print(t.get('id'), t.get('name')) / "
+- 2026-05-11 01:36:20 | curl -s "http://127.0.0.1:5000/api/teams" | python3 -c " / import sys, json / teams = json.load(sys.stdin) / for t in teams: /     if 'jeonbuk' in t.get('id','') or 'gwangju' in t.get('id',''): /         print(repr(t.get('id')), t.get('name')) / "
+- 2026-05-11 01:36:25 | curl -s "http://127.0.0.1:5000/api/match-extras?date=2026-05-10&home_slug=jeonbuk&away_slug=gwangju" | python3 -c " / import sys, json / d = json.load(sys.stdin) / print('ready:', d.get('ready')) / print('fallback:', d.get('fallback')) / print('fallback_type:', d.get('fallback_type')) / print('fallback_date:', d.get('fallback_date')) / print('avg_positions:', len(d.get('avg_positions', []))) / print('shots:', len(d.get('shots', []))) / if d.get('error'): /     print('ERROR:', d['error']) / "
+- 2026-05-11 02:04:08 | curl -s "http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon_fc&awayTeam=suwon" 2>&1 | head -100
+- 2026-05-11 02:04:12 | curl -s "http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon_fc&awayTeam=suwon" 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print('status ok - keys:', list(d.keys()))"
+- 2026-05-11 02:05:48 | for i in 1 2 3; do curl -s -o /dev/null -w "try $i: %{http_code}\n" "http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon_fc&awayTeam=suwon"; done
+- 2026-05-11 02:05:50 | curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/api/match-extras?date=2026-05-10&home_slug=suwon_fc&away_slug=suwon"
+- 2026-05-11 02:09:57 | curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon_fc&awayTeam=suwon" && echo " - server alive"
+- 2026-05-11 02:11:24 | ps aux 2>/dev/null | grep python | grep -v grep || tasklist 2>/dev/null | grep -i python
+- 2026-05-11 02:19:49 | taskkill /F /IM python.exe 2>/dev/null; taskkill /F /FI "IMAGENAME eq python3.exe" 2>/dev/null; sleep 2 && ps aux | grep python | grep -v grep | wc -l && echo "processes remaining"
+- 2026-05-11 02:21:13 | ps aux | grep python | grep -v grep | awk '{print $1}' | xargs kill -9 2>/dev/null; sleep 2; ps aux | grep python | grep -v grep | wc -l
+- 2026-05-11 02:21:28 | ps aux | grep python | grep -v grep
+- 2026-05-11 02:21:32 | curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon_fc&awayTeam=suwon"
+- 2026-05-11 02:22:36 | curl -s "http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon&awayTeam=busan" 2>&1
+- 2026-05-11 02:23:15 | curl -s "http://127.0.0.1:5000/api/k2/schedule" | python3 -c "import sys,json; d=json.load(sys.stdin); print('upcoming:', len(d.get('upcoming',[])), 'keys:', list(d.keys())[:5])" 2>&1 / curl -s "http://127.0.0.1:5000/api/k1/schedule" | python3 -c "import sys,json; d=json.load(sys.stdin); print('upcoming:', len(d.get('upcoming',[])), 'keys:', list(d.keys())[:5])" 2>&1
+- 2026-05-11 02:28:12 | curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/ && echo "" / curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon&awayTeam=busan" && echo "" / curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/static/js/prediction.js?v=31" && echo ""
+- 2026-05-11 02:32:45 | time curl -s -o /dev/null "http://127.0.0.1:5000/api/match-extras?date=2026-05-10&home_slug=suwon&away_slug=busan" && echo "done" / time curl -s -o /dev/null "http://127.0.0.1:5000/api/match-extras?date=2026-05-17&home_slug=suwon&away_slug=busan" && echo "done"
+- 2026-05-11 02:33:09 | curl -s "http://127.0.0.1:5000/api/k2/schedule" | python3 -c " / import sys, json / d = json.load(sys.stdin) / ups = d.get('upcoming', []) / for g in ups[:5]: /     print(repr(g.get('date')), g.get('home_id'), 'vs', g.get('away_id')) / "
+- 2026-05-11 02:33:18 | curl -s "http://127.0.0.1:5000/api/k2/schedule" | python3 -c " / import sys, json / d = json.load(sys.stdin) / ups = d.get('upcoming', []) / # suwon vs busan 李얘린 / for g in ups: /     if 'suwon' in g.get('home_id','') or 'busan' in g.get('home_id','') or 'suwon' in g.get('away_id','') or 'busan' in g.get('away_id',''): /         print(repr(g)) / "
+- 2026-05-11 02:33:44 | ps aux | grep -i nginx | grep -v grep | head -5 / # Check if nginx is running and what port / curl -s -o /dev/null -w "nginx-80: %{http_code}\n" http://127.0.0.1:80/api/match-prediction?homeTeam=suwon\&awayTeam=busan 2>/dev/null || echo "port 80: not reachable" / curl -s -o /dev/null -w "flask-5000: %{http_code}\n" http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon\&awayTeam=busan 2>/dev/null
+- 2026-05-11 02:36:56 | ps aux | grep -i nginx | grep -v grep / netstat -tlnp 2>/dev/null | grep -E '80|443|8080' | head -10 / ls /etc/nginx/sites-enabled/ 2>/dev/null || ls /etc/nginx/conf.d/ 2>/dev/null || echo "no nginx conf found"
+- 2026-05-11 02:54:16 | curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/api/prediction-backtest?league=k2&year=2026" && echo "" / curl -s "http://127.0.0.1:5000/api/prediction-backtest?league=k2&year=2026" | python3 -c "import sys,json; d=json.load(sys.stdin); print('ready:', d.get('ready'), 'keys:', list(d.keys())[:5])" 2>&1
+- 2026-05-11 02:54:19 | curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/api/predicted-lineup?teamId=suwon" && echo "" / curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:5000/api/predicted-lineup?teamId=busan" && echo ""
+- 2026-05-11 03:01:08 | curl -s -o /dev/null -w "%{http_code}" "https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=busan" && echo "" / curl -s "https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=busan" 2>&1 | head -50
+- 2026-05-11 03:01:17 | curl -v "https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=busan" 2>&1 | head -30
+- 2026-05-11 03:01:47 | python3 -c " / import urllib.request, ssl / ctx = ssl.create_default_context() / ctx.check_hostname = False / ctx.verify_mode = ssl.CERT_NONE / urls = [ /     'https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=busan', /     'https://today-tactics.co.kr/api/match-prediction?homeTeam=ulsan&awayTeam=pohang', /     'https://today-tactics.co.kr/api/match-prediction?homeTeam=jeonbuk&awayTeam=gwangju', /     'https://today-tactics.co.kr/api/teams', / ] / for url in urls: /     try: /         r = urllib.request.urlopen(url, context=ctx, timeout=10) /         print(url.split('?')[1] if '?' in url else 'teams', r.status) /     except Exception as e: /         print(url.split('?')[1] if '?' in url else 'teams', str(e)[:80]) / " 2>&1
+- 2026-05-11 03:18:53 | curl -sk --max-time 10 -w "\nHTTP_STATUS:%{http_code}" "https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=busan" 2>&1 | tail -5
+- 2026-05-11 03:18:57 | curl -v --max-time 10 "http://<IP-REDACTED>/api/match-prediction?homeTeam=suwon&awayTeam=busan" 2>&1 | head -20
+- 2026-05-11 03:19:03 | curl -skL --max-time 15 -w "\nHTTP_STATUS:%{http_code}" "https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=busan" 2>&1 | tail -3
+- 2026-05-11 03:19:06 | curl -v --max-time 15 "https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=busan" 2>&1 | head -30
+- 2026-05-11 03:19:12 | curl -skL --max-time 15 "https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=busan" 2>&1
+- 2026-05-11 03:21:16 | for port in 22 222 2222 22022 10022; do /   result=$(timeout 5 bash -c "echo > /dev/tcp/<IP-REDACTED>/$port" 2>&1) /   if [ $? -eq 0 ]; then /     echo "PORT $port: OPEN" /   else /     echo "PORT $port: CLOSED/TIMEOUT" /   fi / done
+- 2026-05-11 03:21:32 | curl -sk --max-time 10 -w "\nHTTP_STATUS:%{http_code}" "https://today-tactics.co.kr/" 2>&1 | tail -5
+- 2026-05-11 03:21:35 | curl -v --max-time 15 "https://today-tactics.co.kr/" 2>&1 | grep -E "(HTTP|Connected|SSL|TLS|error|Error)" | head -15
+- 2026-05-11 03:21:46 | git log --oneline -5
+- 2026-05-11 03:21:51 | git status && git log origin/main..HEAD --oneline 2>&1
+- 2026-05-11 03:37:38 | python3 -c " / import urllib.request, json / d = json.loads(urllib.request.urlopen('http://127.0.0.1:5000/api/match-extras?date=2026.02.21&home_slug=jeonbuk&away_slug=daejeon', timeout=5).read()) / print('ready:', d.get('ready')) / print('reason:', d.get('reason')) / print('event_id:', d.get('event_id')) / print('fallback:', d.get('fallback')) / print('avg_positions count:', len(d.get('avg_positions', []))) / " 2>&1
+- 2026-05-11 03:39:53 | git log --oneline --all | grep -v "20e0f5d\|41c6818" | head -5 && echo "---" && git show 0a08fcb --stat
+- 2026-05-11 03:40:03 | git log --oneline --before="2026-05-09" | head -20
+- 2026-05-11 03:40:27 | git log --all --oneline --diff-filter=A -- "*goal*" 2>/dev/null; echo "---"; git log --oneline --all -30 | head -30
+- 2026-05-11 03:40:34 | git show 789e08e --stat && echo "---DATE---" && git show 789e08e --format="%ci %s" | head -2
+- 2026-05-11 03:43:05 | python3 -c " / path = 'templates/index.html' / with open(path, encoding='utf-8') as f: /     c = f.read() / c = c.replace('prediction.js?v=32', 'prediction.js?v=33') / with open(path, 'w', encoding='utf-8') as f: /     f.write(c) / print('done') / "
+- 2026-05-11 11:21:16 | ls -lt checklist/ | head -20
+- 2026-05-11 11:22:58 | git log --since="2026-05-08" --until="2026-05-12" --pretty=format:"%h %ai %s" --reverse
+- 2026-05-11 11:22:59 | git log --since="2026-05-08" --pretty=format:"=== %h %ai %s ===" --stat --reverse
+- 2026-05-11 11:23:03 | git show --stat 21dd16c
+- 2026-05-11 11:23:04 | git show 64036e37 2>&1 | head -100; echo "---"; git show --stat 064de37 | head -30
+- 2026-05-11 11:23:04 | git show 20e0f5d -- main.py | head -150
+- 2026-05-11 11:23:08 | git show 640e2c4 --stat; echo "---DIFF---"; git show 640e2c4 -- main.py | head -120
+- 2026-05-11 11:23:09 | git show 4262c8a --stat; echo "---"; git show 868d8b3 -- deploy/today_tactics.nginx | head -80
+- 2026-05-11 11:23:24 | git show 064de37 -- main.py | head -80; echo "---"; git show 4041d08 -- deploy/today_tactics.nginx
+- 2026-05-11 11:23:25 | git show 41c6818 -- static/js/prediction.js | head -60; echo "---"; git show bfbce34 --stat
+- 2026-05-11 11:30:51 | tail -100 flask_test.log 2>&1
+- 2026-05-11 11:31:09 | grep -n "match-prediction\|match_prediction" flask_test.log | tail -30
+- 2026-05-11 11:31:25 | curl -s "http://127.0.0.1:5000/api/match-prediction?homeTeam=suwon&awayTeam=jeonnam" 2>&1 | head -100
+- 2026-05-11 11:31:38 | FLASK_DEV=1 LOGIN_REQUIRED=0 python main.py 2>&1 | head -1
+- 2026-05-11 11:31:44 | until curl -s -o /dev/null "http://127.0.0.1:5000/health"; do sleep 1; done; echo "ready"
+- 2026-05-11 11:32:45 | curl -s -w "\nSTATUS=%{http_code}\n" "http://127.0.0.1:5000/api/match-prediction?homeTeam=jeonbuk&awayTeam=ulsan" -o checklist/_pred_k1.json; python -c " / import json / d = json.load(open('checklist/_pred_k1.json', encoding='utf-8')) / print('top keys:', sorted(d.keys())) / print('home ok:', bool(d.get('home') and d.get('home', {}).get('name'))) / print('away ok:', bool(d.get('away') and d.get('away', {}).get('name'))) / print('prediction:', d.get('prediction')) / print('confidence:', d.get('confidence')) / print('setpiece h:', d.get('home',{}).get('setpiece')) / print('setpiece a:', d.get('away',{}).get('setpiece')) / "
+- 2026-05-11 11:33:26 | grep -c "match-prediction" flask_test.log; echo "---"; grep "match-prediction\|ERROR\|Error\|500\|Traceback" flask_test.log | tail -30
+- 2026-05-11 11:33:27 | grep -n "prediction-section\|prediction-report\|prediction-close" templates/index.html
+- 2026-05-11 11:33:57 | grep -B2 -A1 "match-extras" flask_test.log | head -30
+- 2026-05-11 11:34:08 | grep -rn "match-extras\|round-predictions" static/ templates/ 2>&1 | grep -v ".map"
+- 2026-05-11 11:34:23 | git log --oneline -- static/js/prediction.js | head -10; echo "---"; git log --oneline -- templates/index.html | head -10
+- 2026-05-11 11:34:23 | git diff 41c6818..HEAD -- static/js/prediction.js | head -80
+- 2026-05-11 11:34:44 | git show 0a08fcb -- static/js/prediction.js
+- 2026-05-11 11:35:31 | tail -30 "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\4a1480c7-e8dd-4de4-a15d-a89f4947e5f0\tasks\bcf9vs9fp.output"
+- 2026-05-11 11:35:38 | curl -s "http://127.0.0.1:5000/" -o /tmp/page.html 2>&1; wc -l /tmp/page.html; sleep 1; tail -20 "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\4a1480c7-e8dd-4de4-a15d-a89f4947e5f0\tasks\bcf9vs9fp.output"
+- 2026-05-11 11:35:44 | curl -sw "STATUS=%{http_code}\n" "http://127.0.0.1:5000/" -o /dev/null; cat "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\4a1480c7-e8dd-4de4-a15d-a89f4947e5f0\tasks\bcf9vs9fp.output" | tail -10
+- 2026-05-11 11:36:12 | node -e " / const fs = require('fs'); / const code = fs.readFileSync('static/js/prediction.js', 'utf8'); / try { /     new Function(code); /     console.log('OK - no syntax error'); / } catch (e) { /     console.log('SYNTAX ERROR:', e.message); / }" 2>&1
+- 2026-05-11 11:36:14 | curl -s "http://127.0.0.1:5000/static/js/prediction.js?v=34" -w "STATUS=%{http_code} SIZE=%{size_download}\n" -o /tmp/served.js; node -e "try { new Function(require('fs').readFileSync('/tmp/served.js','utf8')); console.log('SERVED OK'); } catch(e) { console.log('SYNTAX:', e.message); }"
+- 2026-05-11 11:36:44 | curl -sIm 10 "https://today-tactics.co.kr/static/js/prediction.js?v=34" 2>&1 | head -5; echo "---"; curl -sm 10 "https://today-tactics.co.kr/" 2>&1 | grep "prediction.js" | head -3
+- 2026-05-11 11:37:04 | curl -sm 10 -w "\nSTATUS=%{http_code}\n" "https://today-tactics.co.kr/api/match-prediction?homeTeam=ulsan&awayTeam=jeonbuk" -o /tmp/prod_pred.txt; head -c 300 /tmp/prod_pred.txt 2>&1; echo ""; echo "---K2---"; curl -sm 10 -w "STATUS=%{http_code}\n" "https://today-tactics.co.kr/api/match-prediction?homeTeam=suwon&awayTeam=jeonnam" -o /dev/null
+- 2026-05-11 11:37:16 | git log origin/main..HEAD --oneline 2>&1; echo "---"; git status -uno; echo "---REMOTE---"; git ls-remote origin main 2>&1 | head -3
+- 2026-05-11 11:37:34 | taskkill //F //PID $(curl -s "http://127.0.0.1:5000/health" -o /dev/null -w "" 2>&1; netstat -ano | grep ":5000.*LISTEN" | head -1 | awk '{print $5}') 2>&1 | head -2; rm -f checklist/_pred_test.json checklist/_pred_k1.json 2>&1
+- 2026-05-11 12:58:24 | ls deploy*.sh deploy/ 2>&1; echo "---"; ls -la ~/.ssh/ 2>&1 | head -10
+- 2026-05-11 12:58:35 | grep -n "root@\|ssh\|SERVER_IP\|211\.\|175\.\|123\.\|today-tactics" checklist/history.md | tail -30
+- 2026-05-11 12:58:50 | cat .gitignore 2>&1; echo "---LOCAL FILES---"; ls -la *.txt *.local *.env 2>&1 | head -20
+- 2026-05-11 12:58:55 | ls *.pem *.key 2>&1; echo "---"; ls .claude/ 2>&1; echo "---hooks---"; ls .claude/hooks/ 2>&1; echo "---settings---"; cat .claude/settings.local.json 2>&1 | head -40
+- 2026-05-11 12:59:07 | ls -la <KEY-REDACTED>; echo "---"; grep -l "today-project\|today_project" .claude/*.json deploy/*.sh 2>&1 | head -5; echo "---SETTINGS LOCAL---"; grep -i "rocky@\|today-project\|ssh -i\|HostName\|HOST" .claude/settings.local.json 2>&1 | head -20
+- 2026-05-11 12:59:15 | nslookup today-tactics.co.kr 2>&1 | tail -10
+- 2026-05-11 12:59:33 | git diff checklist/history.md | head -40; echo "==="; git status
+- 2026-05-11 12:59:41 | grep -n "rocky@\|<IP-REDACTED>\|<KEY-REDACTED>" checklist/history.md | tail -20 | head -10; echo "---"; git diff checklist/history.md | tail -80 | head -50
+- 2026-05-11 12:59:54 | grep -c "1\.201\.126\.200\|today-project\.pem" checklist/history.md
+- 2026-05-11 13:00:00 | python -c " / path = 'checklist/history.md' / with open(path, encoding='utf-8') as f: /     c = f.read() / c = c.replace('1.201.126.200', '<IP-REDACTED>').replace('today-project.pem', '<KEY-REDACTED>') / with open(path, 'w', encoding='utf-8') as f: /     f.write(c) / print('done') / "; grep -c "1\.201\.126\.200\|today-project\.pem" checklist/history.md
+- 2026-05-11 13:00:03 | echo "flask_test.log" >> .gitignore; git status
