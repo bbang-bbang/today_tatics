@@ -5476,7 +5476,11 @@ def _default_labels_for_rows(rows):
 
 
 def _build_formation_slots(formation, mirror=False):
-    """포메이션 문자열 -> [{slot_order, x, y, label}]. mirror=True면 원정팀용(x 반전)."""
+    """포메이션 문자열 -> [{slot_order, x, y, label}]. mirror=True면 원정팀용(x 반전).
+
+    y는 1.0-y로 반전 — SofaScore lineup의 slot_order(1번이 라이트백)와
+    broadcast 시각(라이트백=캔버스 아래쪽) 정합. POSITION_LABELS도 swap.
+    """
     if not formation or not all(part.isdigit() for part in formation.split("-")):
         formation = "4-4-2"  # fallback
     if formation in POSITION_LABELS:
@@ -5484,16 +5488,19 @@ def _build_formation_slots(formation, mirror=False):
     else:
         rows = [int(x) for x in formation.split("-")]
         labels = _default_labels_for_rows(rows)
+    # 라벨 L↔R swap — slot 1이 RB(라이트백)가 되도록 (SofaScore slot_order와 정합)
+    labels = mirror_labels(labels)
     positions = compute_formation(formation)
-    # 홈=좌측, 원정=우측(반전)
+    # 홈=좌측, 원정=우측(x 반전). y는 모두 1.0-y로 반전(broadcast 시각).
     slots = []
     for i, pos in enumerate(positions):
         x = round(1.0 - pos["x"], 3) if mirror else pos["x"]
+        y = round(1.0 - pos["y"], 3)
         label = labels[i] if i < len(labels) else ""
         if mirror:
             if label.startswith("L"): label = "R" + label[1:]
             elif label.startswith("R"): label = "L" + label[1:]
-        slots.append({"slot_order": i, "x": x, "y": pos["y"], "label": label})
+        slots.append({"slot_order": i, "x": x, "y": y, "label": label})
     return slots
 
 
