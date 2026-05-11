@@ -181,8 +181,12 @@ for pid, (k_team_ss, shirt, _) in best_for_pid.items():
     match = next((p for p in players_json if p.get("number") == shirt and p.get("name")), None)
     if not match:
         continue
+    # ASCII-only(영문) name_ko도 한글로 덮어쓰기 — phase1/이전 단계에서 영문이
+    # 들어간 케이스(예: 배서준→Seo-Joon Bae) 해소. 외국인은 portal name도 영문
+    # 이라 변화 없음(영문→영문).
     cur.execute(
-        "UPDATE players SET name_ko=? WHERE id=? AND (name_ko IS NULL OR name_ko='')",
+        "UPDATE players SET name_ko=? WHERE id=? AND ("
+        " name_ko IS NULL OR name_ko='' OR name_ko GLOB '*[a-zA-Z]*')",
         (match["name"], pid)
     )
     if cur.rowcount:
