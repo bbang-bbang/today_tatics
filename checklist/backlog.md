@@ -17,6 +17,31 @@ events.id=90333089 (Jeonbuk vs Daejeon, 슈퍼컵 추정)을 DB에서 직접 삭
 
 ---
 
+### [ ] shotmap 좌표 백엔드에서 정규화 — 프론트 변환 임시 fix
+**왜**: 5/11 작업으로 `drawShotmap`이 `mapPos(100 - s.x, ...)`로 호출하는 형태. SofaScore shotmap의 "공격 골 = x=0"을 avg_positions의 "자기 골 = x=0" 시스템으로 맞춤. 정상 동작하지만 좌표 시스템 불일치가 응답 JSON에 그대로 남아있어, 다른 클라이언트/외부 사용 시 재변환 필요.
+**무엇**: `/api/match-extras`의 `shots` 응답 생성 단계에서 `s["x"] = 100 - s["x"]` 일괄 변환. drawShotmap의 100-x 조정 제거.
+- 또는 더 깔끔하게는 crawler(`fetch_match_extras.py:save_shotmap`)에서 저장 시점에 변환하고 DB 데이터 1회 마이그레이션(44K row).
+**비용**: API만 변환하면 20분, DB 마이그레이션 포함 1h
+**효과**: 좌표 시스템 일관성, 향후 다른 시각화에서 재변환 불필요
+
+---
+
+### [ ] events.home_score/away_score 직접 비교 일괄 점검
+**왜**: 5/11 `team_stats()` form/streak 쿼리가 미래 매치(score=NULL) row와 NULL 비교로 500. 두 곳만 fix했지만 다른 endpoint(insights, analytics 등)에 잠복 가능. 미래 매치 row가 늘수록 노출 확률 증가.
+**무엇**: `grep -n "SELECT.*home_score.*away_score" main.py`로 전수 점검. 직접 비교 위치는 `home_score IS NOT NULL AND away_score IS NOT NULL` 필터 추가. SUM/CASE 기반은 NULL safe라 제외.
+**비용**: 30분
+**효과**: 미래 매치 schema row로 인한 500 사고 예방
+
+---
+
+### [ ] deploy 자동화 — push → 운영 pull/restart
+**왜**: 5/11 사고 — git push만 하고 운영 pull 안 해서 사용자가 8시간 동안 빈 화면. commit ≠ deploy. 한 줄로 묶는 자동화 필요.
+**무엇**: `make deploy` 또는 GitHub Actions(push 시 webhook으로 운영 trigger). 또는 `deploy.sh`를 `git push && ssh ... pull/restart` 형식으로 확장.
+**비용**: 30분~1h
+**효과**: 핫픽스 즉시 반영, 사고 줄임
+
+---
+
 ### [ ] mps.player_name NULL 73% — 데이터 수집 단계 결손
 **왜**: `match_player_stats.player_name` 67K row 중 49K(73%)가 NULL. 5/8 fallback으로 영문 이름 표시는 즉시 해결됐지만 근본 원인은 수집 코드.
 **무엇**: `crawlers/crawl_sofascore.py` / `crawl_match_stats.py` 점검 — SofaScore 응답 파싱 시 player.name이 어디서 빠지는지 추적.
