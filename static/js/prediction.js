@@ -1075,25 +1075,19 @@
         const w = canvas.width, h = canvas.height;
         drawPitch(ctx, w, h);
 
-        // starter 모드는 선발만이라 모두 같은 큰 원. all 모드는 교체 IN을 점선·반투명으로 분리.
+        // 토글로 분리하므로 점 스타일은 선발/교체 IN 동일하게 통일 (모두 현재 출장 선수)
         for (const p of positions) {
             if (p.x == null || p.y == null) continue;
             const [px, py] = mapPos(p.x, p.y, p.is_home === 1, w, h);
             const color = p.is_home === 1 ? hColor : aColor;
 
-            const isSub = (p.is_starter !== undefined) && p.is_starter !== 1;
-            const radius = isSub ? 9 : 13;
             ctx.fillStyle = color;
-            ctx.globalAlpha = isSub ? 0.55 : 1;
             ctx.beginPath();
-            ctx.arc(px, py, radius, 0, Math.PI * 2);
+            ctx.arc(px, py, 13, 0, Math.PI * 2);
             ctx.fill();
-            ctx.globalAlpha = 1;
             ctx.strokeStyle = "#fff";
             ctx.lineWidth = 1.2;
-            if (isSub) ctx.setLineDash([3, 3]);
             ctx.stroke();
-            ctx.setLineDash([]);
 
             // 등번호
             ctx.fillStyle = "#fff";
