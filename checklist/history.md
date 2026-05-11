@@ -2619,3 +2619,4 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-11 16:38:01 | grep -n "slots\|slot_order\|formation\|x.*y\|coord" main.py | head -30
 - 2026-05-11 16:38:43 | ssh -i <KEY-REDACTED> -o StrictHostKeyChecking=no -o IdentitiesOnly=yes rocky@<IP-REDACTED> "cd /opt/today_tactics && sqlite3 -separator '|' players.db ' / SELECT ml.is_home, ml.position, ml.slot_order, ml.shirt_number, p.name_ko, ml.formation / FROM match_lineups ml / LEFT JOIN players p ON p.id=ml.player_id / WHERE ml.event_id=15403858 AND ml.is_starter=1 / ORDER BY ml.is_home DESC, ml.slot_order; / '" 2>&1 | grep -v "post-quantum\|store now\|openssh.com"
 - 2026-05-11 16:41:42 | python -c "import py_compile; py_compile.compile('main.py', doraise=True); print('OK')" && grep -c "1\.201\.126\.200\|today-project\.pem" checklist/history.md
+- 2026-05-11 16:44:39 | git status
