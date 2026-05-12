@@ -903,6 +903,9 @@
             _flashPlaying = false;
             btnPlay.disabled = false;
             btnPlay.textContent = "▶ 재생";
+            // 재생 완료 후 라인 자동 제거 — 미관 (작전 다시 보려면 재드로잉)
+            state.lines = [];
+            render();
         }, maxDuration + 100);
     }
 

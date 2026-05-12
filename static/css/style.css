@@ -810,7 +810,7 @@ body {
     flex: 1 1 auto;
     display: flex;
     flex-direction: row;
-    height: clamp(400px, 62vh, 820px);
+    height: clamp(480px, 75vh, 1000px);
     min-width: 0;
 }
 
@@ -822,7 +822,7 @@ body {
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: 8px;
     gap: 0;
 }
 
