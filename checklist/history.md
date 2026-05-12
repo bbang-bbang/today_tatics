@@ -4,11 +4,13 @@
 
 ---
 
-## 2026-05-13 | 전술판 라인업 포지션 버그 3종 수정
+## 2026-05-13 | 전술판 라인업 포지션 버그 3종 + 포메이션 기준값 테이블 추가
 
 ### 진단
 - 대구FC 세라핌/류재문 등 포지션 뒤바뀜 — stored `formation` 필드가 SofaScore slot_order 실제 배치와 불일치
 - 수원FC vs 수원삼성: 일류첸코 MF존, 이건희/김민우 뒤바뀜 — 원정팀 y좌표 반전 버그
+- `/api/match-lineup` 500 에러 — `sqlite3.Row.get()` AttributeError (formation_sofa 필터)
+- `compute_formation` 등간격 row x-좌표가 포메이션 전술 특성을 미반영 (4-1-4-1 CDM 위치 등)
 
 ### 변경 내용
 **main.py** `_build_formation_slots()`:
@@ -18,13 +20,20 @@
 **main.py** `match_lineup()` `build_side()`:
 - SQL SELECT에 `ml.formation_sofa` 추가
 - formation_sofa(SofaScore 실제 보고 포메이션) 우선 적용
-- formation_sofa도 DF 행 수 검증 → 불일치 시 실측 D/M/F 분포로 재도출
-- stored formation도 동일 DF 행 검증 → fallback 재도출
+- `r.get("formation_sofa")` → `r["formation_sofa"]` (sqlite3.Row는 .get() 미지원)
+
+**main.py** `FORMATION_ROW_X` 기준값 테이블 신설:
+- 21개 K리그 포메이션별 행 x-좌표 하드코딩
+- 4-1-4-1: CDM x=0.23 (DF 바로 앞), 4-2-3-1: CDM x=0.26 (DF 블록 밀착)
+- 기존 0.12~0.44 등간격 fallback 유지 (미등록 포메이션)
+
+### 배포
+- 가비아 서버 git pull + systemctl restart 완료 (커밋 `fcca687`)
 
 ### 검증
-- 대구FC 라인업: 세라핌(DF)/류재문(MF) 좌표 정상 배치
-- 수원FC vs 수원삼성: 이건희/김민우 정상, 일류첸코 AM존 배치
-- 전체 228건 FW-in-MF-zone: SofaScore 정상 코딩(섀도스트라이커 등) 확인 → 버그 아님
+- 수원FC vs 수원삼성 2026-05-03: home 11명 / away 11명 정상 로드 확인
+- 대구FC 라인업 포지션 정상 배치 확인
+- 4-1-4-1 CDM, 4-2-3-1 CDM2 위치 개선 확인
 
 ---
 
