@@ -1068,7 +1068,8 @@
                 <div class="pt-panel">
                     <div class="pt-panel-title">평균 포지션</div>
                     <canvas class="pt-canvas" id="pt-canvas-avg" width="520" height="340"></canvas>
-                    <div class="pt-hint">홈 좌→우 / 원정 우→좌 공격</div>
+                    <div class="pt-hint">홈 좌→우 / 원정 우→좌 공격 · 점에 마우스를 올리면 선수 정보</div>
+                    <div class="pt-tooltip" id="pt-tooltip-avg" hidden></div>
                 </div>
                 <div class="pt-panel">
                     <div class="pt-panel-title">슛맵 <span class="pt-shotcount"></span></div>
@@ -1080,7 +1081,7 @@
                         <span class="pt-sl"><i class="psl-dot psl-block"></i>블록</span>
                         <span class="pt-sl"><i class="psl-dot psl-post"></i>골대</span>
                     </div>
-                    <div class="pt-tooltip" hidden></div>
+                    <div class="pt-tooltip" id="pt-tooltip-shot" hidden></div>
                 </div>
             </div>
         </div>`;
@@ -1089,7 +1090,8 @@
 
         const avgCanvas = card.querySelector("#pt-canvas-avg");
         const shotCanvas = card.querySelector("#pt-canvas-shot");
-        const tooltip = card.querySelector(".pt-tooltip");
+        const avgTooltip  = card.querySelector("#pt-tooltip-avg");
+        const shotTooltip = card.querySelector("#pt-tooltip-shot");
         const sct = card.querySelector(".pt-shotcount");
 
         const allPositions = Array.isArray(extras.avg_positions) ? extras.avg_positions : [];
@@ -1133,8 +1135,8 @@
             try {
                 const homeKit = { fill: homeFill, stroke: homeStroke, text: homeText };
                 const awayKit = { fill: awayFill, stroke: awayStroke, text: awayText };
-                drawAvgPositions(avgCanvas, positions, homeKit, awayKit);
-                drawShotmap(shotCanvas, shots, homeKit, awayKit, tooltip);
+                drawAvgPositions(avgCanvas, positions, homeKit, awayKit, avgTooltip);
+                drawShotmap(shotCanvas, shots, homeKit, awayKit, shotTooltip);
             } catch (err) {
                 console.error("[전술 보기 redraw 실패]", err);
             }
@@ -1200,39 +1202,66 @@
         ];
     }
 
-    function drawAvgPositions(canvas, positions, homeKit, awayKit) {
+    function drawAvgPositions(canvas, positions, homeKit, awayKit, tooltip) {
         const ctx = canvas.getContext("2d");
         const w = canvas.width, h = canvas.height;
         drawPitch(ctx, w, h);
 
-        // 홈=home 키트(primary fill + border_home), 어웨이=away 키트(흰색 fill + border_away)
+        // B 방식: 원 반지름 축소(13→10) + fill alpha 0.75로 겹침 시 뒤 점도 비침.
+        //         캔버스 텍스트는 등번호만 표기, 한글 이름은 호버 툴팁으로.
+        const RADIUS = 10;
+        const drawPts = [];
         for (const p of positions) {
             if (p.x == null || p.y == null) continue;
             const [px, py] = mapPos(p.x, p.y, p.is_home === 1, w, h);
             const k = p.is_home === 1 ? homeKit : awayKit;
 
+            ctx.globalAlpha = 0.78;
             ctx.fillStyle = k.fill;
             ctx.beginPath();
-            ctx.arc(px, py, 13, 0, Math.PI * 2);
+            ctx.arc(px, py, RADIUS, 0, Math.PI * 2);
             ctx.fill();
+            ctx.globalAlpha = 1;
             ctx.strokeStyle = k.stroke;
-            ctx.lineWidth = p.is_home === 1 ? 1.4 : 2.2;  // 어웨이 흰색 fill은 border 두껍게
+            ctx.lineWidth = p.is_home === 1 ? 1.4 : 2.2;
             ctx.stroke();
 
-            // 등번호 — fill 명도에 따라 자동 (홈=흰색, 어웨이=검은색)
+            // 등번호만 (이름은 호버 시)
             ctx.fillStyle = k.text;
             ctx.font = "bold 11px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(p.shirt_number || "·", px, py);
 
-            // 한글이름 (점 밑)
-            if (p.name) {
-                ctx.fillStyle = "#dde";
-                ctx.font = "10px sans-serif";
-                ctx.fillText(p.name, px, py + 22);
-            }
+            drawPts.push({ px, py, r: RADIUS + 2, data: p });
         }
+
+        // 호버 툴팁 (shotmap과 동일 패턴)
+        if (!tooltip) return;
+        canvas.onmousemove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+            // 가장 가까운 점 1개 (반지름 내). 겹친 그룹은 마우스 위치에 가장 가까운 점 우선.
+            let hit = null, bestDist = Infinity;
+            for (const d of drawPts) {
+                const dist = Math.hypot(mx - d.px, my - d.py);
+                if (dist <= d.r && dist < bestDist) { hit = d; bestDist = dist; }
+            }
+            if (hit) {
+                const p = hit.data;
+                const side = p.is_home === 1 ? "홈" : "원정";
+                const shirt = p.shirt_number ? `#${p.shirt_number} ` : "";
+                tooltip.innerHTML = `<b>${shirt}${p.name || "선수"}</b><br>` +
+                    `<span style="opacity:0.75">${side} · 평균 (${p.x.toFixed(1)}, ${p.y.toFixed(1)})</span>`;
+                tooltip.style.left = (e.clientX - rect.left + 12) + "px";
+                tooltip.style.top  = (e.clientY - rect.top  + 12) + "px";
+                tooltip.hidden = false;
+            } else {
+                tooltip.hidden = true;
+            }
+        };
+        canvas.onmouseleave = () => { tooltip.hidden = true; };
     }
 
     const SHOT_COLORS = {
