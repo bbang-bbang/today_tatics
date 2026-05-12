@@ -22,6 +22,8 @@ except Exception:
 BASE = Path(__file__).resolve().parent.parent
 DB = BASE / "players.db"
 PORTAL_JSON = BASE / "data" / "kleague_players_2026.json"
+EXCLUDED_EVENT_IDS = (90333089,)  # synthetic event 제외 (main.py 동일)
+EXCLUDED_SQL = "(" + ",".join(str(i) for i in EXCLUDED_EVENT_IDS) + ")"
 
 # SofaScore team_id → portal slug (history 5/11 16:10 검증 매핑)
 SS_TO_SLUG = {
@@ -53,7 +55,7 @@ def main():
 
     # 최근 출전한 player_id 단위로 best shirt + DB name_ko + team
     # (전 시즌 = 2026, K1/K2 경기 한정)
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         WITH appearances AS (
             SELECT ml.player_id,
                    ml.shirt_number,
@@ -62,6 +64,7 @@ def main():
             FROM match_lineups ml
             JOIN events e ON e.id=ml.event_id
             WHERE e.tournament_id IN (410, 777)
+              AND e.id NOT IN {EXCLUDED_SQL}
               AND date(e.date_ts, 'unixepoch', 'localtime') >= '2026-01-01'
               AND ml.shirt_number IS NOT NULL
             GROUP BY ml.player_id, ml.shirt_number, ss_team_id

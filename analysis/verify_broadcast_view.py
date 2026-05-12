@@ -22,6 +22,8 @@ except Exception:
 
 DB_PATH = Path(__file__).resolve().parent.parent / "players.db"
 PLAYER_STEP = 0.16  # main.py 동일
+EXCLUDED_EVENT_IDS = (90333089,)  # synthetic event 제외 (main.py 동일)
+EXCLUDED_SQL = "(" + ",".join(str(i) for i in EXCLUDED_EVENT_IDS) + ")"
 
 # ── main.py 카피 (검증 자기완결성) ──────────────────────────
 POSITION_LABELS = {
@@ -190,7 +192,8 @@ def verify_B_avg_positions(conn):
         WHERE ml.is_starter = 1
           AND ml.slot_order IN (1, 4)
           AND ml.formation IN ({})
-        """.format(",".join("?" * len(BACK4))),
+          AND ml.event_id NOT IN {}
+        """.format(",".join("?" * len(BACK4)), EXCLUDED_SQL),
         BACK4,
     ).fetchall()
 
@@ -242,7 +245,7 @@ def verify_B_avg_positions(conn):
 def verify_C_shotmap(conn):
     print("\n=== C. Shotmap — mapPos 통과 후 home/away 좌우 분포 ===")
     rows = conn.execute(
-        "SELECT is_home, x FROM match_shotmap WHERE x IS NOT NULL"
+        f"SELECT is_home, x FROM match_shotmap WHERE x IS NOT NULL AND event_id NOT IN {EXCLUDED_SQL}"
     ).fetchall()
 
     # 프론트 변환: mapPos(100 - s.x, s.y, isHome) → px = isHome ? (100-s.x) : 100-(100-s.x) = s.x

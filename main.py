@@ -388,6 +388,12 @@ def compute_formation(formation_str):
     return positions
 
 
+# 데이터 수집 대상에서 항상 제외할 매치 (synthetic event — lineup/avg/shot 없음).
+# matches-by-date 목록과 event_id endpoint들이 함께 사용.
+EXCLUDED_EVENT_IDS = {90333089}  # 2026-02-21 슈퍼컵 전북 vs 대전
+EXCLUDED_EVENT_IDS_SQL = "(" + ",".join(str(i) for i in EXCLUDED_EVENT_IDS) + ")"
+
+
 POSITION_LABELS = {
     "4-4-2": ["GK", "LB", "CB", "CB", "RB", "LM", "CM", "CM", "RM", "ST", "ST"],
     "4-3-3": ["GK", "LB", "CB", "CB", "RB", "CM", "CM", "CM", "LW", "ST", "RW"],
@@ -5564,7 +5570,8 @@ def matches_by_date():
         FROM events e
         LEFT JOIN (SELECT DISTINCT event_id FROM match_lineups) lu ON lu.event_id = e.id
         WHERE e.tournament_id IN (410, 777)
-    """
+          AND e.id NOT IN {excluded_ids}
+    """.format(excluded_ids=EXCLUDED_EVENT_IDS_SQL)
     if where:
         sql += " AND " + " AND ".join(where)
     sql += " ORDER BY e.date_ts ASC, e.id ASC"
@@ -5648,6 +5655,9 @@ def match_lineup():
         except ValueError:
             conn.close()
             return jsonify({"error": "event_id must be int"}), 400
+        if event_id in EXCLUDED_EVENT_IDS:
+            conn.close()
+            return jsonify({"ready": False, "reason": "excluded_event", "event_id": event_id}), 404
         ev = cur.execute("""
             SELECT id, home_team_id, home_team_name, away_team_id, away_team_name,
                    date_ts, home_score, away_score, tournament_id
@@ -5667,11 +5677,12 @@ def match_lineup():
         if not home_team or not away_team:
             conn.close()
             return jsonify({"error": "unknown team slug"}), 400
-        ev = cur.execute("""
+        ev = cur.execute(f"""
             SELECT id, home_team_id, home_team_name, away_team_id, away_team_name,
                    date_ts, home_score, away_score, tournament_id
             FROM events
-            WHERE date_ts >= ? AND date_ts < ?
+            WHERE id NOT IN {EXCLUDED_EVENT_IDS_SQL}
+              AND date_ts >= ? AND date_ts < ?
               AND home_team_id = ? AND away_team_id = ?
             LIMIT 1
         """, (start_ts, end_ts, home_team["sofascore_id"], away_team["sofascore_id"])).fetchone()
@@ -5940,6 +5951,9 @@ def match_extras():
         except ValueError:
             conn.close()
             return jsonify({"error": "event_id must be int"}), 400
+        if event_id in EXCLUDED_EVENT_IDS:
+            conn.close()
+            return jsonify({"ready": False, "reason": "excluded_event", "event_id": event_id}), 404
         ev = cur.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
     elif date_str and home_slug and away_slug:
         dt_str = date_str.replace(".", "-")
@@ -5954,9 +5968,10 @@ def match_extras():
         if not home_team or not away_team:
             conn.close()
             return jsonify({"error": "unknown team slug"}), 400
-        ev = cur.execute("""
+        ev = cur.execute(f"""
             SELECT id FROM events
-            WHERE date_ts >= ? AND date_ts < ?
+            WHERE id NOT IN {EXCLUDED_EVENT_IDS_SQL}
+              AND date_ts >= ? AND date_ts < ?
               AND home_team_id = ? AND away_team_id = ?
             LIMIT 1
         """, (start_ts, end_ts, home_team["sofascore_id"], away_team["sofascore_id"])).fetchone()
@@ -6126,6 +6141,9 @@ def match_retrospective():
         except ValueError:
             conn.close()
             return jsonify({"error": "event_id must be int"}), 400
+        if event_id in EXCLUDED_EVENT_IDS:
+            conn.close()
+            return jsonify({"ready": False, "reason": "excluded_event", "event_id": event_id}), 404
         ev = cur.execute("""
             SELECT id, home_score, away_score FROM events WHERE id = ?
         """, (event_id,)).fetchone()
@@ -6142,9 +6160,10 @@ def match_retrospective():
         if not home_team or not away_team:
             conn.close()
             return jsonify({"error": "unknown team slug"}), 400
-        ev = cur.execute("""
+        ev = cur.execute(f"""
             SELECT id, home_score, away_score FROM events
-            WHERE date_ts >= ? AND date_ts < ?
+            WHERE id NOT IN {EXCLUDED_EVENT_IDS_SQL}
+              AND date_ts >= ? AND date_ts < ?
               AND home_team_id = ? AND away_team_id = ?
             LIMIT 1
         """, (start_ts, end_ts, home_team["sofascore_id"], away_team["sofascore_id"])).fetchone()

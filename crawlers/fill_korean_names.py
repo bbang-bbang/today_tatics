@@ -250,6 +250,8 @@ print(f"완료(phase2b lineup historic fallback): name_ko {phase2b_updated}건")
 #
 # master team_id 검증은 제거 — 임대·이적 케이스(player.team_id가 옛 팀)도 정정 가능.
 
+EXCLUDED_EVENT_IDS_SQL = "(90333089)"  # synthetic event 제외 (main.py 동일)
+
 cur.execute(f"""
     WITH appearances AS (
         SELECT ml.player_id,
@@ -259,6 +261,7 @@ cur.execute(f"""
         FROM match_lineups ml
         JOIN events e ON e.id=ml.event_id
         WHERE e.tournament_id IN (410, 777)
+          AND e.id NOT IN {EXCLUDED_EVENT_IDS_SQL}
           AND date(e.date_ts, 'unixepoch', 'localtime') >= '2026-01-01'
           AND ml.shirt_number IS NOT NULL
         GROUP BY ml.player_id, ml.shirt_number, k_team_ss
