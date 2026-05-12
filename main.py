@@ -5268,6 +5268,7 @@ def prediction_backtest():
     n_actual_home_wins = n_actual_draws = n_actual_away_wins = 0
     confidence_buckets = {"high": [0, 0], "med": [0, 0], "low": [0, 0]}  # [hit, total]
     per_round_agg = {}  # {round: {"hit": n, "total": n}}
+    match_records = []  # 잔차 분석용 — 매치별 (brier, pred, actual, conf) 누적
 
     for g in games:
         gid, ts, hid, aid, hs, as_, rnd = g
@@ -5330,6 +5331,28 @@ def prediction_backtest():
             if pred_outcome == actual:
                 bag["hit"] += 1
 
+        # 잔차 record (worst 잔차 분석용)
+        match_records.append({
+            "event_id":          gid,
+            "date_ts":           ts,
+            "home_ss_id":        hid,
+            "away_ss_id":        aid,
+            "home_score":        int(hs),
+            "away_score":        int(as_),
+            "actual":            actual,
+            "predicted":         {"home": outcome_p["home"], "draw": outcome_p["draw"], "away": outcome_p["away"]},
+            "predicted_outcome": pred_outcome,
+            "top_score":         top_strs[0] if top_strs else None,
+            "lam_home":          round(pred["lam_home"], 2),
+            "lam_away":          round(pred["lam_away"], 2),
+            "confidence":        bucket,
+            "h_games":           pred["h_games"],
+            "a_games":           pred["a_games"],
+            "h2h_games":         h2h_g,
+            "brier":             brier,
+            "hit_1x2":           pred_outcome == actual,
+        })
+
     conn.close()
 
     # per-round 누적 라인 생성
@@ -5353,6 +5376,31 @@ def prediction_backtest():
         result = {"league": league.upper(), "year": year, "n_total": 0, "n_skipped": n_skipped,
                   "ready": False}
     else:
+        # 잔차 큰 매치 5건 — brier 내림차순. 패턴 식별용 1단계 잔차 분석.
+        def _fmt_record(r):
+            home_info = _team_info_by_sofascore_id(r["home_ss_id"]) or {}
+            away_info = _team_info_by_sofascore_id(r["away_ss_id"]) or {}
+            return {
+                "event_id":          r["event_id"],
+                "date":              datetime.fromtimestamp(r["date_ts"]).strftime("%Y-%m-%d"),
+                "home":              home_info.get("short") or home_info.get("name") or str(r["home_ss_id"]),
+                "away":              away_info.get("short") or away_info.get("name") or str(r["away_ss_id"]),
+                "actual_score":      f"{r['home_score']}-{r['away_score']}",
+                "actual_outcome":    r["actual"],
+                "predicted_top":     r["top_score"],
+                "predicted_outcome": r["predicted_outcome"],
+                "predicted_pct":     {k: round(v, 1) for k, v in r["predicted"].items()},
+                "lam_home":          r["lam_home"],
+                "lam_away":          r["lam_away"],
+                "confidence":        r["confidence"],
+                "h_games":           r["h_games"],
+                "a_games":           r["a_games"],
+                "h2h_games":         r["h2h_games"],
+                "brier":             round(r["brier"], 3),
+                "hit_1x2":           r["hit_1x2"],
+            }
+        worst = sorted(match_records, key=lambda r: -r["brier"])[:5]
+
         result = {
             "league":            league.upper(),
             "year":              year,
@@ -5373,6 +5421,7 @@ def prediction_backtest():
                 for k, v in confidence_buckets.items()
             },
             "per_round":         per_round,
+            "worst_residuals":   [_fmt_record(r) for r in worst],
             "ready": True,
         }
 
