@@ -2647,3 +2647,4 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-12 14:53:31 | python -c "import py_compile; py_compile.compile('main.py', doraise=True); print('PY OK')"
 - 2026-05-12 15:02:51 | git diff main.py
 - 2026-05-12 15:12:51 | python -c "import py_compile; py_compile.compile('main.py', doraise=True); print('PY OK')" && node -e "new Function(require('fs').readFileSync('static/js/prediction.js','utf8')); console.log('JS OK')"
+- 2026-05-12 15:14:35 | curl -sm 15 'https://today-tactics.co.kr/api/prediction-backtest?league=k1&year=2026' | python -c " / import sys, json / sys.stdout.reconfigure(encoding='utf-8') / d = json.load(sys.stdin) / print('K1 calibration_curve:') / for c in d.get('calibration_curve', []): /     print(f\"  {c['bucket']:<6} {c['hit']}/{c['total']} = {c['actual_pct']}%\") / print(f\"K1 by_confidence: {d['by_confidence']}\") / "

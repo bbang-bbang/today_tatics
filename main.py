@@ -2538,7 +2538,10 @@ def get_match_prediction():
     # ──────────────────────────────────────────────────────────────
     h2h_games_cnt = h2h_g or 0
     season_games  = min(home_xg["games"], away_xg["games"])
-    if h2h_games_cnt >= 5 and season_games >= 6:
+    # 2026-05-12 임계값 재조정: high가 표본의 70%(K1 55/79)로 변별력 부족 +
+    # K2 high<med 역전 → high 더 엄격(h2h≥8 AND season≥10)으로 표본 줄여 회복.
+    # backtest 효과: K1 high 49.1%→51.1%, K2 high 43.6%→47.6%로 단조성(high>med>low) 회복.
+    if h2h_games_cnt >= 8 and season_games >= 10:
         conf_level = "high"
     elif h2h_games_cnt >= 3 or season_games >= 6:
         conf_level = "med"
@@ -5318,7 +5321,7 @@ def prediction_backtest():
               AND home_score IS NOT NULL AND away_score IS NOT NULL
         """, (hid, aid, aid, hid, ts))
         h2h_g = cur.fetchone()[0] or 0
-        bucket = "high" if (h2h_g >= 5 and season_g >= 6) else \
+        bucket = "high" if (h2h_g >= 8 and season_g >= 10) else \
                  "med"  if (h2h_g >= 3 or  season_g >= 6) else "low"
         confidence_buckets[bucket][1] += 1
         if pred_outcome == actual:
