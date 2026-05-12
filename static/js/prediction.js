@@ -565,9 +565,16 @@
             low:  { icon: "🔴", label: "신뢰도 낮음", color: "#f87171" },
         };
         const m = meta[conf.level] || meta.low;
+
+        // 실측 적중률 (backtest 캐시 lookup) — 사용자 신뢰도 텍스트 보정
+        const bt = _backtestCache[isK1 ? "k1" : "k2"];
+        const bc = bt && bt.by_confidence && bt.by_confidence[conf.level];
+        const actualHtml = (bc && bc.total) ? `<span class="pc-actual" style="color:${m.color}aa">실측 ${bc.pct}% (${bc.hit}/${bc.total})</span>` : "";
+
         const badge = `<div class="pred-confidence" style="border-color:${m.color}55">
             <span class="pc-icon">${m.icon}</span>
             <span class="pc-label" style="color:${m.color}">${m.label}</span>
+            ${actualHtml}
             <span class="pc-sub">H2H ${conf.h2h_games}경기 · 시즌 ${conf.season_games}경기</span>
         </div>`;
         if (!isK1 || conf.level === "high") return badge;
@@ -1323,8 +1330,8 @@
         canvas.onmouseleave = () => { tooltip.hidden = true; };
     }
 
-    // 페이지 로드 시 K2 일정 불러오기 + 백테스트 캐시 워밍
+    // 페이지 로드 시 K2 일정 불러오기 + 백테스트 캐시 워밍 (confidenceBadge가 by_confidence lookup)
     loadSchedule();
-    fetch("/api/prediction-backtest?league=k2&year=2026").catch(() => {});
-    fetch("/api/prediction-backtest?league=k1&year=2026").catch(() => {});
+    loadBacktest("k2");
+    loadBacktest("k1");
 })();

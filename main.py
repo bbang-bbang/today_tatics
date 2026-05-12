@@ -5376,6 +5376,29 @@ def prediction_backtest():
         result = {"league": league.upper(), "year": year, "n_total": 0, "n_skipped": n_skipped,
                   "ready": False}
     else:
+        # 예측 max prob bucket별 실측 적중률 (calibration curve용)
+        # 신뢰도 isotonic 보정 1단계 — 사용자 신뢰도 텍스트에 실측 적중률 노출.
+        def _prob_bucket(p):
+            if p < 40: return "<40"
+            if p < 50: return "40-50"
+            if p < 60: return "50-60"
+            if p < 70: return "60-70"
+            return ">=70"
+        _calib_agg = {}
+        for r in match_records:
+            p_max = max(r["predicted"]["home"], r["predicted"]["draw"], r["predicted"]["away"])
+            b = _prob_bucket(p_max)
+            bag = _calib_agg.setdefault(b, {"hit": 0, "total": 0})
+            bag["total"] += 1
+            if r["hit_1x2"]:
+                bag["hit"] += 1
+        calibration_curve = [
+            {"bucket": b, "hit": v["hit"], "total": v["total"],
+             "actual_pct": round(v["hit"] / v["total"] * 100, 1) if v["total"] else None}
+            for b, v in sorted(_calib_agg.items(),
+                               key=lambda kv: ("<40","40-50","50-60","60-70",">=70").index(kv[0]))
+        ]
+
         # 잔차 큰 매치 5건 — brier 내림차순. 패턴 식별용 1단계 잔차 분석.
         def _fmt_record(r):
             home_info = _team_info_by_sofascore_id(r["home_ss_id"]) or {}
@@ -5421,6 +5444,7 @@ def prediction_backtest():
                 for k, v in confidence_buckets.items()
             },
             "per_round":         per_round,
+            "calibration_curve": calibration_curve,
             "worst_residuals":   [_fmt_record(r) for r in worst],
             "ready": True,
         }

@@ -4005,6 +4005,7 @@ body {
 }
 .pc-icon { font-size: 0.8rem; }
 .pc-label { font-weight: 700; font-size: 0.72rem; }
+.pc-actual { font-weight: 600; font-size: 0.66rem; letter-spacing: -0.01em; }
 .pc-sub   { color: #6a8aa8; font-size: 0.65rem; }
 
 /* K1 예측 불확실 경고 */
