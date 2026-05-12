@@ -1755,7 +1755,7 @@ _POISSON_MAX_GOALS = 5  # 스코어 매트릭스 최대 (0~5골)
 #       → draw_boost 0.06→0.18, dc_rho 0.00→0.10 (Dixon-Coles 무승부 보정 가산)
 # draw_boost 수식: new_draw% = (raw_draw + boost) / (1 + boost)
 _LEAGUE_CONSTANTS = {
-    410: {"home_adv": 0.98, "away_adj": 1.02, "draw_boost": 0.04, "dc_rho": 0.10, "shrinkage_k": 3},  # K1: away 가중 ↑ + draw boost ↓ (1차 튜닝 04-21 후 away 강세 트렌드 반영)
+    410: {"home_adv": 0.98, "away_adj": 1.02, "draw_boost": 0.04, "dc_rho": 0.10, "shrinkage_k": 3},  # K1: away 가중 ↑ + draw boost ↓ (1차 튜닝 04-21 후 away 강세 트렌드 반영). 2026-05-12 미세 보정 2회 시도(home_adv 1.01 / away_adj 1.00) 모두 1X2 -1.3%p 악화 → revert. worst 5 매치는 외생 변수(부상·감독) 영향 추정 — 모델 입력에 없는 변수.
     777: {"home_adv": 0.96, "away_adj": 0.90, "draw_boost": 0.18, "dc_rho": 0.10, "shrinkage_k": 0},  # K2: draw boost ↑↑ + Dixon-Coles ρ 도입 (실제 draw 31%인데 12% 예측)
 }
 _DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0.10, "dc_rho": 0.0, "shrinkage_k": 0}
