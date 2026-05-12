@@ -337,7 +337,32 @@
             <span class="pbt-stat"><span class="pbt-v">${d.brier_score}</span><span class="pbt-k">Brier</span></span>
             <span class="pbt-sub">${d.n_total}경기 rolling · 무작위 ${d.baseline_random}%</span>
             ${backtestChartHtml(d.per_round)}
+            ${backtestWorstHtml(d.worst_residuals)}
         </div>`;
+    }
+
+    // 빗나감 큰 매치 5건 (잔차 분석 표시)
+    function backtestWorstHtml(worst) {
+        if (!Array.isArray(worst) || worst.length === 0) return "";
+        const outcomeLabel = { home: "홈", draw: "무", away: "원" };
+        const confColor = { high: "#7bed9f", med: "#facc15", low: "#f87171" };
+        const rows = worst.map(w => {
+            const c = confColor[w.confidence] || "#94a3b8";
+            const predPct = w.predicted_pct[w.predicted_outcome];
+            return `<div class="pbt-worst-row">
+                <span class="pbt-worst-date">${w.date.slice(5)}</span>
+                <span class="pbt-worst-match">${w.home} ${w.actual_score} ${w.away}</span>
+                <span class="pbt-worst-pred">예측 ${outcomeLabel[w.predicted_outcome]} ${predPct}%</span>
+                <span class="pbt-worst-arrow">→</span>
+                <span class="pbt-worst-actual">${outcomeLabel[w.actual_outcome]}</span>
+                <span class="pbt-worst-conf" style="color:${c}">신뢰 ${w.confidence}</span>
+                <span class="pbt-worst-brier">Brier ${w.brier}</span>
+            </div>`;
+        }).join("");
+        return `<details class="pbt-worst">
+            <summary>📌 빗나간 매치 ${worst.length}건 보기 (Brier 큰 순)</summary>
+            <div class="pbt-worst-list">${rows}</div>
+        </details>`;
     }
 
     // 라운드별 적중률 막대 차트
@@ -968,6 +993,42 @@
         // 무승부에 예측 빗나간 케이스
         if (!hit1x2 && actOut === "draw")
             pins.push(`🤝 무승부 가능성(${pred.draw}%) 빗나감 — 양 팀 결정력 균형`);
+
+        // ── 빗나간 매치 한정 — 실패 분석 핀인 ──────────────────
+        if (!hit1x2) {
+            // 1) 모델 예측 분포 — 사용자가 모델이 얼마나 빗나갔나 한눈에
+            pins.unshift(`🎯 모델 예측 ${labelMap[predOut]} ${predPctMap[predOut]}% → 실제 ${labelMap[actOut]} (모델 ${predPctMap[actOut]}%)`);
+
+            // 2) 폼 격차 무시 — 최근 10경기 승점 합산 비교
+            const homePts = (home.form_points || []).reduce((a, b) => a + b, 0);
+            const awayPts = (away.form_points || []).reduce((a, b) => a + b, 0);
+            if (Math.abs(homePts - awayPts) >= 6) {
+                const strongerOut = homePts > awayPts ? "home" : "away";
+                if (actOut !== strongerOut && actOut !== "draw") {
+                    const stronger = homePts > awayPts ? home : away;
+                    const weaker   = homePts > awayPts ? away : home;
+                    pins.push(`📉 폼 격차 무시: 최근 10경기 ${stronger.name} ${Math.max(homePts, awayPts)}점 vs ${weaker.name} ${Math.min(homePts, awayPts)}점 — 약팀 upset`);
+                }
+            }
+
+            // 3) H2H 우세 역전
+            const h2h = predData.h2h;
+            if (h2h && h2h.games >= 5) {
+                const dom = h2h.home_w > h2h.away_w + 1 ? "home"
+                          : h2h.away_w > h2h.home_w + 1 ? "away" : null;
+                if (dom && dom !== actOut) {
+                    const domName = dom === "home" ? home.name : away.name;
+                    pins.push(`🔄 H2H 우세 역전: 직전 ${h2h.games}경기 ${domName} 우세(${h2h.home_w}승 ${h2h.draw}무 ${h2h.away_w}패)였으나 결과 반대`);
+                }
+            }
+
+            // 4) xG 거의 동률 + non-draw 결과 → 결정력 차이
+            const xgDiff = Math.abs((xg.home || 0) - (xg.away || 0));
+            if (xgDiff < 0.5 && (xg.home > 0 || xg.away > 0) && actOut !== "draw") {
+                const winner = actOut === "home" ? home.name : away.name;
+                pins.push(`⚡ xG 거의 동률(${xg.home.toFixed(1)} vs ${xg.away.toFixed(1)}) — ${winner} 결정력 우위`);
+            }
+        }
 
         // 스코어 태그
         let scoreTag, scoreTagClass;

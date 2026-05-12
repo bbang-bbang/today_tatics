@@ -3954,6 +3954,51 @@ body {
     padding-top: 8px;
     border-top: 1px solid rgba(255,255,255,0.06);
 }
+
+/* Backtest 빗나간 매치 5건 (잔차) */
+.pbt-worst {
+    width: 100%;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.68rem;
+}
+.pbt-worst summary {
+    cursor: pointer;
+    color: #aab8d4;
+    font-weight: 600;
+    list-style: none;
+    user-select: none;
+    padding: 4px 0;
+}
+.pbt-worst summary::-webkit-details-marker { display: none; }
+.pbt-worst summary::before { content: "▸ "; color: #6a8aa8; }
+.pbt-worst[open] summary::before { content: "▾ "; }
+.pbt-worst-list {
+    display: flex; flex-direction: column; gap: 4px;
+    padding-top: 6px;
+}
+.pbt-worst-row {
+    display: grid;
+    grid-template-columns: 38px 1fr auto auto auto auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+}
+.pbt-worst-row:hover { background: rgba(255,255,255,0.06); }
+.pbt-worst-date  { color: #6a8aa8; font-variant-numeric: tabular-nums; }
+.pbt-worst-match { color: #e3eaff; font-weight: 600; }
+.pbt-worst-pred  { color: #94a3b8; }
+.pbt-worst-arrow { color: #4a6a88; }
+.pbt-worst-actual { color: #f87171; font-weight: 600; }
+.pbt-worst-conf  { font-weight: 600; }
+.pbt-worst-brier { color: #6a8aa8; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) {
+    .pbt-worst-row { grid-template-columns: 1fr auto; }
+    .pbt-worst-pred, .pbt-worst-arrow, .pbt-worst-actual, .pbt-worst-conf, .pbt-worst-brier { display: none; }
+}
 .pbc-svg {
     display: block;
     width: 100%;
