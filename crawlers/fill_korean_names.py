@@ -230,4 +230,71 @@ for pid, (k_team_ss, shirt, _) in best_for_pid.items():
 
 conn.commit()
 print(f"완료(phase2b lineup historic fallback): name_ko {phase2b_updated}건")
+
+
+# ── Phase 2c: portal 우선 덮어쓰기 (잘못된 한글 stale 교정) ─────
+# phase2a/2b는 name_ko가 비어있거나 ASCII인 경우만 채움. 한글이 이미 있으면
+# 손대지 않음 — 그래서 이적·임대로 새 팀 등번호에 옛 시즌 다른 선수 이름이
+# 남는 stale 케이스 발생(예: hwaseong #5 "유선" → 실제 "양시후").
+#
+# 매칭 기준: master players.shirt_number는 옛 시즌 값일 수 있어 부정확.
+# match_lineups의 (player_id, k_team_ss, shirt_number) best 쌍을 사용 —
+# verify_player_mapping.py와 동일 알고리즘.
+#
+# 안전 조건:
+#   1) 현 시즌(2026) lineup만 (옛 시즌 stale 회피)
+#   2) lineup cnt ≥ 2 (한 번뿐인 일회성 매칭 신뢰도 부족)
+#   3) k_team_ss가 K1/K2 SS_ID 중 하나 (K3·미등록 팀 제외)
+#   4) portal[slug][best_shirt] entry 존재
+#   5) 현재 name_ko가 ASCII 포함 아님 (한글이 박혀있는 stale 케이스만)
+#
+# master team_id 검증은 제거 — 임대·이적 케이스(player.team_id가 옛 팀)도 정정 가능.
+
+cur.execute(f"""
+    WITH appearances AS (
+        SELECT ml.player_id,
+               ml.shirt_number,
+               CASE WHEN ml.is_home=1 THEN e.home_team_id ELSE e.away_team_id END AS k_team_ss,
+               COUNT(*) AS cnt
+        FROM match_lineups ml
+        JOIN events e ON e.id=ml.event_id
+        WHERE e.tournament_id IN (410, 777)
+          AND date(e.date_ts, 'unixepoch', 'localtime') >= '2026-01-01'
+          AND ml.shirt_number IS NOT NULL
+        GROUP BY ml.player_id, ml.shirt_number, k_team_ss
+    ),
+    best_per_player AS (
+        SELECT player_id, shirt_number, k_team_ss, cnt,
+               ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY cnt DESC) AS rn
+        FROM appearances
+    )
+    SELECT p.id, p.team_id, p.name_ko, b.k_team_ss, b.shirt_number, b.cnt
+    FROM best_per_player b
+    JOIN players p ON p.id=b.player_id
+    WHERE b.rn=1
+      AND b.cnt >= 2
+      AND b.k_team_ss IN ({ss_ids_csv})
+      AND p.name_ko IS NOT NULL AND p.name_ko != ''
+      AND p.name_ko NOT GLOB '*[a-zA-Z]*'
+""")
+phase2c_targets = cur.fetchall()
+phase2c_updated = 0
+for pid, master_team, name_ko, k_team_ss, shirt, cnt in phase2c_targets:
+    slug = ss_id_to_slug.get(k_team_ss)
+    if not slug:
+        continue
+    portal = all_players.get(slug, {}).get("players", [])
+    match = next((p for p in portal if p.get("number") == int(shirt) and p.get("name")), None)
+    if not match:
+        continue
+    portal_name = match["name"]
+    if portal_name == name_ko:
+        continue
+    cur.execute("UPDATE players SET name_ko=? WHERE id=?", (portal_name, pid))
+    if cur.rowcount:
+        phase2c_updated += 1
+        print(f"  phase2c overwrite: pid={pid} {slug} #{shirt} '{name_ko}' → '{portal_name}'")
+
+conn.commit()
+print(f"완료(phase2c portal 우선 덮어쓰기): name_ko {phase2c_updated}건")
 conn.close()
