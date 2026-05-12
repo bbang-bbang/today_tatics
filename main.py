@@ -5566,8 +5566,9 @@ def _default_labels_for_rows(rows):
 def _build_formation_slots(formation, mirror=False):
     """포메이션 문자열 -> [{slot_order, x, y, label}]. mirror=True면 원정팀용(x 반전).
 
-    y는 1.0-y로 반전 — SofaScore lineup의 slot_order(1번이 라이트백)와
-    broadcast 시각(라이트백=캔버스 아래쪽) 정합. POSITION_LABELS도 swap.
+    홈팀(mirror=False): y = 1-y 반전 적용. slot 1(RB) → 캔버스 아래쪽.
+    원정팀(mirror=True): y 반전 없음. slot 1(RB, 원정 시선에서 오른쪽=broadcast 위쪽) → 캔버스 위쪽.
+    수동 포메이션(FORMATIONS.teamB)과 동일한 방식으로 통일.
     """
     if not formation or not all(part.isdigit() for part in formation.split("-")):
         formation = "4-4-2"  # fallback
@@ -5576,15 +5577,12 @@ def _build_formation_slots(formation, mirror=False):
     else:
         rows = [int(x) for x in formation.split("-")]
         labels = _default_labels_for_rows(rows)
-    # 라벨 L↔R swap — slot 1이 RB(라이트백)가 되도록 (SofaScore slot_order와 정합).
-    # broadcast 시각에서 home/away 라이트백 모두 화면 아래쪽이므로 home·away 동일 라벨.
     labels = mirror_labels(labels)
     positions = compute_formation(formation)
-    # 홈=좌측, 원정=우측(x 반전). y는 모두 1.0-y로 반전(broadcast 시각).
     slots = []
     for i, pos in enumerate(positions):
         x = round(1.0 - pos["x"], 3) if mirror else pos["x"]
-        y = round(1.0 - pos["y"], 3)
+        y = pos["y"] if mirror else round(1.0 - pos["y"], 3)
         label = labels[i] if i < len(labels) else ""
         slots.append({"slot_order": i, "x": x, "y": y, "label": label})
     return slots
@@ -5773,7 +5771,8 @@ def match_lineup():
 
     resolved_event_id = ev["id"]
     lu_rows = cur.execute("""
-        SELECT ml.is_home, ml.team_id, ml.formation, ml.player_id, ml.player_name,
+        SELECT ml.is_home, ml.team_id, ml.formation, ml.formation_sofa,
+               ml.player_id, ml.player_name,
                ml.shirt_number, ml.position, ml.is_starter, ml.slot_order,
                ml.confirmed,
                COALESCE(p.name_ko, ml.player_name, p.name) AS name_display,
@@ -5793,6 +5792,39 @@ def match_lineup():
         if not rows:
             return None
         formation = next((r["formation"] for r in rows if r["formation"]), None)
+        # formation_sofa = SofaScore가 실제로 보고한 포메이션 → 서브-row 구조까지 정확
+        formation_sofa = next((r["formation_sofa"] for r in rows if r.get("formation_sofa")), None)
+
+        # 우선순위: formation_sofa > stored formation(DF 행 검증 후)
+        starter_rows_tmp = [r for r in rows if r["is_starter"]]
+        actual_d = sum(1 for r in starter_rows_tmp if r["position"] == "D")
+        actual_m = sum(1 for r in starter_rows_tmp if r["position"] == "M")
+        actual_f = sum(1 for r in starter_rows_tmp if r["position"] == "F")
+
+        if formation_sofa:
+            # formation_sofa DF 행도 검증 — 틀리면 실측 분포로 재도출
+            try:
+                if actual_d + actual_m + actual_f == 10 and int(formation_sofa.split("-")[0]) != actual_d:
+                    raise ValueError
+                formation = formation_sofa
+            except (ValueError, IndexError):
+                parts = []
+                if actual_d: parts.append(str(actual_d))
+                if actual_m: parts.append(str(actual_m))
+                if actual_f: parts.append(str(actual_f))
+                formation = "-".join(parts) if parts else formation
+        elif actual_d + actual_m + actual_f == 10 and formation:
+            # formation_sofa 없을 때: stored DF 행이 실측과 다르면 재도출
+            try:
+                if int(formation.split("-")[0]) != actual_d:
+                    parts = []
+                    if actual_d: parts.append(str(actual_d))
+                    if actual_m: parts.append(str(actual_m))
+                    if actual_f: parts.append(str(actual_f))
+                    formation = "-".join(parts) if parts else formation
+            except (ValueError, IndexError):
+                pass
+
         slots     = _build_formation_slots(formation, mirror=(not is_home_flag))
 
         starters, subs = [], []

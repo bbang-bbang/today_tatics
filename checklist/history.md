@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-05-13 | 전술판 라인업 포지션 버그 3종 수정
+
+### 진단
+- 대구FC 세라핌/류재문 등 포지션 뒤바뀜 — stored `formation` 필드가 SofaScore slot_order 실제 배치와 불일치
+- 수원FC vs 수원삼성: 일류첸코 MF존, 이건희/김민우 뒤바뀜 — 원정팀 y좌표 반전 버그
+
+### 변경 내용
+**main.py** `_build_formation_slots()`:
+- 원정팀(mirror=True) y좌표 반전 제거 — `y = pos["y"] if mirror else round(1.0 - pos["y"], 3)`
+- 기존: 홈/원정 모두 y=1-y → 원정 slot 1이 캔버스 아래로 내려가는 버그
+
+**main.py** `match_lineup()` `build_side()`:
+- SQL SELECT에 `ml.formation_sofa` 추가
+- formation_sofa(SofaScore 실제 보고 포메이션) 우선 적용
+- formation_sofa도 DF 행 수 검증 → 불일치 시 실측 D/M/F 분포로 재도출
+- stored formation도 동일 DF 행 검증 → fallback 재도출
+
+### 검증
+- 대구FC 라인업: 세라핌(DF)/류재문(MF) 좌표 정상 배치
+- 수원FC vs 수원삼성: 이건희/김민우 정상, 일류첸코 AM존 배치
+- 전체 228건 FW-in-MF-zone: SofaScore 정상 코딩(섀도스트라이커 등) 확인 → 버그 아님
+
+---
+
 ## 2026-05-11 | 전술보기 H2H fallback — 예정 경기도 직전 맞대결 전술 표시
 
 ### 진단
@@ -2651,3 +2675,6 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-12 15:22:10 | for lg in k1 k2; do / echo "=== ${lg^^} ===" / curl -sm 30 "https://today-tactics.co.kr/api/prediction-backtest?league=$lg&year=2026" | python -c " / import sys, json / sys.stdout.reconfigure(encoding='utf-8') / d = json.load(sys.stdin) / b = d['by_confidence'] / print(f\"  high {b['high']['pct']}%({b['high']['hit']}/{b['high']['total']})  med {b['med']['pct']}%({b['med']['hit']}/{b['med']['total']})  low {b['low']['pct']}%({b['low']['hit']}/{b['low']['total']})\") / " / done
 - 2026-05-12 15:27:42 | node -e "new Function(require('fs').readFileSync('static/js/app.js','utf8')); console.log('JS OK')"
 - 2026-05-12 15:39:47 | node -e "new Function(require('fs').readFileSync('static/js/prediction.js','utf8')); console.log('JS OK')"
+- 2026-05-13 00:50:20 | sleep 3 && cat "C:\Users\BANGEU~1\AppData\Local\Temp\claude\C--Users-BangEunHo-OneDrive-------today-tatics\68ad54ff-5692-4cb1-b990-8a07496d2de6\tasks\b160il2hc.output"
+- 2026-05-13 00:50:33 | pip install authlib 2>&1 | tail -5
+- 2026-05-13 00:50:42 | sleep 4 && cat "C:\Users\BANGEU~1\AppData\Local\Temp\claude\C--Users-BangEunHo-OneDrive-------today-tatics\68ad54ff-5692-4cb1-b990-8a07496d2de6\tasks\bwavl9b9s.output"
