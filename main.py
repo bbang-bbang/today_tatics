@@ -397,6 +397,11 @@ POSITION_LABELS = {
     "3-4-3": ["GK", "CB", "CB", "CB", "LM", "CM", "CM", "RM", "LW", "ST", "RW"],
     "5-3-2": ["GK", "LWB", "CB", "CB", "CB", "RWB", "CM", "CM", "CM", "ST", "ST"],
     "5-4-1": ["GK", "LWB", "CB", "CB", "CB", "RWB", "LM", "CM", "CM", "RM", "ST"],
+    "4-5-1":   ["GK", "LB", "CB", "CB", "RB", "LM", "CM", "CM", "CM", "RM", "ST"],
+    "3-4-2-1": ["GK", "CB", "CB", "CB", "LM", "CM", "CM", "RM", "LW", "RW", "ST"],
+    "3-4-1-2": ["GK", "CB", "CB", "CB", "LM", "CM", "CM", "RM", "AM", "ST", "ST"],
+    "4-4-1-1": ["GK", "LB", "CB", "CB", "RB", "LM", "CM", "CM", "RM", "AM", "ST"],
+    "3-1-4-2": ["GK", "CB", "CB", "CB", "CDM", "LM", "CM", "CM", "RM", "ST", "ST"],
 }
 
 def mirror_labels(labels):
@@ -5488,7 +5493,8 @@ def _build_formation_slots(formation, mirror=False):
     else:
         rows = [int(x) for x in formation.split("-")]
         labels = _default_labels_for_rows(rows)
-    # 라벨 L↔R swap — slot 1이 RB(라이트백)가 되도록 (SofaScore slot_order와 정합)
+    # 라벨 L↔R swap — slot 1이 RB(라이트백)가 되도록 (SofaScore slot_order와 정합).
+    # broadcast 시각에서 home/away 라이트백 모두 화면 아래쪽이므로 home·away 동일 라벨.
     labels = mirror_labels(labels)
     positions = compute_formation(formation)
     # 홈=좌측, 원정=우측(x 반전). y는 모두 1.0-y로 반전(broadcast 시각).
@@ -5497,9 +5503,6 @@ def _build_formation_slots(formation, mirror=False):
         x = round(1.0 - pos["x"], 3) if mirror else pos["x"]
         y = round(1.0 - pos["y"], 3)
         label = labels[i] if i < len(labels) else ""
-        if mirror:
-            if label.startswith("L"): label = "R" + label[1:]
-            elif label.startswith("R"): label = "L" + label[1:]
         slots.append({"slot_order": i, "x": x, "y": y, "label": label})
     return slots
 

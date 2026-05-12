@@ -35,5 +35,6 @@ Thumbs.db
 
 # 로컬 임시 로그/결과
 flask_test.log
+flask_dev.log
 qa_results.txt
 *.legacy_*.bak
