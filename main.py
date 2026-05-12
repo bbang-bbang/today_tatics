@@ -1747,15 +1747,16 @@ def get_team_trend():
 
 _POISSON_MAX_GOALS = 5  # 스코어 매트릭스 최대 (0~5골)
 
-# 리그별 포아송 모델 상수 (2026 실측 기반 재튜닝 — 2026-04-21)
-# 실측 (41경기 K1 / 56경기 K2):
-#   K1 2026: 실제 draw율=39%, raw Poisson draw_p≈28.8% → boost 0.12로 목표 37% calibration
-#   K2 2026: 실제 draw율=28%, raw Poisson draw_p≈25.1% → boost 0.03으로 목표 27% calibration
-#   draw_boost 수식: new_draw% = (raw_draw + boost) / (1 + boost)
-# draw_boost = argmax outcome 결정 시 draw 확률에 더해 줄 오프셋 (0~1 스케일)
+# 리그별 포아송 모델 상수 (2026 실측 기반 재튜닝 — 2026-05-12, 표본 2배 누적)
+# 실측 (79경기 K1 / 83경기 K2):
+#   K1: pred home 43%/draw 39%/away 18% → actual 33%/32%/35%. away 과소예측·draw 과대.
+#       → home_adv 1.04→0.98, away_adj 0.93→1.02, draw_boost 0.12→0.04
+#   K2: pred home 42%/draw 12%/away 46% → actual 36%/31%/33%. draw 심각 과소예측.
+#       → draw_boost 0.06→0.18, dc_rho 0.00→0.10 (Dixon-Coles 무승부 보정 가산)
+# draw_boost 수식: new_draw% = (raw_draw + boost) / (1 + boost)
 _LEAGUE_CONSTANTS = {
-    410: {"home_adv": 1.04, "away_adj": 0.93, "draw_boost": 0.12, "dc_rho": 0.10, "shrinkage_k": 3},  # K1: home_adv 1.07→1.04 (shrinkage가 격차 줄여 home 편향 유발한 영향 보정)
-    777: {"home_adv": 0.96, "away_adj": 0.90, "draw_boost": 0.06, "dc_rho": 0.00, "shrinkage_k": 0},  # K2: 그대로 유지 (이미 47.8%, draw_boost 0.12 시도 시 -6%p 악화 검증됨)
+    410: {"home_adv": 0.98, "away_adj": 1.02, "draw_boost": 0.04, "dc_rho": 0.10, "shrinkage_k": 3},  # K1: away 가중 ↑ + draw boost ↓ (1차 튜닝 04-21 후 away 강세 트렌드 반영)
+    777: {"home_adv": 0.96, "away_adj": 0.90, "draw_boost": 0.18, "dc_rho": 0.10, "shrinkage_k": 0},  # K2: draw boost ↑↑ + Dixon-Coles ρ 도입 (실제 draw 31%인데 12% 예측)
 }
 _DEFAULT_LEAGUE_CONSTANTS = {"home_adv": 1.00, "away_adj": 0.90, "draw_boost": 0.10, "dc_rho": 0.0, "shrinkage_k": 0}
 
