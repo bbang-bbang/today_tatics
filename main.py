@@ -5793,7 +5793,7 @@ def match_lineup():
             return None
         formation = next((r["formation"] for r in rows if r["formation"]), None)
         # formation_sofa = SofaScore가 실제로 보고한 포메이션 → 서브-row 구조까지 정확
-        formation_sofa = next((r["formation_sofa"] for r in rows if r.get("formation_sofa")), None)
+        formation_sofa = next((r["formation_sofa"] for r in rows if r["formation_sofa"]), None)
 
         # 우선순위: formation_sofa > stored formation(DF 행 검증 후)
         starter_rows_tmp = [r for r in rows if r["is_starter"]]
