@@ -5825,6 +5825,87 @@ def match_lineup():
     ).fetchall()
     avg_by_pid = {r["player_id"]: (r["x"], r["y"]) for r in avg_rows}
 
+    # K리그 포털 라인업(있으면 ground truth) — side별 player 목록.
+    # build_side에서 라인 라벨(G/D/M/F) 재할당에 사용. 좌표 자체는 사용하지 않음
+    # (전술판 격자 보존 위해). 매칭은 등번호 기반.
+    kl_rows = conn.execute("""
+        SELECT side, back_no, top_pct, left_pct
+        FROM kleague_lineup WHERE sofa_event_id = ?
+    """, (resolved_event_id,)).fetchall()
+    kleague_by_side = {"home": [], "away": []}
+    for r in kl_rows:
+        kleague_by_side[r["side"]].append({
+            "back_no": r["back_no"], "top_pct": r["top_pct"], "left_pct": r["left_pct"],
+        })
+
+    def _kleague_position_by_shirt(kl_players):
+        """K리그 라인업 → {shirt_number: 'G'|'D'|'M'|'F'}, 재도출 formation.
+
+        K리그 시각화 top%: 큰 값=자기 골대 쪽(GK), 작은 값=상대 골대 쪽(FW).
+        GK = 최후방 라인(1명). D = 첫 outfield row 누적 (3명 이상까지).
+        F = 마지막 outfield row만. M = 그 사이 전부.
+        multi-row(4-2-3-1, 4-1-4-1 등) 매치도 처리 가능.
+        """
+        if len(kl_players) != 11:
+            return None
+        from collections import defaultdict
+        by_top = defaultdict(list)
+        for p in kl_players:
+            by_top[round(p["top_pct"], 1)].append(p)
+        tops_desc = sorted(by_top.keys(), reverse=True)
+        if len(tops_desc) < 3:
+            return None
+        gk_line = by_top[tops_desc[0]]
+        if len(gk_line) != 1:
+            return None
+        non_gk = tops_desc[1:]
+
+        # D: 첫 row부터 누적 — 3명 이상 도달까지 (3백/4백/5백 처리)
+        d_line = []
+        d_used = 0
+        for t in non_gk:
+            d_line.extend(by_top[t])
+            d_used += 1
+            if len(d_line) >= 3:
+                break
+        # D 누적이 너무 많으면 (>=6) skip — 비현실적
+        if not (3 <= len(d_line) <= 6):
+            return None
+
+        # F: 마지막 row부터 누적 — 2명 이상 도달까지 (1톱은 단독, 2/3톱은 합산).
+        # LW/RW가 별도 row인 경우(K리그 시각화 특성)도 FW로 합산되어 사용자 인지에 가까움.
+        f_line = []
+        f_used = 0
+        for t in reversed(non_gk[d_used:]):
+            f_line = list(by_top[t]) + f_line
+            f_used += 1
+            if len(f_line) >= 2:
+                break
+        if not (1 <= len(f_line) <= 4):
+            return None
+
+        # M = D와 F 사이 row들
+        m_start = d_used
+        m_end = len(non_gk) - f_used
+        if m_start >= m_end:
+            return None  # M 라인 부재 — 비현실
+        m_line = []
+        for t in non_gk[m_start:m_end]:
+            m_line.extend(by_top[t])
+        if len(m_line) < 1:
+            return None
+
+        nD, nM, nF = len(d_line), len(m_line), len(f_line)
+        if nD + nM + nF != 10:
+            return None
+
+        formation = f"{nD}-{nM}-{nF}"
+        pos_by_shirt = {gk_line[0]["back_no"]: "G"}
+        for p in d_line: pos_by_shirt[p["back_no"]] = "D"
+        for p in m_line: pos_by_shirt[p["back_no"]] = "M"
+        for p in f_line: pos_by_shirt[p["back_no"]] = "F"
+        return pos_by_shirt, formation
+
     def build_side(is_home_flag, ss_team_id, ss_team_name):
         rows = [r for r in lu_rows if r["is_home"] == is_home_flag]
         if not rows:
@@ -5833,46 +5914,75 @@ def match_lineup():
         # formation_sofa = SofaScore가 실제로 보고한 포메이션 → 서브-row 구조까지 정확
         formation_sofa = next((r["formation_sofa"] for r in rows if r["formation_sofa"]), None)
 
-        # 우선순위: formation_sofa > stored formation(DF 행 검증 후)
-        starter_rows_tmp = [r for r in rows if r["is_starter"]]
-        actual_d = sum(1 for r in starter_rows_tmp if r["position"] == "D")
-        actual_m = sum(1 for r in starter_rows_tmp if r["position"] == "M")
-        actual_f = sum(1 for r in starter_rows_tmp if r["position"] == "F")
+        # 우선순위 0순위: K리그 포털 라벨 (공식 출처) → starter.position·formation 모두 override
+        side_key = "home" if is_home_flag else "away"
+        kl_players = kleague_by_side.get(side_key, [])
+        kl_override = _kleague_position_by_shirt(kl_players)
 
-        if formation_sofa:
-            # formation_sofa DF 행도 검증 — 틀리면 실측 분포로 재도출
-            try:
-                if actual_d + actual_m + actual_f == 10 and int(formation_sofa.split("-")[0]) != actual_d:
-                    raise ValueError
-                formation = formation_sofa
-            except (ValueError, IndexError):
-                parts = []
-                if actual_d: parts.append(str(actual_d))
-                if actual_m: parts.append(str(actual_m))
-                if actual_f: parts.append(str(actual_f))
-                formation = "-".join(parts) if parts else formation
-        elif actual_d + actual_m + actual_f == 10 and formation:
-            # formation_sofa 없을 때: stored DF 행이 실측과 다르면 재도출
-            try:
-                if int(formation.split("-")[0]) != actual_d:
+        starter_rows_tmp = [r for r in rows if r["is_starter"]]
+
+        # K리그 적용 가능 검사: 매칭률(등번호 일치) ≥ 9/11 이면 채택, 아니면 SofaScore 그대로
+        kl_pos_by_pid = None
+        if kl_override:
+            kl_pos_by_shirt, kl_formation = kl_override
+            kl_pos_by_pid = {}
+            matched_cnt = 0
+            for r in starter_rows_tmp:
+                shirt = r["shirt_number"]
+                if shirt is not None and shirt in kl_pos_by_shirt:
+                    kl_pos_by_pid[r["player_id"]] = kl_pos_by_shirt[shirt]
+                    matched_cnt += 1
+            if matched_cnt < 9:
+                kl_pos_by_pid = None  # 매핑 부족 → fallback
+                kl_formation = None
+
+        # position 카운트: K리그 우선 → SofaScore fallback
+        if kl_pos_by_pid:
+            actual_d = sum(1 for pid in kl_pos_by_pid.values() if pid == "D")
+            actual_m = sum(1 for pid in kl_pos_by_pid.values() if pid == "M")
+            actual_f = sum(1 for pid in kl_pos_by_pid.values() if pid == "F")
+            # K리그 포메이션 직접 사용
+            formation = kl_formation
+        else:
+            actual_d = sum(1 for r in starter_rows_tmp if r["position"] == "D")
+            actual_m = sum(1 for r in starter_rows_tmp if r["position"] == "M")
+            actual_f = sum(1 for r in starter_rows_tmp if r["position"] == "F")
+            if formation_sofa:
+                # formation_sofa DF 행도 검증 — 틀리면 실측 분포로 재도출
+                try:
+                    if actual_d + actual_m + actual_f == 10 and int(formation_sofa.split("-")[0]) != actual_d:
+                        raise ValueError
+                    formation = formation_sofa
+                except (ValueError, IndexError):
                     parts = []
                     if actual_d: parts.append(str(actual_d))
                     if actual_m: parts.append(str(actual_m))
                     if actual_f: parts.append(str(actual_f))
                     formation = "-".join(parts) if parts else formation
-            except (ValueError, IndexError):
-                pass
+            elif actual_d + actual_m + actual_f == 10 and formation:
+                try:
+                    if int(formation.split("-")[0]) != actual_d:
+                        parts = []
+                        if actual_d: parts.append(str(actual_d))
+                        if actual_m: parts.append(str(actual_m))
+                        if actual_f: parts.append(str(actual_f))
+                        formation = "-".join(parts) if parts else formation
+                except (ValueError, IndexError):
+                    pass
 
         slots     = _build_formation_slots(formation, mirror=(not is_home_flag))
 
         starters, subs = [], []
         for r in rows:
+            pid = r["player_id"]
+            # K리그 override 적용된 경우 position 교체
+            kl_pos = kl_pos_by_pid.get(pid) if kl_pos_by_pid else None
             p = {
-                "player_id":    r["player_id"],
+                "player_id":    pid,
                 "name":         r["name_display"] or r["player_name"] or "",
                 "name_raw":     r["player_name"] or "",
                 "shirt_number": r["shirt_number"],
-                "position":     r["position"],
+                "position":     kl_pos or r["position"],
                 "height":       r["height"],
             }
             if r["is_starter"]:
@@ -5881,12 +5991,35 @@ def match_lineup():
             else:
                 subs.append(p)
 
-        # B 방식: 라인 내 starter 좌우 재정렬.
-        # 같은 SofaScore 라인(D/M/F)에 속한 starter들의 avg_y 순서가 그 라인의 slot.y 순서와
-        # 매칭되도록 slot_order 재할당. 슬롯 좌표는 formation 격자 그대로(전술판 격자 보존).
-        # avg_position 없는 starter가 라인에 1명 이상이면 그 라인은 정렬 건너뜀 (SofaScore 그대로).
-        if avg_by_pid:
-            from collections import defaultdict
+        from collections import defaultdict
+        if kl_pos_by_pid:
+            # K리그 적용: position·formation 기준으로 slot_order 전체 재할당.
+            # GK=0, D=1..nD, M=nD+1..nD+nM, F=나머지. 라인 내 avg_y로 좌우 정렬.
+            nD_, nM_, nF_ = actual_d, actual_m, actual_f
+            line_slot_idx = {
+                "G": [0],
+                "D": list(range(1, 1 + nD_)),
+                "M": list(range(1 + nD_, 1 + nD_ + nM_)),
+                "F": list(range(1 + nD_ + nM_, len(slots))),
+            }
+            by_line = defaultdict(list)
+            for st in starters:
+                by_line[st["position"]].append(st)
+
+            for label, slot_indices in line_slot_idx.items():
+                line_sts = by_line.get(label, [])
+                if len(line_sts) != len(slot_indices) or not slot_indices:
+                    continue
+                # 라인 내 좌우 정렬: avg_y 가능하면 사용, 아니면 안정 정렬
+                line_sorted = sorted(
+                    line_sts,
+                    key=lambda st: avg_by_pid.get(st["player_id"], (50, 50))[1],
+                )
+                slot_sorted = sorted(slot_indices, key=lambda i: slots[i]["y"])
+                for st, si in zip(line_sorted, slot_sorted):
+                    st["slot_order"] = si
+        elif avg_by_pid:
+            # B 방식 fallback: SofaScore 라인 라벨 + avg_y 라인 내 정렬
             by_line = defaultdict(list)
             line_slot_orders = defaultdict(list)
             for st in starters:
@@ -5895,13 +6028,11 @@ def match_lineup():
                 if pos in ("D", "M", "F") and so is not None and 0 <= so < len(slots):
                     by_line[pos].append(st)
                     line_slot_orders[pos].append(so)
-
             for pos, group in by_line.items():
                 if len(group) < 2:
                     continue
                 if not all(st["player_id"] in avg_by_pid for st in group):
-                    continue  # avg 누락이 있으면 안전하게 패스
-                # avg_y 오름차순 ↔ slot.y 오름차순 — 라인 내 좌우 매핑 (방향 일관성 유지)
+                    continue
                 sorted_starters = sorted(group, key=lambda st: avg_by_pid[st["player_id"]][1])
                 sorted_sos      = sorted(line_slot_orders[pos], key=lambda so: slots[so]["y"])
                 for st, new_so in zip(sorted_starters, sorted_sos):
