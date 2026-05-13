@@ -5817,6 +5817,13 @@ def match_lineup():
         conn.close()
         return jsonify({"ready": False, "reason": "no_lineup", "event_id": resolved_event_id})
 
+    # avg_position 사전 조회 — finished 매치는 실측 좌표로 슬롯 덮어씀 (slot_order 매핑 99.9% 오류 회피)
+    avg_rows = conn.execute(
+        "SELECT player_id, x, y FROM match_avg_positions WHERE event_id=?",
+        (resolved_event_id,),
+    ).fetchall()
+    avg_by_pid = {r["player_id"]: (r["x"], r["y"]) for r in avg_rows}
+
     def build_side(is_home_flag, ss_team_id, ss_team_name):
         rows = [r for r in lu_rows if r["is_home"] == is_home_flag]
         if not rows:
@@ -5872,6 +5879,26 @@ def match_lineup():
                 starters.append(p)
             else:
                 subs.append(p)
+
+        # avg_position 오버라이드: starter의 slot_order에 해당하는 슬롯 좌표를 실측값으로 교체.
+        # _build_formation_slots와 동일한 변환: home은 x 그대로/y반전, away는 x반전/y 그대로.
+        for st in starters:
+            pid = st["player_id"]
+            if pid not in avg_by_pid:
+                continue
+            slot_idx = st.get("slot_order")
+            if slot_idx is None or not (0 <= slot_idx < len(slots)):
+                continue
+            raw_x, raw_y = avg_by_pid[pid]
+            if is_home_flag:
+                nx = raw_x / 100.0
+                ny = 1.0 - raw_y / 100.0
+            else:
+                nx = 1.0 - raw_x / 100.0
+                ny = raw_y / 100.0
+            slots[slot_idx]["x"] = round(nx, 3)
+            slots[slot_idx]["y"] = round(ny, 3)
+            slots[slot_idx]["avg_override"] = True
 
         team_info = _team_info_by_sofascore_id(ss_team_id) or {}
         return {

@@ -2687,3 +2687,6 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-13 00:50:20 | sleep 3 && cat "C:\Users\BANGEU~1\AppData\Local\Temp\claude\C--Users-BangEunHo-OneDrive-------today-tatics\68ad54ff-5692-4cb1-b990-8a07496d2de6\tasks\b160il2hc.output"
 - 2026-05-13 00:50:33 | pip install authlib 2>&1 | tail -5
 - 2026-05-13 00:50:42 | sleep 4 && cat "C:\Users\BANGEU~1\AppData\Local\Temp\claude\C--Users-BangEunHo-OneDrive-------today-tatics\68ad54ff-5692-4cb1-b990-8a07496d2de6\tasks\bwavl9b9s.output"
+- 2026-05-13 10:23:08 | git show origin/main:checklist/history.md > checklist/history.md && git add checklist/history.md && git diff --cached --stat checklist/history.md
+- 2026-05-13 10:23:12 | git diff --cached --stat
+- 2026-05-13 10:23:20 | git status
