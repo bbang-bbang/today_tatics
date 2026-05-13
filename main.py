@@ -5817,6 +5817,14 @@ def match_lineup():
         conn.close()
         return jsonify({"ready": False, "reason": "no_lineup", "event_id": resolved_event_id})
 
+    # avg_position 사전 조회 — 같은 라인 내 starter 좌우 순서 재정렬에 사용 (B 방식).
+    # 슬롯 좌표는 formation 격자 그대로 유지, starter의 slot_order만 재할당.
+    avg_rows = conn.execute(
+        "SELECT player_id, x, y FROM match_avg_positions WHERE event_id=?",
+        (resolved_event_id,),
+    ).fetchall()
+    avg_by_pid = {r["player_id"]: (r["x"], r["y"]) for r in avg_rows}
+
     def build_side(is_home_flag, ss_team_id, ss_team_name):
         rows = [r for r in lu_rows if r["is_home"] == is_home_flag]
         if not rows:
@@ -5872,6 +5880,32 @@ def match_lineup():
                 starters.append(p)
             else:
                 subs.append(p)
+
+        # B 방식: 라인 내 starter 좌우 재정렬.
+        # 같은 SofaScore 라인(D/M/F)에 속한 starter들의 avg_y 순서가 그 라인의 slot.y 순서와
+        # 매칭되도록 slot_order 재할당. 슬롯 좌표는 formation 격자 그대로(전술판 격자 보존).
+        # avg_position 없는 starter가 라인에 1명 이상이면 그 라인은 정렬 건너뜀 (SofaScore 그대로).
+        if avg_by_pid:
+            from collections import defaultdict
+            by_line = defaultdict(list)
+            line_slot_orders = defaultdict(list)
+            for st in starters:
+                pos = st["position"]
+                so  = st.get("slot_order")
+                if pos in ("D", "M", "F") and so is not None and 0 <= so < len(slots):
+                    by_line[pos].append(st)
+                    line_slot_orders[pos].append(so)
+
+            for pos, group in by_line.items():
+                if len(group) < 2:
+                    continue
+                if not all(st["player_id"] in avg_by_pid for st in group):
+                    continue  # avg 누락이 있으면 안전하게 패스
+                # avg_y 오름차순 ↔ slot.y 오름차순 — 라인 내 좌우 매핑 (방향 일관성 유지)
+                sorted_starters = sorted(group, key=lambda st: avg_by_pid[st["player_id"]][1])
+                sorted_sos      = sorted(line_slot_orders[pos], key=lambda so: slots[so]["y"])
+                for st, new_so in zip(sorted_starters, sorted_sos):
+                    st["slot_order"] = new_so
 
         team_info = _team_info_by_sofascore_id(ss_team_id) or {}
         return {
