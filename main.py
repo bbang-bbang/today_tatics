@@ -5868,6 +5868,14 @@ def match_lineup():
         if total_outfield != 10:
             return None
 
+        # D 누적: 첫 row가 3명 미만이면 인접 row와 합쳐서 D 라인 형성
+        # (K리그가 LB+CB+CB+RB를 2 row로 split 표시하는 경우 대응)
+        while len(outfield) > 1 and len(outfield[0][1]) < 3:
+            merged = (outfield[0][0], outfield[0][1] + outfield[1][1])
+            outfield = [merged] + outfield[2:]
+        if len(outfield) < 2 or len(outfield[0][1]) < 3:
+            return None
+
         # 5+ row → 4-row까지 축소: middle row 중 합이 가장 작은 인접 쌍 합치기.
         # 첫 row(D)와 마지막 row(F)는 보존.
         while len(outfield) > 4:
