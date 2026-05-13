@@ -5877,20 +5877,17 @@ def match_lineup():
             return None
 
         # 5+ row → 4-row까지 축소: middle row 중 합이 가장 작은 인접 쌍 합치기.
-        # 첫 row(D)와 마지막 row(F)는 보존.
+        # 동일 합 발생 시 더 뒤쪽(공격 라인 쪽) 우선 — 4-2-1-2-1 → 4-2-3-1 표준.
         while len(outfield) > 4:
             middle_indices = list(range(1, len(outfield) - 1))
             if len(middle_indices) < 2:
-                # 합칠 middle이 부족 — 마지막에서 두 번째와 마지막 합치기 (F 확장)
-                # 또는 첫 둘 합치기 (D 확장). 인원 수 작은 쪽 선호.
-                # 안전 fallback: 첫 두 row 합치기 (D 확장)
                 merged = (outfield[0][0], outfield[0][1] + outfield[1][1])
                 outfield = [merged] + outfield[2:]
                 continue
             best_i, best_sum = None, 999
             for i in middle_indices[:-1]:
                 s = len(outfield[i][1]) + len(outfield[i + 1][1])
-                if s < best_sum:
+                if s < best_sum or (s == best_sum and best_i is not None and i > best_i):
                     best_sum, best_i = s, i
             merged = (outfield[best_i][0], outfield[best_i][1] + outfield[best_i + 1][1])
             outfield = outfield[:best_i] + [merged] + outfield[best_i + 2:]
