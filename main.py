@@ -5872,23 +5872,24 @@ def match_lineup():
         if not (3 <= len(d_line) <= 6):
             return None
 
-        # F: 마지막 row부터 누적 — 2명 이상 도달까지 (1톱은 단독, 2/3톱은 합산).
-        # LW/RW가 별도 row인 경우(K리그 시각화 특성)도 FW로 합산되어 사용자 인지에 가까움.
-        f_line = []
-        f_used = 0
-        for t in reversed(non_gk[d_used:]):
-            f_line = list(by_top[t]) + f_line
-            f_used += 1
-            if len(f_line) >= 2:
-                break
+        # F: 마지막 row만 사용 (1~4명 허용). 단순 룰 — 누적은 1톱 매치에서
+        # MF row까지 통째 흡수하는 버그가 있어 v4에서 폐기.
+        # 결과: 5-4-1·3-4-3 같은 단순 3-line 매치가 정확히 표시됨.
+        # 4-2-3-1 multi-row는 4-5-1로 표시 (1톱 보존, 사용자 인지에 가까움).
+        f_line = list(by_top[non_gk[-1]])
+        f_used = 1
         if not (1 <= len(f_line) <= 4):
             return None
 
-        # M = D와 F 사이 row들
+        # F가 D 영역과 겹치면 비현실
+        if d_used + f_used > len(non_gk):
+            return None
+
+        # M = D와 F 사이 row들 (없을 수도 — 그러면 비현실로 거부)
         m_start = d_used
         m_end = len(non_gk) - f_used
         if m_start >= m_end:
-            return None  # M 라인 부재 — 비현실
+            return None
         m_line = []
         for t in non_gk[m_start:m_end]:
             m_line.extend(by_top[t])
