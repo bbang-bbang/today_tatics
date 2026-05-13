@@ -38,7 +38,7 @@
         nextId: 100,
         animSpeed: 1.0,
         highlightPlayerId: null, // 개인 강조 모드: 이 선수만 하이라이트
-        showRoleTags: false,     // 롤 태그 표시 토글
+        showRoleTags: true,      // 롤 태그 기본 표시 (4-3-3 LW/RW vs 4-2-3-1 CDM/AM 구분용)
     };
 
     const canvas = document.getElementById("field");
@@ -316,11 +316,11 @@
             ctx.fillStyle = txtCol; ctx.font = "bold 11px 'Segoe UI', sans-serif";
             ctx.textAlign = "center"; ctx.textBaseline = "middle";
             ctx.fillText(p.number, px, py);
-            // 롤 태그 표시
-            if (state.showRoleTags && p.position) {
+            // 롤 태그 표시 — 슬롯 라벨(LW/CDM/AM 등) 우선, 없으면 GK/DF/MF/FW
+            if (state.showRoleTags && (p.slotLabel || p.position)) {
                 ctx.font = "bold 8px 'Segoe UI', sans-serif";
                 ctx.fillStyle = "rgba(255,255,200,0.9)";
-                ctx.fillText(p.position, px, py - r - 5);
+                ctx.fillText(p.slotLabel || p.position, px, py - r - 5);
             }
             ctx.font = "bold 10px 'Segoe UI', sans-serif";
             ctx.fillStyle = "#fff";
@@ -2174,6 +2174,7 @@
                     x: slot.x, y: slot.y, onField: true, slotIdx: slot.idx,
                     name: p.name || p.name_raw || "", number: p.shirt_number || null,
                     position: POS_SS_TO_APP[p.position] || "",
+                    slotLabel: slot.label || "",  // 4-3-3/4-2-3-1 등 라인 구분용 디테일 라벨
                     height: p.height || null, weight: null, dob: "",
                     playerId: p.player_id,
                 });
