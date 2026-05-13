@@ -5950,8 +5950,11 @@ def match_lineup():
                     kl_pos_by_pid[r["player_id"]] = kl_pos_by_shirt[shirt]
                     kl_row_idx_by_pid[r["player_id"]] = kl_row_idx_by_shirt[shirt]
                     matched_cnt += 1
-            if matched_cnt < 9:
-                kl_pos_by_pid = None  # 매핑 부족 → fallback
+            # 11/11 완전 매칭일 때만 K리그 적용. 1명이라도 매핑 부재면 SofaScore + B 방식 fallback.
+            # (부분 매칭 시 매핑 부재 starter의 SofaScore 원본 slot_order가 K리그 line slot과
+            #  충돌해 slot_dup 발생 가능 — ev=11000598 케이스에서 확인)
+            if matched_cnt < 11:
+                kl_pos_by_pid = None
                 kl_row_idx_by_pid = None
                 kl_formation = None
 
