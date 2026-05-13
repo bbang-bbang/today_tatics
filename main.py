@@ -5839,12 +5839,15 @@ def match_lineup():
         })
 
     def _kleague_position_by_shirt(kl_players):
-        """K리그 라인업 → {shirt_number: 'G'|'D'|'M'|'F'}, 재도출 formation.
+        """K리그 라인업 → ({shirt_number: 'G'|'D'|'M'|'F'}, formation,
+                          {shirt_number: row_idx}).
 
-        K리그 시각화 top%: 큰 값=자기 골대 쪽(GK), 작은 값=상대 골대 쪽(FW).
-        GK = 최후방 라인(1명). D = 첫 outfield row 누적 (3명 이상까지).
-        F = 마지막 outfield row만. M = 그 사이 전부.
-        multi-row(4-2-3-1, 4-1-4-1 등) 매치도 처리 가능.
+        K리그 row 그대로 multi-row formation으로 변환.
+        N=3 (D-M-F) 또는 N=4 (D-CDM-MF-F 등) row 그대로 사용.
+        N=5+ 매치는 middle row 중 작은 인접 쌍을 합쳐 4-row로 축소.
+
+        K리그 row index가 main.py compute_formation의 slot row와 1:1 매핑되어
+        slot_order 재할당 시 사용. 라인 라벨(D/M/F)은 첫=D, 마지막=F, 나머지=M.
         """
         if len(kl_players) != 11:
             return None
@@ -5858,54 +5861,56 @@ def match_lineup():
         gk_line = by_top[tops_desc[0]]
         if len(gk_line) != 1:
             return None
-        non_gk = tops_desc[1:]
 
-        # D: 첫 row부터 누적 — 3명 이상 도달까지 (3백/4백/5백 처리)
-        d_line = []
-        d_used = 0
-        for t in non_gk:
-            d_line.extend(by_top[t])
-            d_used += 1
-            if len(d_line) >= 3:
-                break
-        # D 누적이 너무 많으면 (>=6) skip — 비현실적
-        if not (3 <= len(d_line) <= 6):
+        # outfield row 추출: (top, [players]) 리스트
+        outfield = [(t, list(by_top[t])) for t in tops_desc[1:]]
+        total_outfield = sum(len(p) for _, p in outfield)
+        if total_outfield != 10:
             return None
 
-        # F: 마지막 row만 사용 (1~4명 허용). 단순 룰 — 누적은 1톱 매치에서
-        # MF row까지 통째 흡수하는 버그가 있어 v4에서 폐기.
-        # 결과: 5-4-1·3-4-3 같은 단순 3-line 매치가 정확히 표시됨.
-        # 4-2-3-1 multi-row는 4-5-1로 표시 (1톱 보존, 사용자 인지에 가까움).
-        f_line = list(by_top[non_gk[-1]])
-        f_used = 1
-        if not (1 <= len(f_line) <= 4):
-            return None
+        # 5+ row → 4-row까지 축소: middle row 중 합이 가장 작은 인접 쌍 합치기.
+        # 첫 row(D)와 마지막 row(F)는 보존.
+        while len(outfield) > 4:
+            middle_indices = list(range(1, len(outfield) - 1))
+            if len(middle_indices) < 2:
+                # 합칠 middle이 부족 — 마지막에서 두 번째와 마지막 합치기 (F 확장)
+                # 또는 첫 둘 합치기 (D 확장). 인원 수 작은 쪽 선호.
+                # 안전 fallback: 첫 두 row 합치기 (D 확장)
+                merged = (outfield[0][0], outfield[0][1] + outfield[1][1])
+                outfield = [merged] + outfield[2:]
+                continue
+            best_i, best_sum = None, 999
+            for i in middle_indices[:-1]:
+                s = len(outfield[i][1]) + len(outfield[i + 1][1])
+                if s < best_sum:
+                    best_sum, best_i = s, i
+            merged = (outfield[best_i][0], outfield[best_i][1] + outfield[best_i + 1][1])
+            outfield = outfield[:best_i] + [merged] + outfield[best_i + 2:]
 
-        # F가 D 영역과 겹치면 비현실
-        if d_used + f_used > len(non_gk):
+        # 이제 outfield는 3 또는 4 row
+        row_counts = [len(p) for _, p in outfield]
+        nD = row_counts[0]
+        nF = row_counts[-1]
+        nM = sum(row_counts[1:-1])
+        if not (3 <= nD <= 6 and 1 <= nF <= 4 and nM >= 1):
             return None
-
-        # M = D와 F 사이 row들 (없을 수도 — 그러면 비현실로 거부)
-        m_start = d_used
-        m_end = len(non_gk) - f_used
-        if m_start >= m_end:
-            return None
-        m_line = []
-        for t in non_gk[m_start:m_end]:
-            m_line.extend(by_top[t])
-        if len(m_line) < 1:
-            return None
-
-        nD, nM, nF = len(d_line), len(m_line), len(f_line)
         if nD + nM + nF != 10:
             return None
 
-        formation = f"{nD}-{nM}-{nF}"
+        formation = "-".join(str(c) for c in row_counts)
+
+        # shirt_number → ('G'|'D'|'M'|'F', row_idx_within_formation)
+        # row_idx: GK=0, D=1, ... , F=len-1
         pos_by_shirt = {gk_line[0]["back_no"]: "G"}
-        for p in d_line: pos_by_shirt[p["back_no"]] = "D"
-        for p in m_line: pos_by_shirt[p["back_no"]] = "M"
-        for p in f_line: pos_by_shirt[p["back_no"]] = "F"
-        return pos_by_shirt, formation
+        row_idx_by_shirt = {gk_line[0]["back_no"]: 0}
+        for idx, (_, players) in enumerate(outfield):
+            label = "D" if idx == 0 else ("F" if idx == len(outfield) - 1 else "M")
+            for p in players:
+                pos_by_shirt[p["back_no"]] = label
+                # row_idx_within_formation: formation row 인덱스 (GK가 0이므로 +1)
+                row_idx_by_shirt[p["back_no"]] = idx + 1
+
+        return pos_by_shirt, formation, row_idx_by_shirt
 
     def build_side(is_home_flag, ss_team_id, ss_team_name):
         rows = [r for r in lu_rows if r["is_home"] == is_home_flag]
@@ -5924,17 +5929,22 @@ def match_lineup():
 
         # K리그 적용 가능 검사: 매칭률(등번호 일치) ≥ 9/11 이면 채택, 아니면 SofaScore 그대로
         kl_pos_by_pid = None
+        kl_row_idx_by_pid = None
+        kl_formation = None
         if kl_override:
-            kl_pos_by_shirt, kl_formation = kl_override
+            kl_pos_by_shirt, kl_formation, kl_row_idx_by_shirt = kl_override
             kl_pos_by_pid = {}
+            kl_row_idx_by_pid = {}
             matched_cnt = 0
             for r in starter_rows_tmp:
                 shirt = r["shirt_number"]
                 if shirt is not None and shirt in kl_pos_by_shirt:
                     kl_pos_by_pid[r["player_id"]] = kl_pos_by_shirt[shirt]
+                    kl_row_idx_by_pid[r["player_id"]] = kl_row_idx_by_shirt[shirt]
                     matched_cnt += 1
             if matched_cnt < 9:
                 kl_pos_by_pid = None  # 매핑 부족 → fallback
+                kl_row_idx_by_pid = None
                 kl_formation = None
 
         # position 카운트: K리그 우선 → SofaScore fallback
@@ -5993,25 +6003,27 @@ def match_lineup():
                 subs.append(p)
 
         from collections import defaultdict
-        if kl_pos_by_pid:
-            # K리그 적용: position·formation 기준으로 slot_order 전체 재할당.
-            # GK=0, D=1..nD, M=nD+1..nD+nM, F=나머지. 라인 내 avg_y로 좌우 정렬.
-            nD_, nM_, nF_ = actual_d, actual_m, actual_f
-            line_slot_idx = {
-                "G": [0],
-                "D": list(range(1, 1 + nD_)),
-                "M": list(range(1 + nD_, 1 + nD_ + nM_)),
-                "F": list(range(1 + nD_ + nM_, len(slots))),
-            }
-            by_line = defaultdict(list)
-            for st in starters:
-                by_line[st["position"]].append(st)
+        if kl_pos_by_pid and kl_row_idx_by_pid:
+            # K리그 row index 기반 slot 매핑 — multi-row formation (4-2-3-1 등) 지원.
+            # slot 인덱스: GK=0, row1=[1..r1], row2=[r1+1..r1+r2], ...
+            row_counts = [int(c) for c in formation.split("-")]  # outfield row counts
+            row_slot_idx = {0: [0]}  # GK
+            cursor = 1
+            for ridx, cnt in enumerate(row_counts):
+                row_slot_idx[ridx + 1] = list(range(cursor, cursor + cnt))
+                cursor += cnt
 
-            for label, slot_indices in line_slot_idx.items():
-                line_sts = by_line.get(label, [])
+            by_row = defaultdict(list)
+            for st in starters:
+                rid = kl_row_idx_by_pid.get(st["player_id"])
+                if rid is not None:
+                    by_row[rid].append(st)
+
+            for rid, line_sts in by_row.items():
+                slot_indices = row_slot_idx.get(rid, [])
                 if len(line_sts) != len(slot_indices) or not slot_indices:
                     continue
-                # 라인 내 좌우 정렬: avg_y 가능하면 사용, 아니면 안정 정렬
+                # 라인 내 좌우 정렬: avg_y 가능하면 사용
                 line_sorted = sorted(
                     line_sts,
                     key=lambda st: avg_by_pid.get(st["player_id"], (50, 50))[1],
