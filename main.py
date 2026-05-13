@@ -5907,18 +5907,19 @@ def match_lineup():
 
         formation = "-".join(str(c) for c in row_counts)
 
-        # shirt_number → ('G'|'D'|'M'|'F', row_idx_within_formation)
-        # row_idx: GK=0, D=1, ... , F=len-1
+        # shirt_number → ('G'|'D'|'M'|'F', row_idx, left_pct)
+        # row_idx: GK=0, D=1, ..., F=len-1. left_pct: K리그 시각화 좌우(0~100)
         pos_by_shirt = {gk_line[0]["back_no"]: "G"}
         row_idx_by_shirt = {gk_line[0]["back_no"]: 0}
+        left_by_shirt = {gk_line[0]["back_no"]: gk_line[0]["left_pct"]}
         for idx, (_, players) in enumerate(outfield):
             label = "D" if idx == 0 else ("F" if idx == len(outfield) - 1 else "M")
             for p in players:
                 pos_by_shirt[p["back_no"]] = label
-                # row_idx_within_formation: formation row 인덱스 (GK가 0이므로 +1)
                 row_idx_by_shirt[p["back_no"]] = idx + 1
+                left_by_shirt[p["back_no"]] = p["left_pct"]
 
-        return pos_by_shirt, formation, row_idx_by_shirt
+        return pos_by_shirt, formation, row_idx_by_shirt, left_by_shirt
 
     def build_side(is_home_flag, ss_team_id, ss_team_name):
         rows = [r for r in lu_rows if r["is_home"] == is_home_flag]
@@ -5938,17 +5939,20 @@ def match_lineup():
         # K리그 적용 가능 검사: 매칭률(등번호 일치) ≥ 9/11 이면 채택, 아니면 SofaScore 그대로
         kl_pos_by_pid = None
         kl_row_idx_by_pid = None
+        kl_left_by_pid = None
         kl_formation = None
         if kl_override:
-            kl_pos_by_shirt, kl_formation, kl_row_idx_by_shirt = kl_override
+            kl_pos_by_shirt, kl_formation, kl_row_idx_by_shirt, kl_left_by_shirt = kl_override
             kl_pos_by_pid = {}
             kl_row_idx_by_pid = {}
+            kl_left_by_pid = {}
             matched_cnt = 0
             for r in starter_rows_tmp:
                 shirt = r["shirt_number"]
                 if shirt is not None and shirt in kl_pos_by_shirt:
                     kl_pos_by_pid[r["player_id"]] = kl_pos_by_shirt[shirt]
                     kl_row_idx_by_pid[r["player_id"]] = kl_row_idx_by_shirt[shirt]
+                    kl_left_by_pid[r["player_id"]] = kl_left_by_shirt[shirt]
                     matched_cnt += 1
             # 11/11 완전 매칭일 때만 K리그 적용. 1명이라도 매핑 부재면 SofaScore + B 방식 fallback.
             # (부분 매칭 시 매핑 부재 starter의 SofaScore 원본 slot_order가 K리그 line slot과
@@ -5956,6 +5960,7 @@ def match_lineup():
             if matched_cnt < 11:
                 kl_pos_by_pid = None
                 kl_row_idx_by_pid = None
+                kl_left_by_pid = None
                 kl_formation = None
 
         # position 카운트: K리그 우선 → SofaScore fallback
@@ -6034,10 +6039,11 @@ def match_lineup():
                 slot_indices = row_slot_idx.get(rid, [])
                 if len(line_sts) != len(slot_indices) or not slot_indices:
                     continue
-                # 라인 내 좌우 정렬: avg_y 가능하면 사용
+                # 라인 내 좌우 정렬: K리그 left% 직접 사용 (avg_y는 좌표계 미러 가능성).
+                # K리그 left%=0 = K리그 시각화 좌측 = 본인 시점 LB → broadcast slot.y 작 (위쪽).
                 line_sorted = sorted(
                     line_sts,
-                    key=lambda st: avg_by_pid.get(st["player_id"], (50, 50))[1],
+                    key=lambda st: kl_left_by_pid.get(st["player_id"], 50),
                 )
                 slot_sorted = sorted(slot_indices, key=lambda i: slots[i]["y"])
                 for st, si in zip(line_sorted, slot_sorted):
