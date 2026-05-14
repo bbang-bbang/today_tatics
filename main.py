@@ -5869,6 +5869,19 @@ def match_lineup():
         if total_outfield != 10:
             return None
 
+        # 사전 병합: top% 차이가 작은(≤3.0) 인접 row는 같은 라인으로 (K리그 시각화의
+        # 미세한 위치 차이로 라인이 분리 표시되는 케이스 — 용인 4-2-3-1을 4-3-2-1로
+        # 잘못 분류하는 케이스 등). top% 차이 3 초과면 진짜 다른 라인.
+        TOP_MERGE_THRESH = 3.0
+        merged_outfield = []
+        for t, players in outfield:
+            if merged_outfield and (merged_outfield[-1][0] - t) <= TOP_MERGE_THRESH:
+                # 인접 row와 합치기 (top%는 평균 유지하기 위해 첫 row의 값 유지)
+                merged_outfield[-1] = (merged_outfield[-1][0], merged_outfield[-1][1] + players)
+            else:
+                merged_outfield.append((t, list(players)))
+        outfield = merged_outfield
+
         # D 누적: 첫 row가 3명 미만이면 인접 row와 합쳐서 D 라인 형성
         # (K리그가 LB+CB+CB+RB를 2 row로 split 표시하는 경우 대응)
         while len(outfield) > 1 and len(outfield[0][1]) < 3:
