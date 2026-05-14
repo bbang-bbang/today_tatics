@@ -9,6 +9,53 @@ import threading
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from functools import wraps
+import time as _time_mod
+
+
+# ── API 응답 인메모리 캐시 (TTL) ────────────────────────────
+# 사용처: prediction-backtest(15s), round-predictions(2.7s), k*/schedule(1.4s), k*/rounds(1.4s).
+# Flask test 환경/단일 process gunicorn 가정. multi-worker 시 동기화 안 됨 (worker별 캐시).
+_API_CACHE = {}  # key → (expires_at, payload)
+_API_CACHE_TTL = 3600  # 1시간
+
+
+def cached_response(ttl=_API_CACHE_TTL):
+    """request.full_path를 키로 응답 객체 캐싱. JSON 직렬화 결과(text)를 저장."""
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                from flask import request as _req, Response
+                key = f"{fn.__name__}|{_req.full_path}"
+            except Exception:
+                return fn(*args, **kwargs)
+            now = _time_mod.time()
+            ent = _API_CACHE.get(key)
+            if ent and ent[0] > now:
+                body, mimetype, status = ent[1]
+                return Response(body, status=status, mimetype=mimetype)
+            resp = fn(*args, **kwargs)
+            try:
+                # Response 객체 또는 tuple 처리
+                if hasattr(resp, "get_data"):
+                    body = resp.get_data(as_text=True)
+                    mimetype = resp.mimetype
+                    status = resp.status_code
+                else:
+                    body = resp
+                    mimetype = "application/json"
+                    status = 200
+                _API_CACHE[key] = (now + ttl, (body, mimetype, status))
+            except Exception:
+                pass
+            return resp
+        return wrapper
+    return deco
+
+
+def invalidate_api_cache():
+    """update_data.py 실행 후 새 데이터 반영 위해 캐시 클리어."""
+    _API_CACHE.clear()
 
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for, abort
 from authlib.integrations.flask_client import OAuth
@@ -4731,6 +4778,7 @@ def _parse_k2_game(g):
     }
 
 @app.route("/api/k2/schedule")
+@cached_response(ttl=600)  # 10분 (스케줄은 거의 안 바뀜)
 def get_k2_schedule():
     """K2 예정 경기 + 팀별 다음 경기"""
     import datetime
@@ -4760,6 +4808,7 @@ def get_k2_schedule():
 
 
 @app.route("/api/k2/rounds")
+@cached_response(ttl=600)
 def get_k2_rounds():
     """K2 라운드 목록 + 각 라운드 경기 결과/예정"""
     import datetime
@@ -4848,6 +4897,7 @@ def _parse_k1_game(g):
 
 
 @app.route("/api/k1/schedule")
+@cached_response(ttl=600)
 def get_k1_schedule():
     """K1 예정 경기 + 팀별 다음 경기"""
     import datetime
@@ -4877,6 +4927,7 @@ def get_k1_schedule():
 
 
 @app.route("/api/k1/rounds")
+@cached_response(ttl=600)
 def get_k1_rounds():
     """K1 라운드 목록 + 각 라운드 경기 결과/예정"""
     import datetime
@@ -4912,6 +4963,7 @@ def get_k1_rounds():
 
 
 @app.route("/api/round-predictions")
+@cached_response(ttl=1800)  # 30분 (라운드는 며칠 단위)
 def round_predictions():
     """
     라운드별 사전 예측 — look-ahead bias 차단.
@@ -5243,6 +5295,7 @@ def next_round():
 
 
 @app.route("/api/prediction-backtest")
+@cached_response(ttl=3600)  # 1시간 (시즌 누적, 자주 안 바뀜)
 def prediction_backtest():
     """
     Rolling backtest: 각 종료 경기 직전까지의 데이터만으로 예측 → 실제 결과와 비교.
@@ -6698,6 +6751,32 @@ def trigger_update():
     t = threading.Thread(target=_run_update_pipeline, kwargs={"triggered_by": "manual"}, daemon=True)
     t.start()
     return jsonify({"ok": True, "msg": "업데이트를 시작했습니다"})
+
+
+def _warm_cache():
+    """서버 시작 시 백그라운드로 무거운 API 미리 호출 — 첫 사용자 대기 시간 제거.
+    K1/K2 백테스트 약 30초 + 스케줄/라운드 약 5초 = 한 번만 인내 후 영구 빠름.
+    """
+    import urllib.request
+    warm_urls = [
+        "http://127.0.0.1:5000/api/prediction-backtest?league=k1&year=2026",
+        "http://127.0.0.1:5000/api/prediction-backtest?league=k2&year=2026",
+        "http://127.0.0.1:5000/api/k1/schedule",
+        "http://127.0.0.1:5000/api/k2/schedule",
+        "http://127.0.0.1:5000/api/k1/rounds",
+        "http://127.0.0.1:5000/api/k2/rounds",
+    ]
+    import time as _t
+    _t.sleep(3)  # 서버 listen 대기
+    for u in warm_urls:
+        try:
+            urllib.request.urlopen(u, timeout=60).read()
+        except Exception:
+            pass
+
+
+# 서버 부팅 후 자동 워밍업 (production gunicorn에서도 동작)
+threading.Thread(target=_warm_cache, daemon=True).start()
 
 
 if __name__ == "__main__":
