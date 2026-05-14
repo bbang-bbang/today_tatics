@@ -6878,3 +6878,134 @@ body.pr-expanded-lock {
 .retro-export:focus-visible {
     outline: 2px solid #7bed9f; outline-offset: 2px;
 }
+
+/* ── 모바일 가시성 작업 (2026-05-14) ───────────────────── */
+/* 핵심: ≤768px에서 데스크탑 좌측 툴바 → 상단 가로 스크롤 띠 전환 + 정보 컴팩트화 */
+
+@media (max-width: 768px) {
+    body { overflow-y: auto; }
+    #app { height: auto; min-height: 100vh; }
+
+    /* 헤더 정확도 배너 — 작게 */
+    .header-accuracy-bar {
+        padding: 8px 12px;
+        margin: 6px 8px 0;
+        font-size: 11px;
+        gap: 6px;
+    }
+    .hab-lead { font-size: 11px; }
+    .hab-name { font-size: 10px; padding: 1px 5px; }
+
+    /* 단계 헤더 — 컴팩트 */
+    .flow-section-head { margin: 10px 0 4px; padding: 0 10px; gap: 6px; }
+    .flow-section-head.flow-section-head-mid { margin: 14px 0 4px; }
+    .flow-step { font-size: 10px; }
+    .flow-title { font-size: 12px; }
+    .flow-hint { display: none; }  /* 모바일에서 안내문 숨김 — 단계명만 */
+
+    /* 인사이트 토글 — 작게 */
+    .insights-toggle { padding: 10px 14px; font-size: 13px; margin: 8px 10px 4px; }
+
+    /* 매치 카드 (.kmc) — 좁은 폭 컴팩트 */
+    .ksb-banner { padding: 8px; }
+    .ksb-header { gap: 6px; }
+    .ksb-title { font-size: 12px; }
+    .ksb-sub { font-size: 10px; }
+    .ksb-round-tabs { gap: 4px; }
+    .ksb-round-btn { padding: 4px 6px; font-size: 11px; }
+    .ksb-round-done { font-size: 9px; }
+    .kmc { padding: 6px 8px; gap: 6px; }
+    .kmc-name { font-size: 11px; }
+    .kmc-score { font-size: 14px; }
+    .kmc-time { font-size: 11px; }
+    .kmc-emb { width: 22px; height: 22px; }
+    .kmc-meta { font-size: 9px; }
+    .kmc-tag { font-size: 9px; padding: 1px 4px; }
+
+    /* 메인 전술판 영역 — column 전환 (600px → 768px 상향) */
+    #main-row { flex-direction: column; }
+    #main-area { flex-direction: column; padding: 8px; gap: 8px; }
+    #canvas-container { flex-direction: column; }
+
+    /* 좌측 툴바 → 상단 가로 스크롤 띠 */
+    #left-toolbar {
+        width: 100% !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 6px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        align-self: stretch;
+        scrollbar-width: thin;
+    }
+    #left-toolbar::-webkit-scrollbar { height: 4px; }
+    #left-toolbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+    .ltb-group {
+        flex-direction: row !important;
+        flex-shrink: 0;
+        gap: 3px;
+    }
+    .ltb-grid2 {
+        display: flex !important;
+        flex-direction: row !important;
+        grid-template-columns: none !important;
+    }
+    .ltb-divider {
+        width: 1px;
+        height: 24px;
+        background: rgba(255,255,255,0.1);
+        margin: 0 4px;
+        flex-shrink: 0;
+    }
+    .ltb-speed { width: auto; min-width: 120px; }
+    .ltb-speed-row { flex-direction: row !important; }
+    .ltb-label { font-size: 10px; }
+    #left-toolbar .mode-btn,
+    #left-toolbar .action-btn {
+        padding: 4px 8px;
+        font-size: 10px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .color-swatches {
+        flex-direction: row !important;
+        gap: 3px;
+        align-items: center;
+    }
+
+    /* 벤치 패널 — 가로 배치 (이미 ≤600px 처리, 768px도 적용) */
+    #bench-panel {
+        width: 100%;
+        flex-direction: row;
+        border-left: none;
+        border-top: 1px solid var(--bg-elevated);
+        height: 140px;
+    }
+    .bench-section { flex-direction: row; border-bottom: none; border-right: 1px solid var(--bg-elevated); }
+    .bench-section:last-child { border-right: none; }
+    .bench-header { flex-direction: column; gap: 4px; align-items: flex-start; }
+    .bench-players { max-height: 90px; font-size: 11px; }
+
+    /* 예측 보고서 — padding 줄이기 */
+    #prediction-section { padding: 10px; }
+    .pred-extras { gap: 8px; }
+    .pred-retro { padding: 10px; }
+    .retro-header { gap: 6px; flex-wrap: wrap; }
+    .retro-title { font-size: 13px; }
+    .retro-export { font-size: 10px; padding: 3px 8px; }
+    .retro-row { font-size: 11px; gap: 6px; flex-wrap: wrap; }
+
+    /* 인사이트 그리드 — 1열로 */
+    #insights-grid { grid-template-columns: 1fr !important; gap: 12px; }
+}
+
+@media (max-width: 480px) {
+    /* 매우 좁은 폭 — 추가 압축 */
+    .ksb-list { gap: 4px; }
+    .kmc { flex-direction: row; padding: 5px 6px; }
+    .kmc-side { padding: 0 4px; }
+    .kmc-name { font-size: 10px; }
+    .header-accuracy-bar { font-size: 10px; padding: 6px 10px; }
+    .hab-stat .hab-k { display: none; }  /* "1X2", "정확" 라벨 숨김, 숫자만 */
+}
