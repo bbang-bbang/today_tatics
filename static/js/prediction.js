@@ -1058,6 +1058,10 @@
                 <span class="retro-verdict ${hit1x2 ? "retro-hit" : "retro-miss"}">
                     ${hit1x2 ? "✅ 적중" : "❌ 빗나감"}
                 </span>
+                ${retro.event_id ? `<a class="retro-export"
+                    href="/api/match-lineup.csv?event_id=${retro.event_id}"
+                    title="라인업 CSV 다운로드 — 분석가/코치 export"
+                    download>📥 CSV</a>` : ""}
             </div>
             <div class="retro-rows">
                 <div class="retro-row">
@@ -1406,8 +1410,25 @@
         canvas.onmouseleave = () => { tooltip.hidden = true; };
     }
 
-    // 페이지 로드 시 K2 일정 불러오기 + 백테스트 캐시 워밍 (confidenceBadge가 by_confidence lookup)
+    // 페이지 로드 시 K2 일정 불러오기 + 백테스트 캐시 워밍 + 헤더 정확도 표시
     loadSchedule();
-    loadBacktest("k2");
-    loadBacktest("k1");
+    Promise.all([loadBacktest("k1"), loadBacktest("k2")]).then(([k1, k2]) => {
+        renderHeaderAccuracy(k1, k2);
+    });
+
+    function renderHeaderAccuracy(k1, k2) {
+        const el = document.getElementById("header-accuracy");
+        if (!el) return;
+        const stat = (d) => d && d.ready
+            ? `<span class="hab-stat"><span class="hab-v">${d.hit_1x2_pct}%</span><span class="hab-k">1X2</span> · <span class="hab-v">${d.exact_score_pct}%</span><span class="hab-k">정확</span> · <span class="hab-v">${d.top3_score_pct}%</span><span class="hab-k">TOP3</span></span>`
+            : `<span class="hab-stat hab-na">데이터 부족</span>`;
+        const n = (d) => d && d.ready ? `${d.n_total}경기` : "-";
+        el.innerHTML = `
+            <span class="hab-lead">📊 모델 정확도</span>
+            <span class="hab-league"><span class="hab-name">K1</span> ${stat(k1)} <span class="hab-n">${n(k1)}</span></span>
+            <span class="hab-sep">|</span>
+            <span class="hab-league"><span class="hab-name">K2</span> ${stat(k2)} <span class="hab-n">${n(k2)}</span></span>
+            <span class="hab-sub">2026 rolling backtest</span>
+        `;
+    }
 })();

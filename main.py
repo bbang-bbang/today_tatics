@@ -6129,6 +6129,68 @@ def match_lineup():
     })
 
 
+@app.route("/api/match-lineup.csv")
+def match_lineup_csv():
+    """매치 라인업 CSV 다운로드 — 분석가·코치 export 용도.
+
+    응답: side, slot_order, position, shirt_number, player_name, slot_label,
+          slot_x, slot_y, avg_x, avg_y, is_starter.
+    매칭 ID는 event_id 쿼리 파라미터로 받음.
+    """
+    import csv
+    import io as _io
+    eid = request.args.get("event_id", type=int)
+    if not eid:
+        return ("event_id required", 400)
+
+    # /api/match-lineup 응답 재활용 (test_client 호출 대신 직접 데이터 fetch)
+    with app.test_request_context(f"/api/match-lineup?event_id={eid}"):
+        resp = match_lineup()
+        data = resp.get_json() if hasattr(resp, "get_json") else None
+    if not data or not data.get("ready"):
+        return ("not_ready", 404)
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    avg_rows = conn.execute(
+        "SELECT player_id, x, y FROM match_avg_positions WHERE event_id=?", (eid,)
+    ).fetchall()
+    avg_by_pid = {r["player_id"]: (r["x"], r["y"]) for r in avg_rows}
+    conn.close()
+
+    buf = _io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["side","slot_order","position","shirt_number","player_id","player_name",
+                "slot_label","slot_x","slot_y","avg_x","avg_y","is_starter"])
+    for side_key in ("home", "away"):
+        side = data.get(side_key) or {}
+        slots = side.get("slots", [])
+        for st in side.get("starters", []):
+            so = st.get("slot_order")
+            slot = slots[so] if so is not None and 0 <= so < len(slots) else {}
+            ap = avg_by_pid.get(st.get("player_id"), (None, None))
+            w.writerow([side_key, so, st.get("position",""), st.get("shirt_number",""),
+                        st.get("player_id",""), st.get("name",""),
+                        slot.get("label",""), slot.get("x",""), slot.get("y",""),
+                        ap[0] if ap[0] is not None else "",
+                        ap[1] if ap[1] is not None else "", 1])
+        for sb in side.get("subs", []):
+            ap = avg_by_pid.get(sb.get("player_id"), (None, None))
+            w.writerow([side_key, "", sb.get("position",""), sb.get("shirt_number",""),
+                        sb.get("player_id",""), sb.get("name",""), "", "", "",
+                        ap[0] if ap[0] is not None else "",
+                        ap[1] if ap[1] is not None else "", 0])
+    out = buf.getvalue()
+    dt = data.get("date", "match")
+    home = (data.get("home") or {}).get("short") or "H"
+    away = (data.get("away") or {}).get("short") or "A"
+    fname = f"lineup_{dt}_{home}_vs_{away}_{eid}.csv"
+    return out, 200, {
+        "Content-Type": "text/csv; charset=utf-8-sig",
+        "Content-Disposition": f'attachment; filename="{fname}"',
+    }
+
+
 # ── 자동 업데이트 스케줄러 ───────────────────────────────────────────────────
 
 _KST = timezone(timedelta(hours=9))
