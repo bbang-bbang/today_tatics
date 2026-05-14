@@ -1531,6 +1531,67 @@
                             <span class="rr-perf-ga">G${p.goals}/A${p.assists}</span>
                         </div>`).join("") : `<div class="rr-empty">데이터 없음</div>`}
                 </div>
+                ${r.narrative && Object.keys(r.narrative).length ? `
+                <div class="rr-card rr-narr">
+                    <div class="rr-card-title">📰 라운드 하이라이트</div>
+                    <div class="rr-narr-row"><span class="rr-narr-k">총 득점</span><span class="rr-narr-v">${r.narrative.total_goals}골 (경기당 ${r.narrative.avg_goals_per_match})</span></div>
+                    <div class="rr-narr-row"><span class="rr-narr-k">최다 득점</span><span class="rr-narr-v">${r.narrative.highest_match.home} ${r.narrative.highest_match.score} ${r.narrative.highest_match.away} (${r.narrative.highest_match.goals}골)</span></div>
+                    <div class="rr-narr-row"><span class="rr-narr-k">최대 점수차</span><span class="rr-narr-v">${r.narrative.biggest_gap.home} ${r.narrative.biggest_gap.score} ${r.narrative.biggest_gap.away} (${r.narrative.biggest_gap.gap}점차)</span></div>
+                    <div class="rr-narr-row"><span class="rr-narr-k">클린시트</span><span class="rr-narr-v">${r.narrative.clean_sheets}팀 무실점</span></div>
+                </div>` : ""}
+                ${r.confidence_calib ? `
+                <div class="rr-card rr-calib">
+                    <div class="rr-card-title">📐 신뢰도 calibration (시즌 누적)</div>
+                    ${["high","med","low"].filter(k => r.confidence_calib[k]).map(k => {
+                        const c = r.confidence_calib[k];
+                        const label = {high:"높음",med:"중간",low:"낮음"}[k];
+                        return `<div class="rr-calib-row">
+                            <span class="rr-calib-k rr-calib-${k}">${label}</span>
+                            <span class="rr-calib-bar"><span class="rr-calib-fill" style="width:${c.pct}%"></span></span>
+                            <span class="rr-calib-v">${c.pct}%</span>
+                            <span class="rr-calib-n">(${c.hit}/${c.total})</span>
+                        </div>`;
+                    }).join("")}
+                </div>` : ""}
+                ${r.best11 && r.best11.length ? `
+                <div class="rr-card rr-best11">
+                    <div class="rr-card-title">⭐ 라운드 베스트 11 (4-4-2)</div>
+                    ${r.best11.map(p => `<div class="rr-perf-row">
+                        <span class="rr-perf-rating">${p.rating}</span>
+                        <span class="rr-perf-name">${p.name}</span>
+                        <span class="rr-perf-team">${p.team}</span>
+                        <span class="rr-perf-pos">${p.position}</span>
+                    </div>`).join("")}
+                </div>` : ""}
+                ${(r.goal_kings && r.goal_kings.length) || (r.assist_kings && r.assist_kings.length) ? `
+                <div class="rr-card rr-kings">
+                    <div class="rr-card-title">⚽ 라운드 골왕·도움왕</div>
+                    ${r.goal_kings.length ? `<div class="rr-king-section">
+                        <div class="rr-king-label">⚽ 골왕</div>
+                        ${r.goal_kings.map(p => `<div class="rr-perf-row">
+                            <span class="rr-perf-rating">${p.goals}G</span>
+                            <span class="rr-perf-name">${p.name}</span>
+                            <span class="rr-perf-team">${p.team}</span>
+                        </div>`).join("")}
+                    </div>` : ""}
+                    ${r.assist_kings.length ? `<div class="rr-king-section">
+                        <div class="rr-king-label">🎯 도움왕</div>
+                        ${r.assist_kings.map(p => `<div class="rr-perf-row">
+                            <span class="rr-perf-rating">${p.assists}A</span>
+                            <span class="rr-perf-name">${p.name}</span>
+                            <span class="rr-perf-team">${p.team}</span>
+                        </div>`).join("")}
+                    </div>` : ""}
+                </div>` : ""}
+                ${r.xg_anomalies && r.xg_anomalies.length ? `
+                <div class="rr-card rr-xg">
+                    <div class="rr-card-title">⚡ xG 결정력 분석</div>
+                    ${r.xg_anomalies.map(x => `<div class="rr-xg-row">
+                        <span class="rr-mu">${x.home} <span class="rr-vs">${x.score}</span> ${x.away}</span>
+                        <span class="rr-xg-data">xG ${x.xg}</span>
+                        <span class="rr-xg-narr">${x.narrative}</span>
+                    </div>`).join("")}
+                </div>` : ""}
             </div>
             <div class="rr-foot">
                 <span>모든 매치 (${r.matches_total}):</span>

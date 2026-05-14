@@ -7195,3 +7195,62 @@ body.pr-expanded-lock {
 .rr-rsel-select:focus {
     outline: 2px solid #7bed9f; outline-offset: 1px;
 }
+
+/* 라운드 리포트 추가 카드 (narrative, calibration, best11, kings, xG) */
+.rr-narr-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+    font-size: 11px;
+}
+.rr-narr-row:last-child { border-bottom: none; }
+.rr-narr-k { color: rgba(255, 255, 255, 0.5); font-weight: 600; }
+.rr-narr-v { color: #e8eaf0; font-size: 11px; }
+
+.rr-calib-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 0;
+    font-size: 11px;
+}
+.rr-calib-k {
+    width: 40px; font-weight: 700; font-size: 10px;
+    padding: 1px 4px; border-radius: 3px;
+    text-align: center;
+}
+.rr-calib-high { background: rgba(123, 237, 159, 0.15); color: #7bed9f; }
+.rr-calib-med  { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+.rr-calib-low  { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+.rr-calib-bar {
+    flex: 1; height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px; overflow: hidden;
+}
+.rr-calib-fill {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, #7bed9f, #4ade80);
+}
+.rr-calib-v { font-weight: 700; color: #e8eaf0; width: 36px; text-align: right; }
+.rr-calib-n { color: rgba(255, 255, 255, 0.4); font-size: 10px; }
+
+.rr-perf-pos {
+    color: rgba(255, 255, 255, 0.45); font-size: 10px;
+    padding: 1px 5px; background: rgba(255, 255, 255, 0.04);
+    border-radius: 3px; min-width: 22px; text-align: center;
+}
+
+.rr-king-section { margin-bottom: 8px; }
+.rr-king-section:last-child { margin-bottom: 0; }
+.rr-king-label {
+    color: rgba(255, 255, 255, 0.55); font-size: 10px;
+    font-weight: 700; margin: 4px 0;
+}
+
+.rr-xg-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+    font-size: 11px; flex-wrap: wrap;
+}
+.rr-xg-row:last-child { border-bottom: none; }
+.rr-xg-data { color: rgba(255, 255, 255, 0.6); font-size: 10px; }
+.rr-xg-narr { color: #fbbf24; font-size: 10px; margin-left: auto; }

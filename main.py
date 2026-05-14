@@ -5419,43 +5419,190 @@ def round_report():
     except Exception:
         pass
 
-    # TOP 퍼포머 (이 라운드 내 starter 평점 상위 5명)
+    # 라운드 매치의 SS event_id 매핑 (재사용)
+    ss_to_team = {t["sofascore_id"]: t for t in TEAMS if t.get("sofascore_id")}
     top_performers = []
+    best11 = []
+    goal_kings = []
+    assist_kings = []
+    xg_anomalies = []
+    narrative = {}
+    confidence_calib = None
+
     if finished_total > 0:
-        # 라운드 매치의 SS event_id 매핑
-        slugs = [g["home_id"] for g in games] + [g["away_id"] for g in games]
-        ss_ids = [SLUG_TO_SS[s] for s in slugs if s in SLUG_TO_SS]
-        if ss_ids:
-            placeholders = ",".join("?" * len(ss_ids))
+        # 라운드 매치 정확 매핑 — (date, home_ss, away_ss) 페어로 events 직접 조회
+        round_pairs = []
+        for g in games:
+            if not g["finished"]: continue
+            h_ss = SLUG_TO_SS.get(g["home_id"])
+            a_ss = SLUG_TO_SS.get(g["away_id"])
+            if h_ss and a_ss:
+                round_pairs.append((g["date"].replace(".", "-"), h_ss, a_ss))
+
+        ev_rows = []
+        for d, hss, ass in round_pairs:
+            cur.execute("""
+                SELECT e.id, e.home_team_id, e.away_team_id, e.home_score, e.away_score
+                FROM events e
+                WHERE e.tournament_id=? AND date(e.date_ts,'unixepoch','localtime')=?
+                  AND e.home_team_id=? AND e.away_team_id=? AND e.home_score IS NOT NULL
+                LIMIT 1
+            """, (tid, d, hss, ass))
+            r = cur.fetchone()
+            if r: ev_rows.append(r)
+        event_ids = [r[0] for r in ev_rows]
+
+        if ev_rows:
+            # ── narrative 통계 (최다 득점·점수차·클린시트·골수)
+            total_goals = sum((r[3] or 0) + (r[4] or 0) for r in ev_rows)
+            biggest = max(ev_rows, key=lambda r: abs((r[3] or 0) - (r[4] or 0)))
+            highest = max(ev_rows, key=lambda r: (r[3] or 0) + (r[4] or 0))
+            clean_sheets = sum(1 for r in ev_rows
+                                if (r[3] == 0 or r[4] == 0))
+            narrative = {
+                "total_goals": total_goals,
+                "avg_goals_per_match": round(total_goals / max(len(ev_rows), 1), 2),
+                "highest_match": {
+                    "home": ss_to_team.get(highest[1], {}).get("short", "?"),
+                    "away": ss_to_team.get(highest[2], {}).get("short", "?"),
+                    "score": f"{highest[3]}:{highest[4]}",
+                    "goals": (highest[3] or 0) + (highest[4] or 0),
+                },
+                "biggest_gap": {
+                    "home": ss_to_team.get(biggest[1], {}).get("short", "?"),
+                    "away": ss_to_team.get(biggest[2], {}).get("short", "?"),
+                    "score": f"{biggest[3]}:{biggest[4]}",
+                    "gap": abs((biggest[3] or 0) - (biggest[4] or 0)),
+                },
+                "clean_sheets": clean_sheets,
+            }
+
+        if event_ids:
+            eids_ph = ",".join("?" * len(event_ids))
+
+            # TOP 퍼포머 5명 (전체 라운드 평점 상위)
             cur.execute(f"""
-                SELECT e.id FROM events e
-                WHERE e.tournament_id=? AND date(e.date_ts,'unixepoch','localtime') >= ?
-                  AND (e.home_team_id IN ({placeholders}) OR e.away_team_id IN ({placeholders}))
-                  AND e.home_score IS NOT NULL
-            """, (tid, earliest_date.replace(".", "-"), *ss_ids, *ss_ids))
-            event_ids = [r[0] for r in cur.fetchall()]
-            if event_ids:
-                eids = ",".join("?" * len(event_ids))
+                SELECT mps.player_id, COALESCE(p.name_ko, p.name, mps.player_name) name,
+                       mps.team_id, mps.position, mps.rating, mps.goals, mps.assists,
+                       mps.minutes_played
+                FROM match_player_stats mps
+                LEFT JOIN players p ON p.id=mps.player_id
+                WHERE mps.event_id IN ({eids_ph})
+                  AND mps.rating IS NOT NULL AND mps.minutes_played >= 60
+                ORDER BY mps.rating DESC LIMIT 5
+            """, event_ids)
+            for pid, name, team_id, pos, rating, goals, assists, mp in cur.fetchall():
+                t_info = ss_to_team.get(team_id, {})
+                top_performers.append({
+                    "player_id": pid, "name": name, "team": t_info.get("short","?"),
+                    "position": pos, "rating": round(rating, 2),
+                    "goals": goals or 0, "assists": assists or 0, "minutes": mp,
+                })
+
+            # 라운드 베스트 11 — 포지션별 최고 평점 (선수당 1회만 GROUP BY player_id)
+            POS_SLOTS = [("G", 1), ("D", 4), ("M", 4), ("F", 2)]  # 4-4-2 베이스
+            for ppos, ppN in POS_SLOTS:
                 cur.execute(f"""
                     SELECT mps.player_id, COALESCE(p.name_ko, p.name, mps.player_name) name,
-                           mps.team_id, mps.position, mps.rating, mps.goals, mps.assists,
-                           mps.minutes_played
+                           mps.team_id, mps.position, MAX(mps.rating) best_rating,
+                           SUM(mps.goals) g, SUM(mps.assists) a
                     FROM match_player_stats mps
                     LEFT JOIN players p ON p.id=mps.player_id
-                    WHERE mps.event_id IN ({eids})
-                      AND mps.rating IS NOT NULL AND mps.minutes_played >= 60
-                    ORDER BY mps.rating DESC LIMIT 5
-                """, event_ids)
-                ss_to_team = {t["sofascore_id"]: t for t in TEAMS if t.get("sofascore_id")}
-                for pid, name, team_id, pos, rating, goals, assists, mp in cur.fetchall():
-                    team_info = ss_to_team.get(team_id, {})
-                    top_performers.append({
-                        "player_id": pid, "name": name,
-                        "team": team_info.get("short", "?"), "position": pos,
-                        "rating": round(rating, 2),
+                    WHERE mps.event_id IN ({eids_ph})
+                      AND mps.rating IS NOT NULL AND mps.minutes_played >= 45
+                      AND mps.position = ?
+                    GROUP BY mps.player_id
+                    ORDER BY best_rating DESC LIMIT ?
+                """, (*event_ids, ppos, ppN))
+                for pid, name, team_id, pos, rating, goals, assists in cur.fetchall():
+                    t_info = ss_to_team.get(team_id, {})
+                    best11.append({
+                        "player_id": pid, "name": name, "team": t_info.get("short","?"),
+                        "position": pos, "rating": round(rating, 2),
                         "goals": goals or 0, "assists": assists or 0,
-                        "minutes": mp,
                     })
+
+            # 라운드 골왕 (goals 합산)
+            cur.execute(f"""
+                SELECT mps.player_id, COALESCE(p.name_ko, p.name, mps.player_name) name,
+                       mps.team_id, SUM(mps.goals) g, SUM(mps.assists) a
+                FROM match_player_stats mps
+                LEFT JOIN players p ON p.id=mps.player_id
+                WHERE mps.event_id IN ({eids_ph}) AND mps.goals > 0
+                GROUP BY mps.player_id
+                ORDER BY g DESC LIMIT 5
+            """, event_ids)
+            for pid, name, team_id, g, a in cur.fetchall():
+                t_info = ss_to_team.get(team_id, {})
+                goal_kings.append({"name": name, "team": t_info.get("short","?"),
+                                   "goals": g, "assists": a or 0})
+
+            # 라운드 도움왕
+            cur.execute(f"""
+                SELECT mps.player_id, COALESCE(p.name_ko, p.name, mps.player_name) name,
+                       mps.team_id, SUM(mps.goals) g, SUM(mps.assists) a
+                FROM match_player_stats mps
+                LEFT JOIN players p ON p.id=mps.player_id
+                WHERE mps.event_id IN ({eids_ph}) AND mps.assists > 0
+                GROUP BY mps.player_id
+                ORDER BY a DESC LIMIT 5
+            """, event_ids)
+            for pid, name, team_id, g, a in cur.fetchall():
+                t_info = ss_to_team.get(team_id, {})
+                assist_kings.append({"name": name, "team": t_info.get("short","?"),
+                                     "goals": g or 0, "assists": a})
+
+            # xG 괴리 매치 — match_player_stats 합산으로 추정
+            # SofaScore retrospective 호출 대신 mps.expected_goals 합산 (있으면)
+            cur.execute(f"""
+                SELECT mps.event_id, mps.is_home, SUM(mps.expected_goals) xg_sum
+                FROM match_player_stats mps
+                WHERE mps.event_id IN ({eids_ph})
+                  AND mps.expected_goals IS NOT NULL
+                GROUP BY mps.event_id, mps.is_home
+            """, event_ids)
+            xg_by_ev = {}
+            for ev_id, is_home, xg_sum in cur.fetchall():
+                xg_by_ev.setdefault(ev_id, {})[is_home] = xg_sum
+            for ev_id, hti, ati, hs, as_ in ev_rows:
+                ev_xg = xg_by_ev.get(ev_id, {})
+                xg_h = ev_xg.get(1)
+                xg_a = ev_xg.get(0)
+                if xg_h is None or xg_a is None: continue
+                gap_h = (hs or 0) - xg_h
+                gap_a = (as_ or 0) - xg_a
+                # 절대 괴리 큰 쪽
+                max_gap = max(abs(gap_h), abs(gap_a))
+                if max_gap < 1.2: continue  # 의미있는 괴리만
+                xg_anomalies.append({
+                    "event_id": ev_id,
+                    "home": ss_to_team.get(hti, {}).get("short","?"),
+                    "away": ss_to_team.get(ati, {}).get("short","?"),
+                    "score": f"{hs}:{as_}",
+                    "xg": f"{xg_h:.2f}:{xg_a:.2f}",
+                    "narrative": (
+                        f"{ss_to_team.get(hti,{}).get('short','?')} 결정력 폭발 (+{gap_h:.1f})"
+                        if gap_h >= 1.2 else
+                        f"{ss_to_team.get(hti,{}).get('short','?')} 결정력 부진 ({gap_h:.1f})"
+                        if gap_h <= -1.2 else
+                        f"{ss_to_team.get(ati,{}).get('short','?')} 결정력 폭발 (+{gap_a:.1f})"
+                        if gap_a >= 1.2 else
+                        f"{ss_to_team.get(ati,{}).get('short','?')} 결정력 부진 ({gap_a:.1f})"
+                    ),
+                    "max_gap": round(max_gap, 2),
+                })
+            xg_anomalies.sort(key=lambda x: -x["max_gap"])
+            xg_anomalies = xg_anomalies[:5]
+
+    # 신뢰도 calibration — backtest by_confidence
+    try:
+        with app.test_request_context(f"/api/prediction-backtest?league={league}&year=2026"):
+            bt2 = prediction_backtest()
+            bt2_data = bt2.get_json() if hasattr(bt2, "get_json") else None
+        if bt2_data and bt2_data.get("by_confidence"):
+            confidence_calib = bt2_data["by_confidence"]
+    except Exception:
+        pass
 
     conn.close()
 
@@ -5473,9 +5620,15 @@ def round_report():
             "hit_exact_pct": round(round_hits_exact / max(finished_total, 1) * 100, 1) if finished_total else None,
         },
         "cumulative": backtest_cum,
+        "confidence_calib": confidence_calib,
         "best_hits": best_hits,
         "worst_misses": worst_misses,
         "top_performers": top_performers,
+        "best11": best11,
+        "goal_kings": goal_kings,
+        "assist_kings": assist_kings,
+        "xg_anomalies": xg_anomalies,
+        "narrative": narrative,
         "matches": matches,
     })
 
