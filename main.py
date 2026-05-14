@@ -6735,6 +6735,21 @@ def get_update_status():
     return jsonify(_UPDATE_STATUS)
 
 
+@app.route("/api/cache-invalidate")
+def cache_invalidate():
+    """API 인메모리 캐시 강제 무효화 + 백그라운드 워밍업 재실행.
+    update_data.py 종료 후 신규 매치 반영 위해 호출. 로컬 hit만 허용(127.0.0.1).
+    """
+    from flask import request as _req
+    remote = _req.remote_addr or ""
+    if not (remote.startswith("127.") or remote == "::1"):
+        return ("forbidden", 403)
+    n = len(_API_CACHE)
+    invalidate_api_cache()
+    threading.Thread(target=_warm_cache, daemon=True).start()
+    return jsonify({"ok": True, "cleared": n, "rewarming": True})
+
+
 @app.route("/api/trigger-update", methods=["POST"])
 def trigger_update():
     # fail-closed: UPDATE_SECRET 미설정이면 엔드포인트 자체를 비활성화 (P7 권고)

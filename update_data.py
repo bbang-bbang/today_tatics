@@ -144,6 +144,15 @@ def main():
         sys.exit(1)
     print("  모든 STEP 정상")
 
+    # API 캐시 무효화 — 신규 매치 반영을 위해 실행 중인 Flask 서버에 hit.
+    # prediction-backtest, round-predictions, schedule, rounds 캐시 리셋.
+    try:
+        import urllib.request, urllib.error
+        urllib.request.urlopen("http://127.0.0.1:5000/api/cache-invalidate", timeout=10).read()
+        print("  ✓ API 캐시 무효화 + 워밍업 트리거")
+    except Exception as e:
+        print(f"  (캐시 무효화 skip: {e})")
+
 
 if __name__ == "__main__":
     main()
