@@ -4735,10 +4735,8 @@ def _fetch_k2_all_games(year=None):
     if year is None:
         year = datetime.datetime.now().year
     games = []
-    now_month = datetime.datetime.now().month if year == datetime.datetime.now().year else 12
-    for m in range(1, now_month + 2):
-        if m > 12:
-            break
+    # 시즌 전체 12개월 fetch — 라운드 일정 전체 확보 (R1~R38 등)
+    for m in range(1, 13):
         payload = json.dumps({"leagueId": "2", "year": str(year), "month": str(m).zfill(2)}).encode("utf-8")
         req = urllib.request.Request(url, data=payload,
             headers={"Content-Type": "application/json; charset=UTF-8", "Accept": "application/json"})
@@ -4852,10 +4850,8 @@ def _fetch_k1_all_games(year=None):
     if year is None:
         year = datetime.datetime.now().year
     games = []
-    now_month = datetime.datetime.now().month if year == datetime.datetime.now().year else 12
-    for m in range(1, now_month + 2):
-        if m > 12:
-            break
+    # 시즌 전체 12개월 fetch — 라운드 일정 전체 확보 (R1~R38 등)
+    for m in range(1, 13):
         payload = json.dumps({"leagueId": "1", "year": str(year), "month": str(m).zfill(2)}).encode("utf-8")
         req = urllib.request.Request(url, data=payload,
             headers={"Content-Type": "application/json; charset=UTF-8", "Accept": "application/json"})
