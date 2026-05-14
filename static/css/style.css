@@ -6715,43 +6715,44 @@ body.pr-expanded-lock {
 @media (max-width: 980px) {
     .pt-grid { grid-template-columns: 1fr; }
 }
-/* ── 정보 계층 재설계 (2026-05-14) ────────────────────────── */
-/* 흐름 단계 헤더 — ① 매치선택 → ② 매치업 → ③ 예측 → ④ 전술판 → ⑤ 통계 */
+/* ── 정보 계층 재설계 (2026-05-14, v2 톤다운) ────────────── */
+/* 흐름 단계 헤더 — 미니멀: 작은 모노톤 + 부드러운 라벨 */
 .flow-section-head {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
-    margin: 18px 0 8px;
-    padding: 0 16px;
-}
-.flow-section-head.flow-section-head-mid {
-    margin: 24px 0 6px;
-}
-.flow-step {
-    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-width: 28px;
-    height: 28px;
-    background: linear-gradient(135deg, #2553a5 0%, #1f4183 100%);
-    color: #fff;
-    border-radius: 50%;
-    font-weight: 700;
-    font-size: 13px;
+    gap: 8px;
+    margin: 14px 0 4px;
+    padding: 0 16px;
+    opacity: 0.65;
+    transition: opacity 0.2s;
+}
+.flow-section-head:hover { opacity: 1; }
+.flow-section-head.flow-section-head-mid { margin: 18px 0 4px; }
+.flow-step {
+    display: inline-block;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
     flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(37, 83, 165, 0.4);
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+    min-width: auto;
+    height: auto;
 }
 .flow-title {
-    color: #f5f5f5;
-    font-size: 17px;
-    font-weight: 700;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 13px;
+    font-weight: 600;
     margin: 0;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.005em;
 }
 .flow-hint {
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 12px;
-    margin-left: 6px;
+    color: rgba(255, 255, 255, 0.32);
+    font-size: 11px;
+    margin-left: 4px;
+    font-weight: 400;
 }
 
 /* 인사이트 접기 (⑤ 단계) */
