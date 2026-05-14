@@ -5829,13 +5829,14 @@ def match_lineup():
     # build_side에서 라인 라벨(G/D/M/F) 재할당에 사용. 좌표 자체는 사용하지 않음
     # (전술판 격자 보존 위해). 매칭은 등번호 기반.
     kl_rows = conn.execute("""
-        SELECT side, back_no, top_pct, left_pct
+        SELECT side, back_no, top_pct, left_pct, player_name
         FROM kleague_lineup WHERE sofa_event_id = ?
     """, (resolved_event_id,)).fetchall()
     kleague_by_side = {"home": [], "away": []}
     for r in kl_rows:
         kleague_by_side[r["side"]].append({
             "back_no": r["back_no"], "top_pct": r["top_pct"], "left_pct": r["left_pct"],
+            "player_name": r["player_name"],
         })
 
     def _kleague_position_by_shirt(kl_players):
@@ -5905,18 +5906,31 @@ def match_lineup():
         formation = "-".join(str(c) for c in row_counts)
 
         # shirt_number → ('G'|'D'|'M'|'F', row_idx, left_pct)
-        # row_idx: GK=0, D=1, ..., F=len-1. left_pct: K리그 시각화 좌우(0~100)
+        # 추가로 player_name(이름 정규화) → 동일 매핑 — 등번호 다른 매치 fallback용.
         pos_by_shirt = {gk_line[0]["back_no"]: "G"}
         row_idx_by_shirt = {gk_line[0]["back_no"]: 0}
         left_by_shirt = {gk_line[0]["back_no"]: gk_line[0]["left_pct"]}
+
+        def _norm_name(nm):
+            return (nm or "").replace("(c)", "").replace(" ", "").strip().lower()
+
+        pos_by_name = {_norm_name(gk_line[0]["player_name"]): "G"}
+        row_idx_by_name = {_norm_name(gk_line[0]["player_name"]): 0}
+        left_by_name = {_norm_name(gk_line[0]["player_name"]): gk_line[0]["left_pct"]}
+
         for idx, (_, players) in enumerate(outfield):
             label = "D" if idx == 0 else ("F" if idx == len(outfield) - 1 else "M")
             for p in players:
                 pos_by_shirt[p["back_no"]] = label
                 row_idx_by_shirt[p["back_no"]] = idx + 1
                 left_by_shirt[p["back_no"]] = p["left_pct"]
+                nm = _norm_name(p["player_name"])
+                pos_by_name[nm] = label
+                row_idx_by_name[nm] = idx + 1
+                left_by_name[nm] = p["left_pct"]
 
-        return pos_by_shirt, formation, row_idx_by_shirt, left_by_shirt
+        return (pos_by_shirt, formation, row_idx_by_shirt, left_by_shirt,
+                pos_by_name, row_idx_by_name, left_by_name)
 
     def build_side(is_home_flag, ss_team_id, ss_team_name):
         rows = [r for r in lu_rows if r["is_home"] == is_home_flag]
@@ -5933,27 +5947,43 @@ def match_lineup():
 
         starter_rows_tmp = [r for r in rows if r["is_starter"]]
 
-        # K리그 적용 가능 검사: 매칭률(등번호 일치) ≥ 9/11 이면 채택, 아니면 SofaScore 그대로
+        # K리그 적용 가능 검사: 등번호 매칭 → 이름 매칭 fallback. 11/11 완전 매칭만 K리그 적용.
         kl_pos_by_pid = None
         kl_row_idx_by_pid = None
         kl_left_by_pid = None
         kl_formation = None
         if kl_override:
-            kl_pos_by_shirt, kl_formation, kl_row_idx_by_shirt, kl_left_by_shirt = kl_override
+            (kl_pos_by_shirt, kl_formation, kl_row_idx_by_shirt, kl_left_by_shirt,
+             kl_pos_by_name, kl_row_idx_by_name, kl_left_by_name) = kl_override
+
+            def _norm_name(nm):
+                return (nm or "").replace("(c)", "").replace(" ", "").strip().lower()
+
             kl_pos_by_pid = {}
             kl_row_idx_by_pid = {}
             kl_left_by_pid = {}
             matched_cnt = 0
             for r in starter_rows_tmp:
                 shirt = r["shirt_number"]
+                pid = r["player_id"]
                 if shirt is not None and shirt in kl_pos_by_shirt:
-                    kl_pos_by_pid[r["player_id"]] = kl_pos_by_shirt[shirt]
-                    kl_row_idx_by_pid[r["player_id"]] = kl_row_idx_by_shirt[shirt]
-                    kl_left_by_pid[r["player_id"]] = kl_left_by_shirt[shirt]
+                    kl_pos_by_pid[pid] = kl_pos_by_shirt[shirt]
+                    kl_row_idx_by_pid[pid] = kl_row_idx_by_shirt[shirt]
+                    kl_left_by_pid[pid] = kl_left_by_shirt[shirt]
                     matched_cnt += 1
-            # 11/11 완전 매칭일 때만 K리그 적용. 1명이라도 매핑 부재면 SofaScore + B 방식 fallback.
-            # (부분 매칭 시 매핑 부재 starter의 SofaScore 원본 slot_order가 K리그 line slot과
-            #  충돌해 slot_dup 발생 가능 — ev=11000598 케이스에서 확인)
+                else:
+                    # 등번호 매칭 실패 — 이름 매칭 시도 (등번호 변경 매치 대응)
+                    n_ko = _norm_name(r["name_display"])
+                    n_raw = _norm_name(r["player_name"])
+                    n_match = None
+                    if n_ko in kl_pos_by_name: n_match = n_ko
+                    elif n_raw in kl_pos_by_name: n_match = n_raw
+                    if n_match:
+                        kl_pos_by_pid[pid] = kl_pos_by_name[n_match]
+                        kl_row_idx_by_pid[pid] = kl_row_idx_by_name[n_match]
+                        kl_left_by_pid[pid] = kl_left_by_name[n_match]
+                        matched_cnt += 1
+            # 11/11 완전 매칭일 때만 K리그 적용. 미만이면 SofaScore + B 방식 fallback.
             if matched_cnt < 11:
                 kl_pos_by_pid = None
                 kl_row_idx_by_pid = None
