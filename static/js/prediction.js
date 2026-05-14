@@ -1440,10 +1440,16 @@
             ${k2R ? `<button class="hab-report-btn" data-league="k2" data-round="${k2R}" title="K2 R${k2R} 라운드 리포트">📋 R${k2R}</button>` : ""}
             <span class="hab-sub">2026 rolling backtest</span>
         `;
+        // 리그별 라운드 목록 보관 (모달에서 셀렉터 사용)
+        _availableRounds.k1 = (k1 && k1.per_round) ? k1.per_round.map(r => r.round) : [];
+        _availableRounds.k2 = (k2 && k2.per_round) ? k2.per_round.map(r => r.round) : [];
+
         el.querySelectorAll(".hab-report-btn").forEach(btn => {
             btn.addEventListener("click", () => openRoundReport(btn.dataset.league, parseInt(btn.dataset.round)));
         });
     }
+
+    const _availableRounds = { k1: [], k2: [] };
 
     async function openRoundReport(league, round) {
         // 모달 생성·재사용
@@ -1478,10 +1484,23 @@
                 ${m.pred ? `<span class="rr-pred">예측 ${m.pred.top_score || "—"} (H ${m.pred.home_pct}%/D ${m.pred.draw_pct}%/A ${m.pred.away_pct}%)</span>` : `<span class="rr-pred-na">예측 부족</span>`}
                 ${showRes && m.residual != null ? `<span class="rr-residual">잔차 ${m.residual}</span>` : ""}
             </div>`;
+        // 라운드 셀렉터 데이터
+        const rounds = _availableRounds[league] || [];
+        const idx = rounds.indexOf(round);
+        const prevR = idx > 0 ? rounds[idx - 1] : null;
+        const nextR = idx >= 0 && idx < rounds.length - 1 ? rounds[idx + 1] : null;
+        const opts = rounds.map(r2 =>
+            `<option value="${r2}"${r2 === round ? " selected" : ""}>R${r2}</option>`).join("");
+
         body.innerHTML = `
             <button class="rr-close" aria-label="닫기">✕</button>
             <div class="rr-head">
-                <h3 class="rr-title">📋 ${r.league} R${r.round} 라운드 리포트</h3>
+                <h3 class="rr-title">📋 ${r.league} 라운드 리포트</h3>
+                <div class="rr-rsel">
+                    <button class="rr-rsel-arrow" data-go="${prevR ?? ""}" ${prevR ? "" : "disabled"} aria-label="이전 라운드">◀</button>
+                    <select class="rr-rsel-select" aria-label="라운드 선택">${opts}</select>
+                    <button class="rr-rsel-arrow" data-go="${nextR ?? ""}" ${nextR ? "" : "disabled"} aria-label="다음 라운드">▶</button>
+                </div>
                 <span class="rr-meta">${r.earliest_date} · ${r.matches_total}경기 (${r.finished_total} 완료)</span>
             </div>
             <div class="rr-grid">
@@ -1521,5 +1540,14 @@
             </div>
         `;
         body.querySelector(".rr-close").addEventListener("click", () => modal.classList.remove("rr-open"));
+        // 라운드 셀렉터 이벤트
+        body.querySelectorAll(".rr-rsel-arrow").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const g = parseInt(btn.dataset.go);
+                if (g) openRoundReport(league, g);
+            });
+        });
+        const sel = body.querySelector(".rr-rsel-select");
+        if (sel) sel.addEventListener("change", () => openRoundReport(league, parseInt(sel.value)));
     }
 })();

@@ -7158,3 +7158,40 @@ body.pr-expanded-lock {
     .rr-all { grid-template-columns: 1fr; }
     .hab-report-btn { font-size: 10px; padding: 2px 6px; }
 }
+
+/* 라운드 셀렉터 (모달 헤더) */
+.rr-rsel {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-left: 4px;
+}
+.rr-rsel-arrow {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #c8d2e8;
+    width: 26px; height: 26px;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.rr-rsel-arrow:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+.rr-rsel-arrow:disabled {
+    opacity: 0.3; cursor: not-allowed;
+}
+.rr-rsel-select {
+    background: rgba(15, 25, 45, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #f5f5f5;
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: 64px;
+}
+.rr-rsel-select:focus {
+    outline: 2px solid #7bed9f; outline-offset: 1px;
+}
