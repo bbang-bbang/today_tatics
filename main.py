@@ -6066,13 +6066,21 @@ def match_lineup():
                 slot_indices = row_slot_idx.get(rid, [])
                 if len(line_sts) != len(slot_indices) or not slot_indices:
                     continue
-                # 라인 내 좌우 정렬: K리그 left% 직접 사용 (avg_y는 좌표계 미러 가능성).
-                # K리그 left%=0 = K리그 시각화 좌측 = 본인 시점 LB → broadcast slot.y 작 (위쪽).
+                # 라인 내 좌우 정렬: K리그 left% 기반.
+                # broadcast 시각 표준:
+                #   HOME: LB(본인 시점 좌측, K리그 left 작) → 캔버스 위쪽(slot.y 작)
+                #   AWAY: LB(본인 시점 좌측, K리그 left 작) → 캔버스 아래쪽(slot.y 큰) [HOME과 mirror]
+                # 따라서 HOME은 K리그 left ASC ↔ slot.y ASC,
+                #         AWAY는 K리그 left ASC ↔ slot.y DESC (방향 반전).
                 line_sorted = sorted(
                     line_sts,
                     key=lambda st: kl_left_by_pid.get(st["player_id"], 50),
                 )
-                slot_sorted = sorted(slot_indices, key=lambda i: slots[i]["y"])
+                slot_sorted = sorted(
+                    slot_indices,
+                    key=lambda i: slots[i]["y"],
+                    reverse=(not is_home_flag),
+                )
                 for st, si in zip(line_sorted, slot_sorted):
                     st["slot_order"] = si
         elif avg_by_pid:
