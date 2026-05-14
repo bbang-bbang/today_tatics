@@ -226,6 +226,22 @@
         `;
     }
 
+    // ── 즐겨찾기 팀 (localStorage) ─────────────────────────
+    const FAV_KEY = "tt_fav_teams";
+    function _loadFavorites() {
+        try {
+            return new Set(JSON.parse(localStorage.getItem(FAV_KEY) || "[]"));
+        } catch (_) { return new Set(); }
+    }
+    function _saveFavorites(set) {
+        try { localStorage.setItem(FAV_KEY, JSON.stringify([...set])); } catch (_) {}
+    }
+    function _toggleFavorite(slug) {
+        const s = _loadFavorites();
+        if (s.has(slug)) s.delete(slug); else s.add(slug);
+        _saveFavorites(s);
+    }
+
     function renderRoundGames(roundNum, rounds, league) {
         const list = document.getElementById(`${league}-game-list`);
         if (!list) return;
@@ -236,11 +252,13 @@
         renderRoundPredPanel(roundNum, league);
 
 
+        const favs = _loadFavorites();
         list.innerHTML = rndData.games.map(g => {
             const finished  = g.finished;
             const canPredict = !finished && g.home_id && g.away_id && g.home_id !== "null" && g.away_id !== "null";
             const hc = tc(g.home_id), ac = tc(g.away_id);
             const dateShort = g.date.replace(/\./g,"/").slice(5);
+            const isFav = favs.has(g.home_id) || favs.has(g.away_id);
 
             const centerContent = finished
                 ? `<div class="kmc-score">${g.home_score} <span class="kmc-score-sep">:</span> ${g.away_score}</div>
@@ -257,21 +275,33 @@
             const awayEmb  = ac.e ? `<img class="kmc-emb" src="/static/img/emblems/${ac.e}" alt="" onerror="this.style.display='none'">` : "";
 
             return `
-            <div class="kmc${finished ? " kmc-done" : canPredict ? " kmc-upcoming" : ""}"
+            <div class="kmc${finished ? " kmc-done" : canPredict ? " kmc-upcoming" : ""}${isFav ? " kmc-fav" : ""}"
                  data-home="${g.home_id}" data-away="${g.away_id}"
                  data-finished="${finished}"
                  data-full-date="${g.date}">
-                <div class="kmc-side kmc-home" style="background:linear-gradient(135deg,${hc.p}55 0%,${hc.p}22 100%)">
+                <div class="kmc-side kmc-home${favs.has(g.home_id) ? " kmc-side-fav" : ""}" style="background:linear-gradient(135deg,${hc.p}55 0%,${hc.p}22 100%)">
+                    <button class="kmc-fav-btn" data-team="${g.home_id}" title="${favs.has(g.home_id) ? "즐겨찾기 해제" : "즐겨찾기"}" type="button">${favs.has(g.home_id) ? "★" : "☆"}</button>
                     ${homeEmb}
                     <span class="kmc-name">${g.home_short}</span>
                 </div>
                 <div class="kmc-mid">${centerContent}</div>
-                <div class="kmc-side kmc-away" style="background:linear-gradient(225deg,${ac.p}55 0%,${ac.p}22 100%)">
+                <div class="kmc-side kmc-away${favs.has(g.away_id) ? " kmc-side-fav" : ""}" style="background:linear-gradient(225deg,${ac.p}55 0%,${ac.p}22 100%)">
                     <span class="kmc-name">${g.away_short}</span>
                     ${awayEmb}
+                    <button class="kmc-fav-btn" data-team="${g.away_id}" title="${favs.has(g.away_id) ? "즐겨찾기 해제" : "즐겨찾기"}" type="button">${favs.has(g.away_id) ? "★" : "☆"}</button>
                 </div>
             </div>`;
         }).join("");
+
+        // 즐겨찾기 토글 이벤트
+        list.querySelectorAll(".kmc-fav-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const slug = btn.dataset.team;
+                _toggleFavorite(slug);
+                renderRoundGames(roundNum, rounds, league);  // 즉시 재렌더
+            });
+        });
 
         list.querySelectorAll(".kmc").forEach(item => {
             item.addEventListener("click", () => {
@@ -283,6 +313,14 @@
                 section.classList.remove("hidden");
                 const gameDate = item.dataset.fullDate || null;
                 const isFinished = item.dataset.finished === "true";
+                // URL 공유 — 사용자 클릭 시 URL 자동 갱신
+                try {
+                    const u = new URL(window.location);
+                    u.searchParams.set("home", homeId);
+                    u.searchParams.set("away", awayId);
+                    if (gameDate) u.searchParams.set("date", gameDate.replace(/\./g, "-"));
+                    window.history.replaceState(null, "", u);
+                } catch (_) {}
                 loadPrediction(homeId, awayId, gameDate, isFinished);
                 // 메인 전술판 자동 적용은 finished 매치만
                 if (isFinished && gameDate) {
@@ -299,14 +337,31 @@
             });
         });
 
-        // 자동 매치 선택 — 첫 진입 시 정보 흐름 즉시 표시.
-        // 우선순위: 가장 최근 완료(finished=true) > 첫 카드.
+        // 자동 매치 선택 — URL 파라미터 우선, 없으면 가장 최근 완료 매치.
         if (!_autoSelectedOnce) {
             _autoSelectedOnce = true;
-            const finishedCards = list.querySelectorAll(".kmc.kmc-done");
-            const target = finishedCards.length
-                ? finishedCards[finishedCards.length - 1]  // 가장 최근(아래쪽) 완료
-                : list.querySelector(".kmc");              // fallback: 첫 카드
+            let target = null;
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const uHome = params.get("home"), uAway = params.get("away"), uDate = params.get("date");
+                if (uHome && uAway) {
+                    // 같은 페이지의 매치 카드 모두에서 매칭 탐색 (현재 리스트 + 다른 리그 wrap)
+                    const wrappers = document.querySelectorAll(".ksb-list");
+                    for (const w of wrappers) {
+                        const cand = w.querySelector(
+                            `.kmc[data-home="${uHome}"][data-away="${uAway}"]` +
+                            (uDate ? `[data-full-date="${uDate.replace(/-/g, ".")}"]` : "")
+                        );
+                        if (cand) { target = cand; break; }
+                    }
+                }
+            } catch (_) {}
+            if (!target) {
+                const finishedCards = list.querySelectorAll(".kmc.kmc-done");
+                target = finishedCards.length
+                    ? finishedCards[finishedCards.length - 1]
+                    : list.querySelector(".kmc");
+            }
             if (target) {
                 requestAnimationFrame(() => target.click());
             }
@@ -1058,6 +1113,7 @@
                 <span class="retro-verdict ${hit1x2 ? "retro-hit" : "retro-miss"}">
                     ${hit1x2 ? "✅ 적중" : "❌ 빗나감"}
                 </span>
+                <button class="retro-share" title="이 매치 URL 복사 — 공유" type="button">🔗 공유</button>
                 ${retro.event_id ? `<a class="retro-export"
                     href="/api/match-lineup.csv?event_id=${retro.event_id}"
                     title="라인업 CSV 다운로드 — 분석가/코치 export"
@@ -1089,6 +1145,24 @@
             </div>` : ""}
         </div>`;
         wrap.insertAdjacentHTML("beforeend", html);
+        // 공유 버튼 — URL 클립보드 복사
+        const shareBtn = wrap.querySelector(".pred-retro:last-child .retro-share");
+        if (shareBtn) {
+            shareBtn.addEventListener("click", async () => {
+                try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    const orig = shareBtn.textContent;
+                    shareBtn.textContent = "✓ 복사됨";
+                    shareBtn.classList.add("retro-share-ok");
+                    setTimeout(() => {
+                        shareBtn.textContent = orig;
+                        shareBtn.classList.remove("retro-share-ok");
+                    }, 1500);
+                } catch (e) {
+                    shareBtn.textContent = "복사 실패";
+                }
+            });
+        }
     }
 
     // ── 전술 보기 카드 (평균 포지션 + 슛맵) ─────────────────
@@ -1419,6 +1493,42 @@
     Promise.all([loadBacktest("k1"), loadBacktest("k2")]).then(([k1, k2]) => {
         renderHeaderAccuracy(k1, k2);
     });
+    // 시즌 시뮬레이션 (지연 로드 — 무거우니 비동기)
+    Promise.all([
+        fetch("/api/season-simulation?league=k1&n=500").then(r => r.json()).catch(() => null),
+        fetch("/api/season-simulation?league=k2&n=500").then(r => r.json()).catch(() => null),
+    ]).then(([k1s, k2s]) => renderSeasonSim(k1s, k2s));
+
+    function renderSeasonSim(k1, k2) {
+        const el = document.getElementById("season-sim-bar");
+        if (!el) return;
+        const renderLeague = (d, name) => {
+            if (!d || !d.ready) return `<span class="ssb-empty">${name} 데이터 부족</span>`;
+            const champ = d.teams[0];
+            const afcCount = d.league === "K1" ? 4 : 2;
+            const top = d.teams.slice(0, 3);
+            const bot = d.teams.slice(-2);
+            return `
+                <div class="ssb-league">
+                    <span class="ssb-name">${d.league}</span>
+                    <span class="ssb-sub">${d.pending_games}경기 남음 · ${d.n_simulations}회 시뮬</span>
+                    <span class="ssb-champ" title="우승 확률 ${champ.win_pct}%">🏆 ${champ.name} ${champ.win_pct}%</span>
+                    <span class="ssb-divider">·</span>
+                    <span class="ssb-afc" title="AFC/승격권 TOP ${afcCount}">
+                        ${top.map(t => `${t.name} ${t.afc_pct}%`).join(" · ")}
+                    </span>
+                    <span class="ssb-divider">·</span>
+                    <span class="ssb-rel" title="강등 위험">
+                        ⚠ ${bot.map(t => `${t.name} ${t.rel_pct}%`).join(" · ")}
+                    </span>
+                </div>`;
+        };
+        el.innerHTML = `
+            <span class="ssb-lead">🎲 시즌 시뮬</span>
+            ${renderLeague(k1, "K1")}
+            ${renderLeague(k2, "K2")}
+        `;
+    }
 
     function renderHeaderAccuracy(k1, k2) {
         const el = document.getElementById("header-accuracy");

@@ -7009,3 +7009,113 @@ body.pr-expanded-lock {
     .header-accuracy-bar { font-size: 10px; padding: 6px 10px; }
     .hab-stat .hab-k { display: none; }  /* "1X2", "정확" 라벨 숨김, 숫자만 */
 }
+
+/* 매치 URL 공유 버튼 */
+.retro-share {
+    margin-left: auto;
+    padding: 4px 10px;
+    background: rgba(96, 165, 250, 0.12);
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    border-radius: 6px;
+    color: #60a5fa;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.retro-share:hover {
+    background: rgba(96, 165, 250, 0.22);
+    border-color: rgba(96, 165, 250, 0.5);
+}
+.retro-share-ok {
+    background: rgba(123, 237, 159, 0.22) !important;
+    border-color: rgba(123, 237, 159, 0.5) !important;
+    color: #7bed9f !important;
+}
+.retro-export { margin-left: 0 !important; }
+
+/* 즐겨찾기 별표 + 카드 강조 */
+.kmc-fav-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: color 0.15s, transform 0.15s;
+    user-select: none;
+    line-height: 1;
+}
+.kmc-fav-btn:hover {
+    color: #fbbf24;
+    transform: scale(1.15);
+}
+.kmc-side-fav .kmc-fav-btn {
+    color: #fbbf24;
+}
+.kmc-fav {
+    border-left: 3px solid #fbbf24;
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.18);
+}
+.kmc-fav .kmc-name {
+    color: #fff;
+    font-weight: 700;
+}
+
+/* 시즌 시뮬레이션 미니 위젯 (헤더 정확도 아래) */
+.season-sim-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 18px;
+    margin: 4px 16px 0;
+    background: linear-gradient(90deg, rgba(15, 25, 45, 0.45) 0%, rgba(96, 165, 250, 0.08) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.5;
+}
+.season-sim-bar:empty { display: none; }
+.ssb-lead {
+    font-weight: 700; color: #c8d2e8;
+    letter-spacing: -0.005em;
+}
+.ssb-league {
+    display: inline-flex; align-items: center; gap: 8px;
+    flex-wrap: wrap;
+}
+.ssb-name {
+    color: #fbf500; font-weight: 700;
+    padding: 1px 6px;
+    background: rgba(251, 245, 0, 0.12);
+    border-radius: 4px;
+    font-size: 10px;
+}
+.ssb-sub {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 10px;
+}
+.ssb-champ {
+    font-weight: 700;
+    color: #fbbf24;
+}
+.ssb-afc {
+    color: #c8d2e8;
+    font-size: 10px;
+}
+.ssb-rel {
+    color: #f87171;
+    font-size: 10px;
+}
+.ssb-divider { color: rgba(255, 255, 255, 0.15); }
+.ssb-empty {
+    color: rgba(255, 255, 255, 0.35);
+    font-style: italic;
+}
+@media (max-width: 768px) {
+    .season-sim-bar { gap: 6px; padding: 6px 12px; font-size: 10px; flex-direction: column; align-items: flex-start; }
+    .ssb-league { gap: 6px; font-size: 10px; }
+    .ssb-divider { display: none; }
+}

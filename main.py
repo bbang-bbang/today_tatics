@@ -5294,6 +5294,164 @@ def next_round():
     })
 
 
+@app.route("/api/season-simulation")
+@cached_response(ttl=3600)
+def season_simulation():
+    """시즌 시뮬레이션 — 남은 매치 Monte Carlo로 최종 순위 분포 추정.
+
+    1. 완료된 매치: 실제 결과로 현재 standings 산출.
+    2. 남은 매치(finished=False): _predict_core 확률로 1X2 추첨 (1000회).
+    3. 각 시뮬레이션별 최종 순위 누적 → 팀별 우승/AFC/강등 확률 산출.
+    """
+    import random as _rand
+    league = request.args.get("league", "k1").lower()
+    n_sim = int(request.args.get("n", "1000"))
+    n_sim = max(100, min(n_sim, 3000))
+    tid = 410 if league == "k1" else 777
+
+    try:
+        raw = _fetch_k1_all_games() if league == "k1" else _fetch_k2_all_games()
+    except Exception:
+        return jsonify({"ready": False, "reason": "no_schedule"})
+    parser = _parse_k1_game if league == "k1" else _parse_k2_game
+    games_all = [parser(g) for g in raw]
+    if not games_all:
+        return jsonify({"ready": False, "reason": "no_games"})
+
+    SLUG_TO_SS = {t["id"]: t["sofascore_id"] for t in TEAMS}
+    SS_TO_TEAM = {t["sofascore_id"]: t for t in TEAMS if t.get("sofascore_id")}
+
+    # 현재 standings — 완료 매치 기준
+    standings = {}  # slug → {W,D,L, gf, ga, pts}
+    teams_in_season = set()
+    finished_games = []
+    pending_games = []
+    for g in games_all:
+        h, a = g["home_id"], g["away_id"]
+        if not h or not a or h == "null" or a == "null": continue
+        teams_in_season.add(h); teams_in_season.add(a)
+        for t in (h, a):
+            standings.setdefault(t, {"W":0,"D":0,"L":0,"gf":0,"ga":0,"pts":0,"played":0})
+        if g["finished"] and g["home_score"] is not None and g["away_score"] is not None:
+            hs, ass = g["home_score"], g["away_score"]
+            standings[h]["gf"] += hs; standings[h]["ga"] += ass
+            standings[a]["gf"] += ass; standings[a]["ga"] += hs
+            standings[h]["played"] += 1; standings[a]["played"] += 1
+            if hs > ass:
+                standings[h]["W"] += 1; standings[h]["pts"] += 3
+                standings[a]["L"] += 1
+            elif hs < ass:
+                standings[a]["W"] += 1; standings[a]["pts"] += 3
+                standings[h]["L"] += 1
+            else:
+                standings[h]["D"] += 1; standings[h]["pts"] += 1
+                standings[a]["D"] += 1; standings[a]["pts"] += 1
+            finished_games.append(g)
+        else:
+            pending_games.append(g)
+
+    # 시뮬레이션을 위해 pending 매치 예측 확률 (한 번만 산출, 모든 sim 공유)
+    conn = sqlite3.connect(DB_PATH)
+    cur  = conn.cursor()
+    # cutoff = 가장 이른 pending 매치 직전. 단순화: 현재 시점.
+    as_of_ts = int(datetime.now().timestamp())
+    year_str = str(datetime.now().year)
+
+    pending_probs = []
+    for g in pending_games:
+        h_ss = SLUG_TO_SS.get(g["home_id"])
+        a_ss = SLUG_TO_SS.get(g["away_id"])
+        if not h_ss or not a_ss: continue
+        pred = _predict_core(cur, h_ss, a_ss, tid, as_of_ts, year_str)
+        if not pred: continue
+        pending_probs.append({
+            "home": g["home_id"], "away": g["away_id"],
+            "p_home": pred["pred_home"] / 100.0,
+            "p_draw": pred["pred_draw"] / 100.0,
+            "p_away": pred["pred_away"] / 100.0,
+            "lam_home": pred["lam_home"],
+            "lam_away": pred["lam_away"],
+        })
+    conn.close()
+
+    # Monte Carlo 시뮬레이션
+    team_list = sorted(teams_in_season)
+    position_counts = {t: [0] * len(team_list) for t in team_list}  # 1위~N위 횟수
+
+    for _ in range(n_sim):
+        sim_pts = {t: standings[t]["pts"] for t in team_list}
+        sim_gf  = {t: standings[t]["gf"]  for t in team_list}
+        sim_ga  = {t: standings[t]["ga"]  for t in team_list}
+        for pp in pending_probs:
+            r = _rand.random()
+            if r < pp["p_home"]:
+                sim_pts[pp["home"]] += 3
+            elif r < pp["p_home"] + pp["p_draw"]:
+                sim_pts[pp["home"]] += 1; sim_pts[pp["away"]] += 1
+            else:
+                sim_pts[pp["away"]] += 3
+            # 골차는 lam 기반 단순 누적 (poisson 단순 가정)
+            # 정확 골 시뮬은 비용 큼 — pts 기반 순위만 산출 (tiebreaker는 gd 누적)
+            sim_gf[pp["home"]] += pp["lam_home"]; sim_ga[pp["home"]] += pp["lam_away"]
+            sim_gf[pp["away"]] += pp["lam_away"]; sim_ga[pp["away"]] += pp["lam_home"]
+
+        # 최종 순위
+        ranked = sorted(team_list, key=lambda t: (-sim_pts[t], -(sim_gf[t]-sim_ga[t]), -sim_gf[t]))
+        for pos, t in enumerate(ranked):
+            position_counts[t][pos] += 1
+
+    # 결과 산출
+    n_teams = len(team_list)
+    afc_top = 4 if league == "k1" else 2  # K1 상위 4 AFC, K2 상위 2 승격
+    rel_bot = 2 if league == "k1" else 2  # 강등권
+
+    results = []
+    for t in team_list:
+        info = SS_TO_TEAM.get(SLUG_TO_SS.get(t), {})
+        counts = position_counts[t]
+        total = sum(counts)
+        win_pct = counts[0] / total * 100 if total else 0
+        afc_pct = sum(counts[:afc_top]) / total * 100 if total else 0
+        rel_pct = sum(counts[n_teams - rel_bot:]) / total * 100 if total else 0
+        avg_pos = sum((i + 1) * c for i, c in enumerate(counts)) / total if total else None
+        results.append({
+            "slug": t, "name": info.get("short") or t,
+            "current_pts": standings[t]["pts"],
+            "current_played": standings[t]["played"],
+            "win_pct": round(win_pct, 1),
+            "afc_pct": round(afc_pct, 1),
+            "rel_pct": round(rel_pct, 1),
+            "avg_pos": round(avg_pos, 1) if avg_pos else None,
+            "median_pos": _median_position(counts),
+            "position_dist": counts,  # 1위~N위 횟수
+        })
+
+    results.sort(key=lambda r: r["avg_pos"] if r["avg_pos"] else 999)
+
+    return jsonify({
+        "ready": True,
+        "league": league.upper(),
+        "n_simulations": n_sim,
+        "n_teams": n_teams,
+        "finished_games": len(finished_games),
+        "pending_games": len(pending_games),
+        "pending_predicted": len(pending_probs),
+        "teams": results,
+    })
+
+
+def _median_position(counts):
+    total = sum(counts)
+    if not total: return None
+    half = total / 2
+    cum = 0
+    for i, c in enumerate(counts):
+        cum += c
+        if cum >= half:
+            return i + 1
+    return None
+
+
 @app.route("/api/prediction-backtest")
 @cached_response(ttl=3600)  # 1시간 (시즌 누적, 자주 안 바뀜)
 def prediction_backtest():
