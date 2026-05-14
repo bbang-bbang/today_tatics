@@ -298,7 +298,22 @@
                 }
             });
         });
+
+        // 자동 매치 선택 — 첫 진입 시 정보 흐름 즉시 표시.
+        // 우선순위: 가장 최근 완료(finished=true) > 첫 카드.
+        if (!_autoSelectedOnce) {
+            _autoSelectedOnce = true;
+            const finishedCards = list.querySelectorAll(".kmc.kmc-done");
+            const target = finishedCards.length
+                ? finishedCards[finishedCards.length - 1]  // 가장 최근(아래쪽) 완료
+                : list.querySelector(".kmc");              // fallback: 첫 카드
+            if (target) {
+                requestAnimationFrame(() => target.click());
+            }
+        }
     }
+    // 자동 선택 1회만 (사용자 후속 클릭 방해 X)
+    let _autoSelectedOnce = false;
 
     // ── 팀 선택 이벤트 수신 (기존 info.js 연동) ─────────────
     document.addEventListener("teamsSelected", (e) => {

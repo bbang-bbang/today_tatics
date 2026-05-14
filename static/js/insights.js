@@ -811,13 +811,34 @@
   }
 
   function init() {
-    initYearFilter();
-    initPosTab();
-    initCardModeTab();
-    initCardLeagueTab();
+    // 토글 이벤트 — 인사이트 섹션 접기/펼치기 (첫 진입 friction 감소)
+    const toggleBtn = document.getElementById("insights-toggle-btn");
+    const section = document.getElementById("insights-section");
+    let loaded = false;
+    if (toggleBtn && section) {
+      toggleBtn.addEventListener("click", () => {
+        const collapsed = section.classList.toggle("insights-collapsed");
+        toggleBtn.setAttribute("aria-expanded", String(!collapsed));
+        if (!collapsed && !loaded) {
+          // lazy load: 첫 펼침 시에만 API 호출
+          initYearFilter();
+          initPosTab();
+          initCardModeTab();
+          initCardLeagueTab();
+          loadAll();
+          loaded = true;
+        }
+      });
+    } else {
+      // 접기 UI 없으면 즉시 로드 (안전 fallback)
+      initYearFilter();
+      initPosTab();
+      initCardModeTab();
+      initCardLeagueTab();
+      loadAll();
+    }
     document.getElementById("drawer-close")?.addEventListener("click", closeDrawer);
     document.getElementById("player-drawer-overlay")?.addEventListener("click", closeDrawer);
-    loadAll();
   }
 
   // 드로어 열기 (외부에서 호출)
