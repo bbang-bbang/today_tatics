@@ -1275,14 +1275,18 @@
         ctx.strokeRect(w - 8 - w * 0.05, h * 0.36, w * 0.05, h * 0.28);
     }
 
-    // SofaScore 좌표(x: 0~100 자기진영→공격진영, y: 0~100 절대 가로) → 캔버스 변환
-    // 홈팀: 좌→우 공격 (x 그대로), 어웨이팀: 우→좌 공격 (x 반전)
-    // y는 100-y로 반전 — broadcast 시각(메인 스탠드 카메라) 표준:
-    //   home 라이트백(y≈10, 자기 골 기준 오른쪽) → 캔버스 아래쪽
-    //   home 레프트백(y≈85) → 캔버스 위쪽
+    // SofaScore 좌표(x: 자기진영=0→상대골=100, y: 본인 시점 우측=0→좌측=100, 본인 시점 기준).
+    //   HOME 공격방향: 좌→우 (x 그대로)
+    //   AWAY 공격방향: 우→좌 (x 반전: 100-x)
+    // broadcast 표준:
+    //   HOME LB(본인 좌측=avg_y 큰) → 캔버스 위쪽 → py = 100 - y
+    //   HOME RB(avg_y 작) → 캔버스 아래쪽
+    //   AWAY LB(avg_y 큰) → 캔버스 아래쪽 (HOME mirror) → py = y
+    //   AWAY RB(avg_y 작) → 캔버스 위쪽
+    // 즉 y는 HOME 100-y, AWAY 그대로 (build_side와 동일한 broadcast mirror 표준).
     function mapPos(x, y, isHome, w, h) {
         const px = isHome ? x : (100 - x);
-        const py = 100 - y;
+        const py = isHome ? (100 - y) : y;
         return [
             8 + (px / 100) * (w - 16),
             8 + (py / 100) * (h - 16),
