@@ -6924,7 +6924,7 @@ def trigger_update():
 
 def _warm_cache():
     """서버 시작 시 백그라운드로 무거운 API 미리 호출 — 첫 사용자 대기 시간 제거.
-    K1/K2 백테스트 약 30초 + 스케줄/라운드 약 5초 = 한 번만 인내 후 영구 빠름.
+    K1/K2 백테스트 + 스케줄/라운드 + 시즌 시뮬 + 라운드 예측 — 워밍업 후 영구 빠름.
     """
     import urllib.request
     warm_urls = [
@@ -6934,12 +6934,14 @@ def _warm_cache():
         "http://127.0.0.1:5000/api/k2/schedule",
         "http://127.0.0.1:5000/api/k1/rounds",
         "http://127.0.0.1:5000/api/k2/rounds",
+        "http://127.0.0.1:5000/api/season-simulation?league=k1&n=500",
+        "http://127.0.0.1:5000/api/season-simulation?league=k2&n=500",
     ]
     import time as _t
     _t.sleep(3)  # 서버 listen 대기
     for u in warm_urls:
         try:
-            urllib.request.urlopen(u, timeout=60).read()
+            urllib.request.urlopen(u, timeout=120).read()
         except Exception:
             pass
 
