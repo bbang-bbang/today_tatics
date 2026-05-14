@@ -5294,6 +5294,192 @@ def next_round():
     })
 
 
+@app.route("/api/round-report")
+@cached_response(ttl=1800)
+def round_report():
+    """라운드 단위 종합 리포트 — 적중률·베스트/워스트·TOP 퍼포머.
+
+    데이터 재활용:
+    - 매치/예측/적중: round_predictions 핵심 로직 inline
+    - 모델 누적 정확도: prediction_backtest per_round
+    - TOP 퍼포머: match_player_stats rating
+    """
+    import datetime as _dt
+    league = request.args.get("league", "k1").lower()
+    round_no = request.args.get("round", type=int)
+    if not round_no:
+        return jsonify({"error": "round required"}), 400
+    tid = 410 if league == "k1" else 777
+
+    try:
+        raw = _fetch_k1_all_games() if league == "k1" else _fetch_k2_all_games()
+    except Exception:
+        return jsonify({"ready": False, "reason": "no_schedule"})
+
+    parser = _parse_k1_game if league == "k1" else _parse_k2_game
+    games = [parser(g) for g in raw if g.get("roundId") == round_no]
+    if not games:
+        return jsonify({"ready": False, "reason": "no_games", "round": round_no})
+    games.sort(key=lambda x: (x["date"], x["time"]))
+
+    SLUG_TO_SS = {t["id"]: t["sofascore_id"] for t in TEAMS}
+    earliest_date = games[0]["date"]
+    try:
+        as_of_ts = int(_dt.datetime.strptime(earliest_date, "%Y.%m.%d").timestamp())
+    except ValueError:
+        return jsonify({"ready": False, "reason": "bad_date"})
+    year_str = earliest_date.split(".")[0]
+
+    conn = sqlite3.connect(DB_PATH)
+    cur  = conn.cursor()
+
+    matches = []
+    round_hits_1x2 = 0
+    round_hits_exact = 0
+    finished_total = 0
+    for g in games:
+        h_slug, a_slug = g["home_id"], g["away_id"]
+        h_ss = SLUG_TO_SS.get(h_slug)
+        a_ss = SLUG_TO_SS.get(a_slug)
+        m = {
+            "home": g["home_short"], "away": g["away_short"],
+            "home_id": h_slug, "away_id": a_slug,
+            "date": g["date"], "time": g["time"], "finished": g["finished"],
+            "actual": (f"{g['home_score']}:{g['away_score']}"
+                       if g["finished"] and g["home_score"] is not None else None),
+        }
+        if not h_ss or not a_ss:
+            m["pred"] = None
+            matches.append(m); continue
+
+        pred = _predict_core(cur, h_ss, a_ss, tid, as_of_ts, year_str)
+        if not pred:
+            m["pred"] = None
+            matches.append(m); continue
+
+        top = (pred.get("top_scores") or [None])[0]
+        m["pred"] = {
+            "home_pct": pred["pred_home"], "draw_pct": pred["pred_draw"],
+            "away_pct": pred["pred_away"],
+            "top_score": (f"{top['home']}:{top['away']}" if top else None),
+        }
+
+        # 적중 판정 (finished + 실제 스코어 있을 때만)
+        if g["finished"] and g["home_score"] is not None:
+            finished_total += 1
+            actual_h, actual_a = g["home_score"], g["away_score"]
+            mx = max(pred["pred_home"], pred["pred_draw"], pred["pred_away"])
+            pred_out = ("home" if pred["pred_home"] == mx
+                        else ("draw" if pred["pred_draw"] == mx else "away"))
+            actual_out = ("home" if actual_h > actual_a
+                          else ("draw" if actual_h == actual_a else "away"))
+            hit_1x2 = (pred_out == actual_out)
+            hit_exact = top is not None and top["home"] == actual_h and top["away"] == actual_a
+            m["hit_1x2"] = hit_1x2
+            m["hit_exact"] = hit_exact
+            # 잔차: 예측 확률 - 실제 결과 cross-entropy 비슷한 단순 지표
+            pct_for_actual = {"home": pred["pred_home"], "draw": pred["pred_draw"],
+                              "away": pred["pred_away"]}[actual_out]
+            m["residual"] = round(100 - pct_for_actual, 1)
+            if hit_1x2: round_hits_1x2 += 1
+            if hit_exact: round_hits_exact += 1
+        matches.append(m)
+
+    # TOP / WORST 매치 식별 (finished 한정)
+    finished_matches = [m for m in matches if m.get("residual") is not None]
+    best_hits = sorted(
+        [m for m in finished_matches if m.get("hit_1x2") and m.get("hit_exact")],
+        key=lambda m: m.get("residual", 100),
+    )[:3]
+    if not best_hits:
+        best_hits = sorted(
+            [m for m in finished_matches if m.get("hit_1x2")],
+            key=lambda m: m.get("residual", 100),
+        )[:3]
+    worst_misses = sorted(
+        [m for m in finished_matches if not m.get("hit_1x2")],
+        key=lambda m: -m.get("residual", 0),
+    )[:3]
+
+    # 누적 적중률 — backtest per_round 활용
+    backtest_cum = None
+    try:
+        with app.test_request_context(f"/api/prediction-backtest?league={league}&year=2026"):
+            bt_resp = prediction_backtest()
+            bt = bt_resp.get_json() if hasattr(bt_resp, "get_json") else None
+        if bt and bt.get("ready"):
+            for r in (bt.get("per_round") or []):
+                if r.get("round") == round_no:
+                    backtest_cum = {
+                        "round_pct": r.get("round_pct"),
+                        "cum_pct": r.get("cum_pct"),
+                        "cum_total": r.get("cum_total"),
+                    }
+                    break
+    except Exception:
+        pass
+
+    # TOP 퍼포머 (이 라운드 내 starter 평점 상위 5명)
+    top_performers = []
+    if finished_total > 0:
+        # 라운드 매치의 SS event_id 매핑
+        slugs = [g["home_id"] for g in games] + [g["away_id"] for g in games]
+        ss_ids = [SLUG_TO_SS[s] for s in slugs if s in SLUG_TO_SS]
+        if ss_ids:
+            placeholders = ",".join("?" * len(ss_ids))
+            cur.execute(f"""
+                SELECT e.id FROM events e
+                WHERE e.tournament_id=? AND date(e.date_ts,'unixepoch','localtime') >= ?
+                  AND (e.home_team_id IN ({placeholders}) OR e.away_team_id IN ({placeholders}))
+                  AND e.home_score IS NOT NULL
+            """, (tid, earliest_date.replace(".", "-"), *ss_ids, *ss_ids))
+            event_ids = [r[0] for r in cur.fetchall()]
+            if event_ids:
+                eids = ",".join("?" * len(event_ids))
+                cur.execute(f"""
+                    SELECT mps.player_id, COALESCE(p.name_ko, p.name, mps.player_name) name,
+                           mps.team_id, mps.position, mps.rating, mps.goals, mps.assists,
+                           mps.minutes_played
+                    FROM match_player_stats mps
+                    LEFT JOIN players p ON p.id=mps.player_id
+                    WHERE mps.event_id IN ({eids})
+                      AND mps.rating IS NOT NULL AND mps.minutes_played >= 60
+                    ORDER BY mps.rating DESC LIMIT 5
+                """, event_ids)
+                ss_to_team = {t["sofascore_id"]: t for t in TEAMS if t.get("sofascore_id")}
+                for pid, name, team_id, pos, rating, goals, assists, mp in cur.fetchall():
+                    team_info = ss_to_team.get(team_id, {})
+                    top_performers.append({
+                        "player_id": pid, "name": name,
+                        "team": team_info.get("short", "?"), "position": pos,
+                        "rating": round(rating, 2),
+                        "goals": goals or 0, "assists": assists or 0,
+                        "minutes": mp,
+                    })
+
+    conn.close()
+
+    return jsonify({
+        "ready": True,
+        "league": league.upper(),
+        "round": round_no,
+        "earliest_date": earliest_date,
+        "matches_total": len(matches),
+        "finished_total": finished_total,
+        "round_accuracy": {
+            "hit_1x2": round_hits_1x2,
+            "hit_exact": round_hits_exact,
+            "hit_1x2_pct": round(round_hits_1x2 / max(finished_total, 1) * 100, 1) if finished_total else None,
+            "hit_exact_pct": round(round_hits_exact / max(finished_total, 1) * 100, 1) if finished_total else None,
+        },
+        "cumulative": backtest_cum,
+        "best_hits": best_hits,
+        "worst_misses": worst_misses,
+        "top_performers": top_performers,
+        "matches": matches,
+    })
+
+
 @app.route("/api/prediction-backtest")
 @cached_response(ttl=3600)  # 1시간 (시즌 누적, 자주 안 바뀜)
 def prediction_backtest():

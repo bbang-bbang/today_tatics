@@ -1427,12 +1427,99 @@
             ? `<span class="hab-stat"><span class="hab-v">${d.hit_1x2_pct}%</span><span class="hab-k">1X2</span> · <span class="hab-v">${d.exact_score_pct}%</span><span class="hab-k">정확</span> · <span class="hab-v">${d.top3_score_pct}%</span><span class="hab-k">TOP3</span></span>`
             : `<span class="hab-stat hab-na">데이터 부족</span>`;
         const n = (d) => d && d.ready ? `${d.n_total}경기` : "-";
+        // 최근 라운드 도출: per_round 마지막 round 번호 (각 리그)
+        const lastRound = (d) => (d && d.per_round && d.per_round.length)
+            ? d.per_round[d.per_round.length - 1].round : null;
+        const k1R = lastRound(k1), k2R = lastRound(k2);
         el.innerHTML = `
             <span class="hab-lead">📊 모델 정확도</span>
             <span class="hab-league"><span class="hab-name">K1</span> ${stat(k1)} <span class="hab-n">${n(k1)}</span></span>
+            ${k1R ? `<button class="hab-report-btn" data-league="k1" data-round="${k1R}" title="K1 R${k1R} 라운드 리포트">📋 R${k1R}</button>` : ""}
             <span class="hab-sep">|</span>
             <span class="hab-league"><span class="hab-name">K2</span> ${stat(k2)} <span class="hab-n">${n(k2)}</span></span>
+            ${k2R ? `<button class="hab-report-btn" data-league="k2" data-round="${k2R}" title="K2 R${k2R} 라운드 리포트">📋 R${k2R}</button>` : ""}
             <span class="hab-sub">2026 rolling backtest</span>
         `;
+        el.querySelectorAll(".hab-report-btn").forEach(btn => {
+            btn.addEventListener("click", () => openRoundReport(btn.dataset.league, parseInt(btn.dataset.round)));
+        });
+    }
+
+    async function openRoundReport(league, round) {
+        // 모달 생성·재사용
+        let modal = document.getElementById("round-report-modal");
+        if (!modal) {
+            modal = document.createElement("div");
+            modal.id = "round-report-modal";
+            modal.className = "rr-modal";
+            modal.innerHTML = `<div class="rr-modal-backdrop"></div><div class="rr-modal-body" id="rr-modal-body"></div>`;
+            document.body.appendChild(modal);
+            modal.querySelector(".rr-modal-backdrop").addEventListener("click", () => modal.classList.remove("rr-open"));
+        }
+        const body = modal.querySelector("#rr-modal-body");
+        body.innerHTML = `<div class="rr-loading">⏳ R${round} 리포트 로딩...</div>`;
+        modal.classList.add("rr-open");
+        let r;
+        try {
+            r = await fetch(`/api/round-report?league=${league}&round=${round}`).then(x => x.json());
+        } catch (e) {
+            body.innerHTML = `<div class="rr-err">로드 실패: ${e.message}</div>`;
+            return;
+        }
+        if (!r || !r.ready) {
+            body.innerHTML = `<div class="rr-err">데이터 없음 (${r ? r.reason : "no_data"})</div>`;
+            return;
+        }
+        const acc = r.round_accuracy || {};
+        const cum = r.cumulative || {};
+        const formatMatch = (m, showRes) => `
+            <div class="rr-match">
+                <span class="rr-mu">${m.home} <span class="rr-vs">${m.actual || (m.time || "-")}</span> ${m.away}</span>
+                ${m.pred ? `<span class="rr-pred">예측 ${m.pred.top_score || "—"} (H ${m.pred.home_pct}%/D ${m.pred.draw_pct}%/A ${m.pred.away_pct}%)</span>` : `<span class="rr-pred-na">예측 부족</span>`}
+                ${showRes && m.residual != null ? `<span class="rr-residual">잔차 ${m.residual}</span>` : ""}
+            </div>`;
+        body.innerHTML = `
+            <button class="rr-close" aria-label="닫기">✕</button>
+            <div class="rr-head">
+                <h3 class="rr-title">📋 ${r.league} R${r.round} 라운드 리포트</h3>
+                <span class="rr-meta">${r.earliest_date} · ${r.matches_total}경기 (${r.finished_total} 완료)</span>
+            </div>
+            <div class="rr-grid">
+                <div class="rr-card rr-acc">
+                    <div class="rr-card-title">🎯 라운드 적중률</div>
+                    <div class="rr-acc-main">
+                        <span class="rr-acc-v">${acc.hit_1x2_pct ?? "-"}%</span>
+                        <span class="rr-acc-k">1X2 (${acc.hit_1x2}/${r.finished_total})</span>
+                    </div>
+                    <div class="rr-acc-sub">정확 스코어 ${acc.hit_exact}/${r.finished_total}</div>
+                    ${cum.cum_pct != null ? `<div class="rr-acc-cum">시즌 누적 ${cum.cum_pct}% (${cum.cum_total}경기)</div>` : ""}
+                </div>
+                <div class="rr-card rr-best">
+                    <div class="rr-card-title">✅ 베스트 적중</div>
+                    ${r.best_hits.length ? r.best_hits.map(m => formatMatch(m, false)).join("") : `<div class="rr-empty">적중 매치 없음</div>`}
+                </div>
+                <div class="rr-card rr-worst">
+                    <div class="rr-card-title">❌ 빗나감 TOP</div>
+                    ${r.worst_misses.length ? r.worst_misses.map(m => formatMatch(m, true)).join("") : `<div class="rr-empty">전 매치 적중</div>`}
+                </div>
+                <div class="rr-card rr-perf">
+                    <div class="rr-card-title">🏆 TOP 퍼포머</div>
+                    ${r.top_performers.length ? r.top_performers.map(p =>
+                        `<div class="rr-perf-row">
+                            <span class="rr-perf-rating">${p.rating}</span>
+                            <span class="rr-perf-name">${p.name}</span>
+                            <span class="rr-perf-team">${p.team}</span>
+                            <span class="rr-perf-ga">G${p.goals}/A${p.assists}</span>
+                        </div>`).join("") : `<div class="rr-empty">데이터 없음</div>`}
+                </div>
+            </div>
+            <div class="rr-foot">
+                <span>모든 매치 (${r.matches_total}):</span>
+                <div class="rr-all">
+                    ${r.matches.map(m => formatMatch(m, false)).join("")}
+                </div>
+            </div>
+        `;
+        body.querySelector(".rr-close").addEventListener("click", () => modal.classList.remove("rr-open"));
     }
 })();
