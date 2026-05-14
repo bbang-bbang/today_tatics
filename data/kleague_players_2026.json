@@ -1864,6 +1864,14 @@
         "dob": "2000/07/17"
       },
       {
+        "number": 17,
+        "name": "김성민",
+        "position": "DF",
+        "height": 171,
+        "weight": 69,
+        "dob": "2000/07/03"
+      },
+      {
         "number": 20,
         "name": "박경섭",
         "position": "DF",
@@ -1926,14 +1934,6 @@
         "height": 187,
         "weight": 80,
         "dob": "1995/08/17"
-      },
-      {
-        "number": 17,
-        "name": "김성민",
-        "position": "MF",
-        "height": 171,
-        "weight": 69,
-        "dob": "2000/07/03"
       },
       {
         "number": 6,
@@ -2738,6 +2738,14 @@
         "dob": "2002/05/05"
       },
       {
+        "number": 6,
+        "name": "정호진",
+        "position": "DF",
+        "height": 182,
+        "weight": 72,
+        "dob": "1999/08/06"
+      },
+      {
         "number": 7,
         "name": "티아깅요",
         "position": "DF",
@@ -2808,14 +2816,6 @@
         "height": 178,
         "weight": 75,
         "dob": "1990/05/07"
-      },
-      {
-        "number": 6,
-        "name": "정호진",
-        "position": "MF",
-        "height": 182,
-        "weight": 72,
-        "dob": "1999/08/06"
       },
       {
         "number": 4,
@@ -4398,6 +4398,22 @@
         "dob": "1997/04/11"
       },
       {
+        "number": 17,
+        "name": "박병규",
+        "position": "DF",
+        "height": 182,
+        "weight": 77,
+        "dob": "2004/10/28"
+      },
+      {
+        "number": 33,
+        "name": "박수빈",
+        "position": "DF",
+        "height": 180,
+        "weight": 74,
+        "dob": "1999/09/22"
+      },
+      {
         "number": 4,
         "name": "베니시오",
         "position": "DF",
@@ -4412,6 +4428,14 @@
         "height": 175,
         "weight": 71,
         "dob": "2001/12/18"
+      },
+      {
+        "number": 19,
+        "name": "양태양",
+        "position": "DF",
+        "height": 180,
+        "weight": 70,
+        "dob": "2004/04/08"
       },
       {
         "number": 3,
@@ -4470,36 +4494,12 @@
         "dob": "2003/09/25"
       },
       {
-        "number": 17,
-        "name": "박병규",
-        "position": "MF",
-        "height": 182,
-        "weight": 77,
-        "dob": "2004/10/28"
-      },
-      {
         "number": 21,
         "name": "박상혁",
         "position": "MF",
         "height": 165,
         "weight": 63,
         "dob": "1998/04/20"
-      },
-      {
-        "number": 33,
-        "name": "박수빈",
-        "position": "MF",
-        "height": 180,
-        "weight": 74,
-        "dob": "1999/09/22"
-      },
-      {
-        "number": 19,
-        "name": "양태양",
-        "position": "MF",
-        "height": 180,
-        "weight": 70,
-        "dob": "2004/04/08"
       },
       {
         "number": 36,
@@ -7822,6 +7822,14 @@
         "dob": "1998/09/11"
       },
       {
+        "number": 23,
+        "name": "성호영",
+        "position": "DF",
+        "height": 175,
+        "weight": 73,
+        "dob": "1999/01/08"
+      },
+      {
         "number": 5,
         "name": "여재율",
         "position": "DF",
@@ -7916,14 +7924,6 @@
         "height": 172,
         "weight": 72,
         "dob": "1997/04/19"
-      },
-      {
-        "number": 23,
-        "name": "성호영",
-        "position": "MF",
-        "height": 175,
-        "weight": 73,
-        "dob": "1999/01/08"
       },
       {
         "number": 18,
@@ -8162,6 +8162,14 @@
         "height": 177,
         "weight": 73,
         "dob": "1988/09/07"
+      },
+      {
+        "number": 30,
+        "name": "이규동",
+        "position": "MF",
+        "height": 178,
+        "weight": 70,
+        "dob": "2004/01/24"
       },
       {
         "number": 88,
