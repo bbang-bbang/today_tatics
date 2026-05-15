@@ -26,19 +26,13 @@ events.id=90333089 (Jeonbuk vs Daejeon, 슈퍼컵 추정)을 DB에서 직접 삭
 
 ---
 
-### [ ] events.home_score/away_score 직접 비교 일괄 점검
-**왜**: 5/11 `team_stats()` form/streak 쿼리가 미래 매치(score=NULL) row와 NULL 비교로 500. 두 곳만 fix했지만 다른 endpoint(insights, analytics 등)에 잠복 가능. 미래 매치 row가 늘수록 노출 확률 증가.
-**무엇**: `grep -n "SELECT.*home_score.*away_score" main.py`로 전수 점검. 직접 비교 위치는 `home_score IS NOT NULL AND away_score IS NOT NULL` 필터 추가. SUM/CASE 기반은 NULL safe라 제외.
-**비용**: 30분
-**효과**: 미래 매치 schema row로 인한 500 사고 예방
+### [x] ~~events.home_score/away_score 직접 비교 일괄 점검~~ — 5/15 완료
+`team_stats()` UNION 서브쿼리 4블록(month_wr, clean_sheet/blank, close_games, big_score)에 `home_score IS NOT NULL AND away_score IS NOT NULL` 가드 추가. commit `33f4a73`. qa_check 31/31 PASS.
 
 ---
 
-### [ ] deploy 자동화 — push → 운영 pull/restart
-**왜**: 5/11 사고 — git push만 하고 운영 pull 안 해서 사용자가 8시간 동안 빈 화면. commit ≠ deploy. 한 줄로 묶는 자동화 필요.
-**무엇**: `make deploy` 또는 GitHub Actions(push 시 webhook으로 운영 trigger). 또는 `deploy.sh`를 `git push && ssh ... pull/restart` 형식으로 확장.
-**비용**: 30분~1h
-**효과**: 핫픽스 즉시 반영, 사고 줄임
+### [x] ~~deploy 자동화 — push → 운영 pull/restart~~ — 5/15 완료
+GitHub Actions 워크플로우 `.github/workflows/deploy.yml` 추가. push to main 시 SSH로 git pull → restart → health check 자동. commit `a6af065`. secrets(SSH_HOST/USER/PRIVATE_KEY) 등록 + 보안그룹 22번 0.0.0.0/0 허용 필요. rocky 사용자(root 거부됨).
 
 ---
 
@@ -61,11 +55,16 @@ sqlite3 players.db "SELECT DISTINCT m.player_id FROM match_player_stats m LEFT J
 
 ---
 
-### [ ] K1 xG 데이터 백필
-**왜**: K1 `match_player_stats.expected_goals` 0건. SQL fallback으로 실제 골 사용 중. xG 보유 시 모델 정확도 +6%p 추정.
-**무엇**: `crawlers/build_k1_xg.py` 재실행
-**비용**: 1~3시간 (Playwright 안정성 변수)
-**효과**: K1 1X2 적중률 44% → 50%+ 가능성
+### [x] ~~K1 xG 데이터 백필~~ — 5/15 완료
+build_k1_xg.py 로컬+운영 양쪽 실행. 945/950 매치 처리, mps 12,976 rows xG 업데이트, ratio 1.07 (Understat급 근접). 백테스트 결과 hit_1x2 변화는 미미(43~45%, 베이스 33% 대비 +10~12%p) — 예측 정확도엔 큰 영향 없었지만 Insights xG 효율 리더보드 가시화 완료. commit ssh로 직접 DB 갱신(코드 변경 0).
+
+---
+
+### [ ] (closed) 매치 상세에 팀 스타일 매치업 카드 — 5/15 완료
+mps 미노출 시즌 데이터(long_balls, crosses, duel, aerial, dribbles)를 매치 상세에 시각화. commit `d129aaa`. P1/P3/P5 동시 가치.
+
+### [ ] (closed) Insights에 K1 xG 효율 리더보드 — 5/15 완료
+/api/insights/xg-efficiency 백엔드 있는데 프론트 미연결 상태였음. league/모드 탭 추가, TOP 15 노출. commit `af364ea`.
 
 ---
 
@@ -102,14 +101,8 @@ python crawlers/fetch_event_heatmap.py 15372989 15372991 15372995
 
 ---
 
-### [ ] HTTPS 적용 (Let's Encrypt + 도메인)
-**왜**: 5/8 P7 보안 감사. 현재 nginx 80 평문, 가로채기 가능. (보안 헤더는 이미 적용됨, HSTS만 HTTPS 후 활성화)
-**무엇**:
-- 도메인 확정 (today_alarms은 today-tactics.co.kr 사용 중 → today_tactics.today-tactics.co.kr 또는 메인 도메인)
-- certbot으로 cert 발급, nginx 443 listen 추가, 80 → 443 redirect
-- nginx config의 HSTS 라인 주석 해제
-**비용**: 30분
-**효과**: 평문 통신 제거, MITM 차단, HSTS preload 가능
+### [x] ~~HTTPS 적용~~ — 5/15 확인: 이미 적용됨
+운영 상태 점검 결과 today-tactics.co.kr 메인 도메인이 today_tactics 프로젝트로 이미 매핑·HTTPS 적용·HSTS 활성. today_alarms는 alarms.today-tactics.co.kr 서브도메인 사용. backlog 라인 가정 오류였음.
 
 ---
 
@@ -117,17 +110,13 @@ python crawlers/fetch_event_heatmap.py 15372989 15372991 15372995
 
 ---
 
-### [ ] 매치 상세 — 카드 통계 노출
-**왜**: 카드 데이터 6,988건이 인사이트 패널에만 노출. 매치 상세에 양 팀 카드 추세도 보여주면 유용.
-**무엇**: prediction.js render()에서 home.cards / away.cards 표시. /api/match-prediction에서 card_events JOIN.
-**비용**: 30분
+### [x] ~~매치 상세 — 카드 통계 노출~~ — 5/15 완료
+prediction.js에 cardsCardHtml() 헬퍼 추가, /api/match-prediction에 home/away.cards (games/yellow/red/y_per_game/r_per_game). 자동 인사이트(거친 운영/퇴장 잦음). commit `0d17857`.
 
 ---
 
-### [ ] 라운드 변경/사이드바 메뉴 변경 시 매치 캐시 초기화
-**왜**: 현재 K1↔K2 탭 전환 시만 자동 닫기. 같은 리그 내 라운드 탭 변경, 사이드바 다른 메뉴(인사이트/스쿼드 등) 클릭 시도 닫기 원할 가능성.
-**무엇**: prediction.js `clearMatchContext()` 호출 지점 추가.
-**비용**: 10분 (사용자 의향 확인 후)
+### [x] ~~라운드 변경 시 매치 캐시 초기화~~ — 5/15 완료
+prediction.js 라운드 버튼 핸들러에 `clearMatchContext()` 추가, prev !== rnd 가드. commit `15c05e5`. 사이드바 메뉴 동기화는 명확한 핸들러 부재 + 사용자 의향 확인 항목이라 별도 미룸.
 
 ---
 
