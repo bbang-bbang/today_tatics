@@ -13,35 +13,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup SSH
+      - name: Setup SSH key
         run: |
-          echo "host_set=${{ secrets.SSH_HOST != '' }}"
-          echo "user_set=${{ secrets.SSH_USER != '' }}"
-          echo "key_set=${{ secrets.SSH_PRIVATE_KEY != '' }}"
           mkdir -p ~/.ssh
-          # CRLF 제거(윈도우 클립보드 경유 시 \r 끼이는 케이스 방어)
           printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          echo "key first line: $(head -1 ~/.ssh/deploy_key | cut -c1-30)..."
-          echo "key last line:  $(tail -1 ~/.ssh/deploy_key | cut -c1-30)..."
-          echo "key lines: $(wc -l < ~/.ssh/deploy_key)"
-          # ssh-keyscan 실패해도 진행(StrictHostKeyChecking=no로 우회)
-          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || echo "(keyscan skipped)"
 
-      - name: Pull, restart, health-check
+      - name: Deploy
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=15 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          # 단일 세션 안에서 단계별로 진단 (set -e 제거, || echo로 fail 위치 노출)
-          $SSH 'set -x
-            echo "=== whoami ==="
-            whoami
-            echo "=== git pull ==="
-            cd /opt/today_tactics && git pull || echo "GIT_PULL_FAIL"
-            echo "=== sudo -n test ==="
-            sudo -n true && echo "NOPASSWD_OK" || echo "NOPASSWD_FAIL"
-            echo "=== systemctl restart ==="
-            sudo -n systemctl restart today_tactics && echo "RESTART_OK" || echo "RESTART_FAIL"
-            echo "=== health ==="
-            sleep 3
-            curl -s -o /dev/null -w "health=%{http_code}\n" http://127.0.0.1:5000/
-          '
+          set -x
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=15 \
+              "$SSH_USER@$SSH_HOST" \
+              "cd /opt/today_tactics && git pull && sudo -n systemctl restart today_tactics && sleep 3 && curl -sf -o /dev/null -w 'health=%{http_code}\n' http://127.0.0.1:5000/"
