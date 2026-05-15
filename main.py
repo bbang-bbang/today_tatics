@@ -2762,6 +2762,46 @@ def get_match_prediction():
     home_cards = cards_analysis(hid)
     away_cards = cards_analysis(aid)
 
+    # ── 팀 스타일(빌드업/경합/돌파) 시즌 통계 ───────────────
+    # mps 시즌 집계 — long ball/cross 정확도, duel/aerial 승률, dribble 성공률
+    def style_analysis(ss_id):
+        cur.execute("""
+            SELECT
+                COUNT(DISTINCT m.event_id) AS games,
+                COALESCE(SUM(m.total_long_balls), 0)    AS lb_t,
+                COALESCE(SUM(m.accurate_long_balls), 0) AS lb_a,
+                COALESCE(SUM(m.total_crosses), 0)       AS cr_t,
+                COALESCE(SUM(m.accurate_crosses), 0)    AS cr_a,
+                COALESCE(SUM(m.duel_won), 0)            AS du_w,
+                COALESCE(SUM(m.duel_lost), 0)           AS du_l,
+                COALESCE(SUM(m.aerial_won), 0)          AS ae_w,
+                COALESCE(SUM(m.aerial_lost), 0)         AS ae_l,
+                COALESCE(SUM(m.successful_dribbles), 0) AS dr_s,
+                COALESCE(SUM(m.attempted_dribbles), 0)  AS dr_t
+            FROM match_player_stats m
+            JOIN events e ON m.event_id = e.id
+            WHERE m.team_id = ? AND e.tournament_id = ?
+              AND e.home_score IS NOT NULL
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime')) = ?
+              AND e.id < 50000000
+        """, (ss_id, tid_filter, now_year))
+        r = cur.fetchone() or (0,)*11
+        games, lb_t, lb_a, cr_t, cr_a, du_w, du_l, ae_w, ae_l, dr_s, dr_t = r
+        return {
+            "games":         games or 0,
+            "long_ball_pct": round(lb_a/lb_t*100, 1) if lb_t else None,
+            "long_ball_pg":  round(lb_t/games, 1)   if games else None,
+            "cross_pct":     round(cr_a/cr_t*100, 1) if cr_t else None,
+            "cross_pg":      round(cr_t/games, 1)    if games else None,
+            "duel_pct":      round(du_w/(du_w+du_l)*100, 1) if (du_w+du_l) else None,
+            "aerial_pct":    round(ae_w/(ae_w+ae_l)*100, 1) if (ae_w+ae_l) else None,
+            "dribble_pct":   round(dr_s/dr_t*100, 1) if dr_t else None,
+            "dribble_pg":    round(dr_t/games, 1)    if games else None,
+        }
+
+    home_style = style_analysis(hid)
+    away_style = style_analysis(aid)
+
     # 휴식일 (현재 시각 기준 직전 경기로부터 일수)
     import time as _time
     _now_ts = int(_time.time())
@@ -2805,11 +2845,13 @@ def get_match_prediction():
     return jsonify({
         "home": {"id": home_id, "name": home_info["name"], **home_stats,
                  "form_points": home_form_pts, "goal_timing": home_timing,
-                 "setpiece": home_sp, "cards": home_cards, "rest_days": home_rest,
+                 "setpiece": home_sp, "cards": home_cards, "style": home_style,
+                 "rest_days": home_rest,
                  "xg_for": round(home_xg["xg_for"], 2), "xg_against": round(home_xg["xg_against"], 2)},
         "away": {"id": away_id, "name": away_info["name"], **away_stats,
                  "form_points": away_form_pts, "goal_timing": away_timing,
-                 "setpiece": away_sp, "cards": away_cards, "rest_days": away_rest,
+                 "setpiece": away_sp, "cards": away_cards, "style": away_style,
+                 "rest_days": away_rest,
                  "xg_for": round(away_xg["xg_for"], 2), "xg_against": round(away_xg["xg_against"], 2)},
         "h2h": {"games": h2h_g or 0, "home_w": h2h_w or 0, "draw": h2h_d or 0, "away_w": h2h_l},
         "prediction": {"home": pred_home, "draw": pred_draw, "away": pred_away},

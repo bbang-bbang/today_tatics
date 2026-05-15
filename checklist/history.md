@@ -2852,3 +2852,4 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-15 11:00:25 | tail -25 /tmp/flask2.log 2>&1
 - 2026-05-15 11:01:03 | powershell -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" 2>&1 | head -3
 - 2026-05-15 13:44:47 | tail -8 "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\bcc887f1-80b6-4372-b9a5-52493da0302d\tasks\b0snph6dn.output" 2>&1
+- 2026-05-15 14:01:03 | powershell -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" 2>&1 | head -3

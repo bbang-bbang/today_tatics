@@ -867,6 +867,72 @@
         </div>`;
     }
 
+    // ── 팀 스타일(빌드업/경합/돌파) 매치업 카드 ────────────────
+    function styleCardHtml(home, away) {
+        const h = home.style, a = away.style;
+        if (!h || !a || (!h.games && !a.games)) return "";
+
+        // 인사이트: 빌드업/경합 매치업 강·약점
+        const insights = [];
+        // 롱볼 빌드업 vs 빌드업 약점 (한 쪽만 강하면 의미)
+        if (h.long_ball_pct !== null && h.long_ball_pct >= 60 && h.long_ball_pg >= 35)
+            insights.push(`📡 ${home.name} 롱볼 빌드업 강세 (정확도 ${h.long_ball_pct}%, 경기당 ${h.long_ball_pg}회)`);
+        if (a.long_ball_pct !== null && a.long_ball_pct >= 60 && a.long_ball_pg >= 35)
+            insights.push(`📡 ${away.name} 롱볼 빌드업 강세 (정확도 ${a.long_ball_pct}%, 경기당 ${a.long_ball_pg}회)`);
+        // 경합 우위
+        if (h.duel_pct !== null && a.duel_pct !== null && Math.abs(h.duel_pct - a.duel_pct) >= 5) {
+            const winner = h.duel_pct > a.duel_pct ? home.name : away.name;
+            const wp = Math.max(h.duel_pct, a.duel_pct);
+            insights.push(`⚔ ${winner} 듀얼 우위 (승률 ${wp}%)`);
+        }
+        // 공중볼 강세
+        if (h.aerial_pct !== null && h.aerial_pct >= 55)
+            insights.push(`🦅 ${home.name} 공중볼 강세 (승률 ${h.aerial_pct}%)`);
+        if (a.aerial_pct !== null && a.aerial_pct >= 55)
+            insights.push(`🦅 ${away.name} 공중볼 강세 (승률 ${a.aerial_pct}%)`);
+        // 돌파 강세
+        if (h.dribble_pct !== null && h.dribble_pct >= 55 && h.dribble_pg >= 8)
+            insights.push(`💨 ${home.name} 돌파 강세 (성공률 ${h.dribble_pct}%, 경기당 ${h.dribble_pg}회)`);
+        if (a.dribble_pct !== null && a.dribble_pct >= 55 && a.dribble_pg >= 8)
+            insights.push(`💨 ${away.name} 돌파 강세 (성공률 ${a.dribble_pct}%, 경기당 ${a.dribble_pg}회)`);
+
+        const fmtPct = v => v !== null ? v + "%" : "—";
+        const fmtPg  = v => v !== null ? v       : "—";
+        const bar = (pct, cls) => `
+            <div class="ts-bar">
+                <div class="ts-bar-fill ${cls}" style="width:${Math.min(100, pct || 0)}%"></div>
+                <span class="ts-bar-val">${fmtPct(pct)}</span>
+            </div>`;
+        const teamCol = (name, s, cls) => `
+            <div class="ts-team ${cls}">
+                <div class="ts-team-name">${name}</div>
+                <div class="ts-section">
+                    <div class="ts-section-lbl">📡 빌드업</div>
+                    <div class="ts-row"><span class="ts-row-lbl">롱볼 정확도</span>${bar(s.long_ball_pct, "ts-build")}</div>
+                    <div class="ts-row-sub">경기당 ${fmtPg(s.long_ball_pg)}회 · 크로스 ${fmtPct(s.cross_pct)} (${fmtPg(s.cross_pg)}회)</div>
+                </div>
+                <div class="ts-section">
+                    <div class="ts-section-lbl">⚔ 경합</div>
+                    <div class="ts-row"><span class="ts-row-lbl">듀얼 승률</span>${bar(s.duel_pct, "ts-duel")}</div>
+                    <div class="ts-row"><span class="ts-row-lbl">공중볼 승률</span>${bar(s.aerial_pct, "ts-aerial")}</div>
+                </div>
+                <div class="ts-section">
+                    <div class="ts-section-lbl">💨 돌파</div>
+                    <div class="ts-row"><span class="ts-row-lbl">드리블 성공률</span>${bar(s.dribble_pct, "ts-dribble")}</div>
+                    <div class="ts-row-sub">경기당 ${fmtPg(s.dribble_pg)}회 시도</div>
+                </div>
+            </div>`;
+        return `
+        <div class="pred-style">
+            <div class="ts-title">⚔ 팀 스타일 매치업</div>
+            <div class="ts-grid">
+                ${teamCol(home.name, h, "ts-home")}
+                ${teamCol(away.name, a, "ts-away")}
+            </div>
+            ${insights.length ? `<div class="ts-insights">${insights.map(i => `<div class="ts-insight">${i}</div>`).join("")}</div>` : ""}
+        </div>`;
+    }
+
     // ── 골 타이밍 바 (전·후반) ──────────────────────────────
     function timingBarsHtml(timing, label) {
         if (!timing) return "";
@@ -1012,6 +1078,7 @@
                 ${timingBarsHtml(away.goal_timing, away.name)}
             </div>
             ${setpieceCardHtml(home, away)}
+            ${styleCardHtml(home, away)}
             ${cardsCardHtml(home, away)}
             ${(hLineup && hLineup.ready) || (aLineup && aLineup.ready) ? `
             <div class="pred-extras-row pred-lineup-row">

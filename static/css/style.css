@@ -4503,6 +4503,115 @@ body {
     .cd-grid { grid-template-columns: 1fr; }
 }
 
+/* 팀 스타일 매치업 (빌드업/경합/돌파) */
+.pred-style {
+    background: rgba(18,29,54,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    grid-column: 1 / -1;
+}
+.ts-title {
+    font-size: 0.75rem;
+    color: #facc15;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 10px;
+    letter-spacing: 0.03em;
+}
+.ts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.ts-team {
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+}
+.ts-home { border-left: 3px solid #4ea4f8; }
+.ts-away { border-left: 3px solid #b87ef8; }
+.ts-team-name {
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+.ts-home .ts-team-name { color: #7eb8ff; }
+.ts-away .ts-team-name { color: #c79ef8; }
+.ts-section {
+    margin-bottom: 10px;
+}
+.ts-section:last-child { margin-bottom: 0; }
+.ts-section-lbl {
+    font-size: 0.65rem;
+    color: #8ab0d8;
+    font-weight: 600;
+    margin-bottom: 4px;
+    letter-spacing: 0.02em;
+}
+.ts-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+.ts-row-lbl {
+    flex-shrink: 0;
+    width: 70px;
+    font-size: 0.6rem;
+    color: #c8d8f0;
+}
+.ts-row-sub {
+    font-size: 0.56rem;
+    color: #6a8aa8;
+    margin-left: 76px;
+    margin-bottom: 4px;
+}
+.ts-bar {
+    position: relative;
+    flex: 1;
+    height: 12px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.ts-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+.ts-build   { background: linear-gradient(90deg, #4ea4f8, #7bed9f); }
+.ts-duel    { background: linear-gradient(90deg, #fbbf24, #f87171); }
+.ts-aerial  { background: linear-gradient(90deg, #c79ef8, #b87ef8); }
+.ts-dribble { background: linear-gradient(90deg, #7bed9f, #4ea4f8); }
+.ts-bar-val {
+    position: absolute;
+    right: 5px;
+    top: 0;
+    line-height: 12px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: #e8f2ff;
+    font-variant-numeric: tabular-nums;
+}
+.ts-insights {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: rgba(78,164,248,0.06);
+    border: 1px solid rgba(78,164,248,0.2);
+    border-radius: 6px;
+}
+.ts-insight {
+    font-size: 0.68rem;
+    color: #7eb8ff;
+    font-weight: 600;
+    line-height: 1.5;
+}
+@media (max-width: 768px) {
+    .ts-grid { grid-template-columns: 1fr; }
+}
+
 /* 골 타이밍 바 */
 .pred-timing {
     background: rgba(18,29,54,0.7);
