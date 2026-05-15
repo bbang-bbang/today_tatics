@@ -30,13 +30,18 @@ jobs:
 
       - name: Pull, restart, health-check
         run: |
-          ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=15 \
-              "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-              'set -e
-               cd /opt/today_tactics
-               git pull
-               sudo systemctl restart today_tactics
-               sleep 3
-               curl -sf -o /dev/null -w "health=%{http_code}\n" http://127.0.0.1:5000/'
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=15 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          # 단일 세션 안에서 단계별로 진단 (set -e 제거, || echo로 fail 위치 노출)
+          $SSH 'set -x
+            echo "=== whoami ==="
+            whoami
+            echo "=== git pull ==="
+            cd /opt/today_tactics && git pull || echo "GIT_PULL_FAIL"
+            echo "=== sudo -n test ==="
+            sudo -n true && echo "NOPASSWD_OK" || echo "NOPASSWD_FAIL"
+            echo "=== systemctl restart ==="
+            sudo -n systemctl restart today_tactics && echo "RESTART_OK" || echo "RESTART_FAIL"
+            echo "=== health ==="
+            sleep 3
+            curl -s -o /dev/null -w "health=%{http_code}\n" http://127.0.0.1:5000/
+          '
