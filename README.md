@@ -51,15 +51,14 @@ today_tactics/
       app.js                     # 전술판 코어 (Canvas, 드래그, 화살표, 애니메이션)
       analytics.js               # 팀 분석 차트
       banner_stats.js            # 배너 스탯
-      dashboard.js               # 대시보드 위젯
       info.js                    # 정보 패널
-      insights.js                # 인사이트 뷰
+      insights.js                # 인사이트 뷰 (대시보드/순위 통합)
       k2heatmap.js               # K2 히트맵 시각화
       player_analytics.js        # 선수 개인 분석 모달
       player_report.js           # 선수 리포트 (레이더 차트, 스탯 바)
       prediction.js              # 경기 예측 + 시즌 시뮬레이션
-      standings.js               # 순위표
-    img/                         # 팀 엠블럼, 킷 아이콘
+      team_compare.js            # 팀 비교 모달 (Chart.js 레이더)
+    img/emblems/                 # 팀 엠블럼 (K01~K42)
   data/
     kleague_players_2026.json    # 2026 시즌 선수 데이터
     kleague_results_2026.json    # 2026 시즌 경기 결과 (196건)
@@ -67,11 +66,13 @@ today_tactics/
     kleague_team_stats.json      # 팀 스탯
     sofascore_teams.json         # SofaScore 팀 ID 매핑
     player_status.json           # 부상/출전정지/출전의문 수동 관리
-  crawlers/                      # 데이터 수집 스크립트
-  analysis/                      # 분석 스크립트 (읽기 전용)
-  saves/                         # 전술판 저장 파일
-  squads/                        # 스쿼드 파일
+  crawlers/                      # 데이터 수집 스크립트 (42개)
+  analysis/                      # 분석/검증 스크립트 (읽기 전용)
+  deploy/                        # 운영 배포 (nginx/systemd/setup.sh)
+  saves/                         # 전술판 저장 파일 (gitignored)
+  squads/                        # 스쿼드 파일 (default_*.json + {team}_2026.json)
   checklist/                     # 개발 프로세스 문서
+  qa_check.py                    # 로컬 API/DB 스모크 테스트
 ```
 
 ---
