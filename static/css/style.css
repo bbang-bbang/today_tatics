@@ -4932,6 +4932,41 @@ body {
     border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 .ins-card-table { font-size: 0.72rem; }
+
+/* xG 효율 리더보드 — 카드 패널과 동일 톤, accent만 보라 */
+.ins-xg-mode-tab {
+    background: none; border: 1px solid transparent;
+    color: #667; font-size: 0.78rem; font-weight: 600;
+    padding: 4px 12px; border-radius: 5px; cursor: pointer;
+    transition: all 0.15s;
+}
+.ins-xg-mode-tab:hover { color: #aac; }
+.ins-xg-mode-tab.active {
+    background: rgba(184,126,248,0.14);
+    color: #c79ef8;
+    border-color: rgba(184,126,248,0.35);
+}
+.ins-xg-league-tab {
+    background: none; border: none; color: #6a8aa8;
+    font-size: 0.72rem; font-weight: 600;
+    padding: 3px 10px; border-radius: 4px; cursor: pointer;
+    letter-spacing: 0.02em; transition: all 0.15s;
+}
+.ins-xg-league-tab:hover { color: #c8d8f0; }
+.ins-xg-league-tab.active {
+    background: rgba(126,207,255,0.16);
+    color: #7ecfff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+#ins-xg-league-tabs {
+    display: flex; gap: 4px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; padding: 3px;
+}
+#ins-panel-xg .ins-table { font-size: 0.72rem; }
+#ins-panel-xg .ins-team-cell { color: #8ab0d8; font-size: 0.7rem; }
+#ins-panel-xg .ins-sub { color: #6a8aa8; font-size: 0.65rem; font-weight: 400; }
 .ins-card-table tbody td.ins-neg { color: #f87171; font-weight: 700; }
 .ins-card-foot {
     color: #5a7a8a; font-size: 0.62rem; margin-top: 6px; text-align: center;

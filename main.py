@@ -4481,8 +4481,12 @@ def insights_card_rankings():
 
 @app.route("/api/insights/xg-efficiency")
 def insights_xg_efficiency():
+    """xG 효율 — 포지션 F + minutes>0 + 시즌 ≥3경기 + xG ≥0.5.
+    league(all|k1|k2) 필터, 정렬은 클라가 처리(절대 골/효율 등)."""
     year = request.args.get("year", "2026")
+    league = request.args.get("league", "all")
     date_cond, date_params = _year_date_params(year)
+    league_cond, league_params = _league_team_filter(league)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(f"""
@@ -4495,10 +4499,11 @@ def insights_xg_efficiency():
                     SELECT event_id FROM match_player_stats
                     WHERE player_id=m.player_id {date_cond})) as pk_goals
         FROM match_player_stats m LEFT JOIN players p ON m.player_id=p.id
-        WHERE m.position='F' AND m.minutes_played>0 {date_cond}
+        WHERE m.position='F' AND m.minutes_played>0 {date_cond} {league_cond}
         GROUP BY m.player_id HAVING games>=3 AND xg>0.5
-        ORDER BY goals DESC LIMIT 20
-    """, date_params * 2).fetchall()
+        ORDER BY (SUM(m.goals) - SUM(COALESCE(m.expected_goals,0))) DESC
+        LIMIT 20
+    """, date_params * 2 + league_params).fetchall()
     conn.close()
     return jsonify([{
         "player_id": r["player_id"],

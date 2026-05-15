@@ -804,9 +804,85 @@
     });
   }
 
+  /* ── xG 효율 리더보드 ── */
+  let currentXgLeague = "all";
+  let currentXgMode   = "diff";   // diff | goals | xg
+  let _xgCache = null;
+
+  function initXgModeTab() {
+    document.querySelectorAll(".ins-xg-mode-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (btn.dataset.mode === currentXgMode) return;
+        document.querySelectorAll(".ins-xg-mode-tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentXgMode = btn.dataset.mode;
+        if (_xgCache) renderXg(_xgCache);
+      });
+    });
+  }
+  function initXgLeagueTab() {
+    document.querySelectorAll(".ins-xg-league-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (btn.dataset.xgLeague === currentXgLeague) return;
+        document.querySelectorAll(".ins-xg-league-tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentXgLeague = btn.dataset.xgLeague;
+        loadXgLeaders();
+      });
+    });
+  }
+  function loadXgLeaders() {
+    return fetch(`/api/insights/xg-efficiency?year=${currentYear}&league=${currentXgLeague}`)
+      .then(r => r.json())
+      .then(d => {
+        _xgCache = Array.isArray(d) ? d : [];
+        showBlock("ins-panel-xg", _xgCache.length > 0);
+        renderXg(_xgCache);
+      });
+  }
+  function renderXg(rows) {
+    const wrap = document.getElementById("ins-xg-body");
+    if (!wrap) return;
+    if (!rows.length) { wrap.innerHTML = '<p class="ins-empty">데이터 없음</p>'; return; }
+    const sorted = [...rows].sort((a, b) => {
+      if (currentXgMode === "diff")  return b.diff - a.diff;
+      if (currentXgMode === "goals") return b.goals - a.goals;
+      return b.xg - a.xg;
+    }).slice(0, 15);
+    const tbody = sorted.map((r, i) => {
+      const diffCls = r.diff >= 0 ? "ins-pos" : "ins-neg";
+      const sign    = r.diff > 0 ? "+" : "";
+      return `
+        <tr>
+          <td class="ins-rank">${i+1}</td>
+          <td class="ins-name">${r.name}</td>
+          <td class="ins-team-cell">${r.team || "—"}</td>
+          <td>${r.games}</td>
+          <td><strong>${r.goals}</strong>${r.pk_goals > 0 ? ` <span class="ins-sub">(NP ${r.np_goals})</span>` : ""}</td>
+          <td>${r.xg}</td>
+          <td class="${diffCls}"><strong>${sign}${r.diff}</strong></td>
+          <td>${r.shots}</td>
+        </tr>`;
+    }).join("");
+    const modeNote = currentXgMode === "diff"  ? "결정력(G−xG) 내림차순. + = xG 대비 초과 득점 (마무리 능력)."
+                   : currentXgMode === "goals" ? "절대 득점 내림차순."
+                   : "절대 xG(슈팅 질) 내림차순.";
+    wrap.innerHTML = `
+      <table class="ins-table">
+        <thead><tr>
+          <th>#</th><th>선수</th><th>팀</th><th>경기</th>
+          <th>G</th><th>xG</th><th>G−xG</th><th>슈팅</th>
+        </tr></thead>
+        <tbody>${tbody}</tbody>
+      </table>
+      <div class="ins-card-foot">${modeNote} TOP 15. 조건: 포지션 F · 출전 ≥3경기 · xG ≥0.5.</div>
+    `;
+  }
+
   /* ── 전체 로드 ── */
   function loadAll() {
     loadTopPerformers();
+    loadXgLeaders();
     loadCardRankings();
   }
 
@@ -825,6 +901,8 @@
           initPosTab();
           initCardModeTab();
           initCardLeagueTab();
+          initXgModeTab();
+          initXgLeagueTab();
           loadAll();
           loaded = true;
         }

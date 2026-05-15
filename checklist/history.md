@@ -2853,3 +2853,9 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-15 11:01:03 | powershell -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" 2>&1 | head -3
 - 2026-05-15 13:44:47 | tail -8 "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\bcc887f1-80b6-4372-b9a5-52493da0302d\tasks\b0snph6dn.output" 2>&1
 - 2026-05-15 14:01:03 | powershell -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" 2>&1 | head -3
+- 2026-05-15 14:23:49 | tail -30 "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\bcc887f1-80b6-4372-b9a5-52493da0302d\tasks\bftc1gkdd.output" 2>&1
+- 2026-05-15 14:30:31 | tail -15 "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\bcc887f1-80b6-4372-b9a5-52493da0302d\tasks\bftc1gkdd.output" 2>&1
+- 2026-05-15 14:32:05 | tail -20 "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\bcc887f1-80b6-4372-b9a5-52493da0302d\tasks\bh0zlekfh.output" 2>&1
+- 2026-05-15 14:36:44 | tail -10 "C:\Users\ehban\AppData\Local\Temp\claude\C--Users-ehban-OneDrive-------today-tatics\bcc887f1-80b6-4372-b9a5-52493da0302d\tasks\bh0zlekfh.output" 2>&1
+- 2026-05-15 14:43:44 | curl -s --max-time 10 "http://<SERVER_IP>/" -o /dev/null -w "root=%{http_code}\n" && curl -s --max-time 10 "http://<SERVER_IP>/api/teams" -o /dev/null -w "teams=%{http_code}\n"
+- 2026-05-15 14:52:42 | powershell -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" 2>&1 | head -3
