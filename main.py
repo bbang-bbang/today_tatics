@@ -2270,15 +2270,17 @@ def get_match_prediction():
             ga = as_ if is_home else hs
             form.append("W" if gf>ga else "D" if gf==ga else "L")
 
-        # 월별 승률 — 현재 달 기준 과거 데이터
+        # 월별 승률 — 현재 달 기준 과거 데이터 (미래 매치 제외)
         cur.execute("""
             SELECT SUM(g), SUM(w) FROM (
                 SELECT COUNT(*) g, SUM(CASE WHEN home_score>away_score THEN 1 ELSE 0 END) w
                 FROM events WHERE tournament_id=? AND home_team_id=?
+                  AND home_score IS NOT NULL AND away_score IS NOT NULL
                   AND CAST(strftime('%m', datetime(date_ts,'unixepoch','localtime')) AS INT)=?
                 UNION ALL
                 SELECT COUNT(*) g, SUM(CASE WHEN away_score>home_score THEN 1 ELSE 0 END) w
                 FROM events WHERE tournament_id=? AND away_team_id=?
+                  AND home_score IS NOT NULL AND away_score IS NOT NULL
                   AND CAST(strftime('%m', datetime(date_ts,'unixepoch','localtime')) AS INT)=?
             )
         """, (tid_filter, ss_id, now_month, tid_filter, ss_id, now_month))
@@ -2321,10 +2323,12 @@ def get_match_prediction():
             FROM (
                 SELECT home_score home_g, away_score away_g, 1 is_home
                 FROM events WHERE tournament_id=? AND home_team_id=?
+                  AND home_score IS NOT NULL AND away_score IS NOT NULL
                   AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
                 UNION ALL
                 SELECT home_score home_g, away_score away_g, 0 is_home
                 FROM events WHERE tournament_id=? AND away_team_id=?
+                  AND home_score IS NOT NULL AND away_score IS NOT NULL
                   AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
             )
         """, (tid_filter, ss_id, now_year, tid_filter, ss_id, now_year))
@@ -2344,10 +2348,12 @@ def get_match_prediction():
             FROM (
                 SELECT home_score gf, away_score ga FROM events
                 WHERE tournament_id=? AND home_team_id=?
+                  AND home_score IS NOT NULL AND away_score IS NOT NULL
                   AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
                 UNION ALL
                 SELECT away_score gf, home_score ga FROM events
                 WHERE tournament_id=? AND away_team_id=?
+                  AND home_score IS NOT NULL AND away_score IS NOT NULL
                   AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
             )
         """, (tid_filter, ss_id, now_year, tid_filter, ss_id, now_year))
@@ -2362,10 +2368,12 @@ def get_match_prediction():
             SELECT SUM(CASE WHEN gf>=3 THEN 1 ELSE 0 END), COUNT(*) FROM (
                 SELECT home_score gf FROM events
                 WHERE tournament_id=? AND home_team_id=?
+                  AND home_score IS NOT NULL
                   AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
                 UNION ALL
                 SELECT away_score gf FROM events
                 WHERE tournament_id=? AND away_team_id=?
+                  AND away_score IS NOT NULL
                   AND strftime('%Y', datetime(date_ts,'unixepoch','localtime'))=?
             )
         """, (tid_filter, ss_id, now_year, tid_filter, ss_id, now_year))
