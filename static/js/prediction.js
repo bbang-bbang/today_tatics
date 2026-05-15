@@ -823,6 +823,50 @@
         </div>`;
     }
 
+    // ── 카드(옐로/레드) 매치업 카드 ──────────────────────────
+    function cardsCardHtml(home, away) {
+        const h = home.cards, a = away.cards;
+        if (!h || !a || (!h.games && !a.games)) return "";
+
+        // 인사이트: 거친 팀 / 신사적 팀 매치업
+        const insights = [];
+        if (h.y_per_game !== null && h.y_per_game >= 3.0)
+            insights.push(`🟨 ${home.name} 거친 경기 운영 (경기당 옐로 ${h.y_per_game}장)`);
+        if (a.y_per_game !== null && a.y_per_game >= 3.0)
+            insights.push(`🟨 ${away.name} 거친 경기 운영 (경기당 옐로 ${a.y_per_game}장)`);
+        if (h.r_per_game !== null && h.r_per_game >= 0.2)
+            insights.push(`🟥 ${home.name} 퇴장 잦음 (${h.red}회/${h.games}경기)`);
+        if (a.r_per_game !== null && a.r_per_game >= 0.2)
+            insights.push(`🟥 ${away.name} 퇴장 잦음 (${a.red}회/${a.games}경기)`);
+
+        // 두 팀 비교: y_per_game 더 큰 쪽 강조
+        const maxYpg = Math.max(h.y_per_game || 0, a.y_per_game || 0, 1);
+        const teamCol = (name, c, cls) => `
+            <div class="cd-team ${cls}">
+                <div class="cd-team-name">${name}</div>
+                <div class="cd-stat">
+                    <div class="cd-stat-bar">
+                        <div class="cd-stat-bar-fill cd-yellow" style="width:${Math.min(100, (c.y_per_game || 0) / maxYpg * 100)}%"></div>
+                        <span class="cd-stat-val">${c.y_per_game !== null ? c.y_per_game : "—"}</span>
+                    </div>
+                    <div class="cd-stat-lbl">경기당 옐로 <span class="cd-stat-sub">(${c.yellow}장 / ${c.games}경기)</span></div>
+                </div>
+                <div class="cd-split">
+                    <span class="cd-tag cd-y">🟨 ${c.yellow}</span>
+                    <span class="cd-tag cd-r">🟥 ${c.red}</span>
+                </div>
+            </div>`;
+        return `
+        <div class="pred-cards">
+            <div class="cd-title">🟨 카드 추세</div>
+            <div class="cd-grid">
+                ${teamCol(home.name, h, "cd-home")}
+                ${teamCol(away.name, a, "cd-away")}
+            </div>
+            ${insights.length ? `<div class="cd-insights">${insights.map(i => `<div class="cd-insight">${i}</div>`).join("")}</div>` : ""}
+        </div>`;
+    }
+
     // ── 골 타이밍 바 (전·후반) ──────────────────────────────
     function timingBarsHtml(timing, label) {
         if (!timing) return "";
@@ -968,6 +1012,7 @@
                 ${timingBarsHtml(away.goal_timing, away.name)}
             </div>
             ${setpieceCardHtml(home, away)}
+            ${cardsCardHtml(home, away)}
             ${(hLineup && hLineup.ready) || (aLineup && aLineup.ready) ? `
             <div class="pred-extras-row pred-lineup-row">
                 ${lineupCardHtml(hLineup, home.name, "pred-lineup-home")}

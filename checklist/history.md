@@ -2849,3 +2849,5 @@ _league_coefs(tid_filter)  # 조회 헬퍼
 - 2026-05-15 10:41:13 | powershell -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | Select-Object OwningProcess,@{N='PName';E={(Get-Process -Id \$_.OwningProcess -ErrorAction SilentlyContinue).ProcessName}}"
 - 2026-05-15 10:41:23 | powershell -Command "netstat -ano | Select-String ':5000.*LISTEN' | Select-Object -First 5"
 - 2026-05-15 10:41:31 | powershell -Command "Get-WmiObject Win32_Process -Filter 'ProcessId=11220' | Select-Object Name,CommandLine"
+- 2026-05-15 11:00:25 | tail -25 /tmp/flask2.log 2>&1
+- 2026-05-15 11:01:03 | powershell -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }" 2>&1 | head -3

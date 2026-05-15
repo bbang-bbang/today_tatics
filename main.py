@@ -2735,6 +2735,33 @@ def get_match_prediction():
     home_sp = setpiece_analysis(hid)
     away_sp = setpiece_analysis(aid)
 
+    # ── 카드(옐로/레드) 시즌 통계 ────────────────────────────
+    # card_events 7K건 + events tournament/year 필터 → 가벼움
+    def cards_analysis(ss_id):
+        cur.execute("""
+            SELECT COUNT(DISTINCT e.id) AS games,
+                   COALESCE(SUM(CASE WHEN c.card_type IN ('yellow','yellowRed') THEN 1 ELSE 0 END), 0) AS yc,
+                   COALESCE(SUM(CASE WHEN c.card_type='red' THEN 1 ELSE 0 END), 0) AS rc
+            FROM events e
+            LEFT JOIN card_events c ON c.event_id = e.id AND c.team_id = ?
+            WHERE e.tournament_id=? AND e.home_score IS NOT NULL
+              AND (e.home_team_id=? OR e.away_team_id=?)
+              AND strftime('%Y', datetime(e.date_ts,'unixepoch','localtime'))=?
+              AND e.id < 50000000
+        """, (ss_id, tid_filter, ss_id, ss_id, now_year))
+        r = cur.fetchone() or (0, 0, 0)
+        games, yc, rc = (r[0] or 0), (r[1] or 0), (r[2] or 0)
+        return {
+            "games":      games,
+            "yellow":     yc,
+            "red":        rc,
+            "y_per_game": round(yc/games, 2) if games else None,
+            "r_per_game": round(rc/games, 3) if games else None,
+        }
+
+    home_cards = cards_analysis(hid)
+    away_cards = cards_analysis(aid)
+
     # 휴식일 (현재 시각 기준 직전 경기로부터 일수)
     import time as _time
     _now_ts = int(_time.time())
@@ -2778,11 +2805,11 @@ def get_match_prediction():
     return jsonify({
         "home": {"id": home_id, "name": home_info["name"], **home_stats,
                  "form_points": home_form_pts, "goal_timing": home_timing,
-                 "setpiece": home_sp, "rest_days": home_rest,
+                 "setpiece": home_sp, "cards": home_cards, "rest_days": home_rest,
                  "xg_for": round(home_xg["xg_for"], 2), "xg_against": round(home_xg["xg_against"], 2)},
         "away": {"id": away_id, "name": away_info["name"], **away_stats,
                  "form_points": away_form_pts, "goal_timing": away_timing,
-                 "setpiece": away_sp, "rest_days": away_rest,
+                 "setpiece": away_sp, "cards": away_cards, "rest_days": away_rest,
                  "xg_for": round(away_xg["xg_for"], 2), "xg_against": round(away_xg["xg_against"], 2)},
         "h2h": {"games": h2h_g or 0, "home_w": h2h_w or 0, "draw": h2h_d or 0, "away_w": h2h_l},
         "prediction": {"home": pred_home, "draw": pred_draw, "away": pred_away},
