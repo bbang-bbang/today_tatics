@@ -154,11 +154,14 @@
 
         wrap.querySelectorAll(".ksb-round-btn").forEach(btn => {
             btn.addEventListener("click", () => {
+                const rnd = parseInt(btn.dataset.round);
+                const prev = (league === "k1") ? k1ActiveRound : activeRound;
                 wrap.querySelectorAll(".ksb-round-btn").forEach(b => b.classList.remove("active"));
                 btn.classList.add("active");
-                const rnd = parseInt(btn.dataset.round);
                 if (league === "k1") k1ActiveRound = rnd;
                 else activeRound = rnd;
+                // 다른 라운드로 이동하면 이전 매치 카드 자동 닫기 (잔류 방지)
+                if (prev !== null && prev !== rnd) clearMatchContext();
                 renderRoundGames(rnd, rounds, league);
             });
         });
